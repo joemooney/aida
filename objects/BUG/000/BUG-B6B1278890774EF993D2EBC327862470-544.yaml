@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:42:37.637024707Z
-modified_at: 2026-11-27T03:56:03.974324126Z
+modified_at: 2026-11-27T03:58:46.370805147Z
 req_type: Bug
 comments:
 - id: 01a21b1a-ee60-7891-ba06-fa2ea0739f94
@@ -45,6 +45,29 @@ comments:
   modified_at: 2026-11-27T03:49:54.775619941Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21b27-da62-7301-a67f-e8e90a7dab52
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    Slice: AC3 + AC2 (the brief's fallback), shipped as Refs BUG-2783. AC1 (bwrap/empty-HOME confinement for codex) needs a live vendor probe of what codex must read (auth, CODEX_HOME, config) and is left for a follow-up slice.
+
+    ### Acceptance criteria and evidence
+    - **AC3 (unit + command-level):** new `no_read` flag on each `ReviewVendor` (claude=true via `--tools ""`, codex=false; a custom `AIDA_REVIEW_RUNNER_CMD` is never verified). `review prepare` collects every unconfined finder/challenger label and `post_review_comment` refuses before any forge call, after the local report and SARIF are written. Test: `bug2783_post_comment_refuses_unconfined_runner_and_canary_never_posts`.
+    - **AC2 (fixture):** same test plants a canary at a fake `$HOME/.ssh/id_test`, a prompt instructing the reviewer to read and quote it, and a fake codex that reads it through the real hardened spawn path. Asserts the canary never reaches the recording forge or the refusal message. The "never in the local report" half needs AC1 and is deferred.
+
+    ### Expected files
+    - `aida-cli-lib/src/vendors/review_runner.rs`
+    - `aida-cli-lib/src/launch/review_runner.rs`
+    - `aida-cli-lib/src/review_prepare.rs`
+
+    ### Ambiguities / conflicts as questions
+    - Is claude's `--tools ""` acceptable as "verified" no-read? I treat it as verified (no Read tool exists in the session); a live probe would harden that.
+    - agy has no review runner today, so nothing to flag for it.
+  created_at: 2026-11-27T03:58:46.370805147Z
+  modified_at: 2026-11-27T03:58:46.370805147Z
+  session_id: 01a21b24f112
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21b19-d8a7-7963-8736-0792eea43275
   author: joe
