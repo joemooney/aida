@@ -22982,6 +22982,9 @@ Options:
       --summary <TEXT>
           One-line rationale stored with the verdict and shown wherever the verdict surfaces
 
+      --needs <KIND:DETAIL>
+          Dependency for this verdict. Repeat for multiple dependencies
+
       --finding <TEXT>
           Concrete review finding to hand to the rework implementer. Repeat for multiple findings;
           omitted findings preserve any existing findings[] in the verdict record. Pass --finding ""
@@ -23005,12 +23008,12 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
-      --pr <PR>
-          Change number. Must match the reviewer lease; otherwise the review stays spec-only
-
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --pr <PR>
+          Change number. Must match the reviewer lease; otherwise the review stays spec-only
 
   -h, --help
           Print help (see a summary with '-h')
@@ -56605,6 +56608,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "needs",
+        "takes_value": true,
+        "help": "Dependency for this verdict. Repeat for multiple dependencies"
       },
       {
         "name": "no-carry",

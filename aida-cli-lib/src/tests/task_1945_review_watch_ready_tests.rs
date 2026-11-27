@@ -57,12 +57,14 @@ fn approval() -> Approval {
     Approval {
         reviewed: format!("{HEAD:040x}"),
         identity: "reviewer seat at 2026-10-22".into(),
+        ci_info: None,
         carried: None,
     }
 }
 
 /// Evidence snapshots; every reader is a value or an error.
 struct Fake {
+    episode: Option<(String, Vec<String>)>,
     landing: crate::landing_policy::LandingPolicy,
     stale_policy: crate::pr_rebase::StaleBasePolicy,
     approval: std::result::Result<Approval, String>,
@@ -76,6 +78,7 @@ impl Fake {
     fn ready() -> Self {
         let head = format!("{HEAD:040x}");
         Self {
+            episode: None,
             landing: Default::default(),
             stale_policy: Default::default(),
             approval: Ok(approval()),
@@ -88,6 +91,12 @@ impl Fake {
 }
 
 impl Evidence for Fake {
+    fn landing_mode(&self) -> crate::landing_policy::LandingPolicy {
+        self.landing.clone()
+    }
+    fn red_main_episode(&self) -> Option<(String, Vec<String>)> {
+        self.episode.clone()
+    }
     fn latest_ci_run(&self, _: &str) -> Result<(String, String, u64)> {
         Ok(("ci".into(), "23".into(), 1))
     }
@@ -1255,6 +1264,7 @@ fn carried_approval_suppresses_both_dispatch_checks_but_not_ci_readiness() {
     evidence.approval = Ok(Approval {
         reviewed: approved,
         identity: "reviewer".into(),
+        ci_info: None,
         carried: Some(description),
     });
     evidence.ci = Ok(CommitChecks {
@@ -1767,4 +1777,27 @@ fn bug_2725_ready_only_with_clean_merge_and_full_head_ci() {
     evidence.ci.as_mut().unwrap().checks[1].run_in_progress = false;
     evidence.landing.mode = crate::landing_policy::LandingMode::ReviewGated;
     assert!(not_ready_with(&evidence, &c).contains("overlapping paths"));
+}
+
+// trace:STORY-2897 | ai:codex
+#[test]
+fn story_2897_s1b_covered_red_requires_fresh_base() {
+    let mut f = Fake::ready();
+    f.landing.mode = crate::landing_policy::LandingMode::ReviewGated;
+    f.ci.as_mut().unwrap().checks = vec![
+        check(crate::landing_policy::MERGE_HOLD_GATE, CheckOutcome::Passed),
+        check(CI_AGGREGATOR_CHECK, CheckOutcome::Failed),
+    ];
+    assert!(not_ready(&f, &change(0, false)).contains("CI failed"));
+    f.episode = Some((format!("{HEAD:040x}"), vec![CI_AGGREGATOR_CHECK.into()]));
+    assert_eq!(ready::evaluate(&change(0, false), &f).0, Readiness::Ready);
+    assert!(not_ready(&f, &change(1, false)).contains("full-tier CI"));
+    f.ci.as_mut()
+        .unwrap()
+        .checks
+        .push(check("other", CheckOutcome::Failed));
+    assert!(not_ready(&f, &change(0, false)).contains("CI failed"));
+    f.ci.as_mut().unwrap().checks.pop();
+    f.ci.as_mut().unwrap().checks[0].outcome = CheckOutcome::Pending;
+    assert!(not_ready(&f, &change(0, false)).contains("has not reported success"));
 }
