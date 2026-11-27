@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2738",
+  "publishes": [
+    {
+      "at": "2026-11-27T18:00:46.627863639Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-26T15:23:17.016777845Z",
+      "spec": "BUG-2738",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4663,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "5a1122ae5b2334814944b81c225392581cc5ccb4"
+      }
+    },
+    {
+      "ts": "2026-11-26T15:23:31.374187276Z",
+      "spec": "BUG-2738",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2738: the landed-spec guard (leases::landed_refusal / record_refusal_on_landed_spec, wired into review record before shelve_spec_on_failure) is correct by inspection: Completed or MERGED/CLOSED PR -> comment naming writer+verdict, no status flip; ledger and merge hold are written earlier; unreadable PR state falls back to today's shelve. AC1: unverified -- no test asserts the ledger entry with the non-shelve, and the review_commands.rs wiring is untested (strict path, blocks). AC2: partially verified by request_changes_on_live_in_progress_spec_still_shelves, but only via direct helper calls, not the record path. Protocol 'PR touches at least one test file': met (bug_2738_landed_refusal_tests.rs). store-writers.toml changes are inventory entries plus sort-order moves. Follow-ups: GitHub-only PR-state probe (p2), missing .AC trace markers (style), check outside atomic closure (p3). CI pending at review time.",
+        "recovery_hint": "address the review findings, move BUG-2738 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-27T17:15:51.133710156Z",
+      "spec": "BUG-2738",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4748,
+        "verdict": "APPROVED",
+        "reviewed_sha": "c7431f976fdbd45012d14ba79fbd8c34b176e22f"
+      }
+    },
+    {
+      "ts": "2026-11-27T17:57:06.671768453Z",
+      "spec": "BUG-2738",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4748
+      }
+    },
+    {
+      "ts": "2026-11-27T18:00:46.394776742Z",
+      "spec": "BUG-2738",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "14fc4f2cf43c14c2e26b50330eab9ae220186cc0",
+        "pr": 4748,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
