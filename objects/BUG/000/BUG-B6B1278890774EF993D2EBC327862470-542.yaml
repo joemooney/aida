@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T02:26:44.337877Z
-modified_at: 2026-11-27T06:05:37.292040979Z
+modified_at: 2026-11-27T06:48:47.030374818Z
 req_type: Bug
 tags:
 - lanes
@@ -193,6 +193,19 @@ comments:
   created_at: 2026-11-27T06:05:37.292028253Z
   modified_at: 2026-11-27T06:05:37.292028253Z
   session_id: 01a21b3a5cd9
+- id: 01a21bc3-80b6-7493-9054-840c471c8b04
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: b75b306e36; round 3 of #4718.
+    Acceptance evidence: AC1-AC4 are unchanged from 74d946754d (the reviewer accepted the code). Fast-gate root cause: the portability ratchet flagged prose classification at lane_salvage.rs:154 (stderr contains 'insufficient permissions'). a32d61ace2 replaced it with a typed signal: journalctl exit status plus empty stdout, treated as unknown and never as 'no OOM kill'. Ratchet baseline untouched. b75b306e36 removes the dead clippy too_many_arguments allow (7 args equals clippy's default limit).
+    Checks: make check-ci-fast exit 0 (ok Check Rust test portability ratchet); check-store-writers.py exit 0 after the main merge; lane_salvage tests 18 passed.
+    Probe findings: an empty kernel log also maps to None (unknown), which is the fail-safe direction for cause attribution. No authority path changed this round.
+    Residual risk: clippy was not run locally after the allow removal. CI's clippy job confirms it.
+  created_at: 2026-11-27T06:48:47.030374818Z
+  modified_at: 2026-11-27T06:48:47.030374818Z
+  session_id: 01a21ba180d8
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21ad7-b05c-7db2-817a-811e696dae3f
   author: joe
