@@ -1,0 +1,30 @@
+id: 01a21abf-bfc9-7c71-b380-311d707bdf0c
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1546
+agreed_id: TASK-3923
+title: An advisor FIX-FIRST / rework ruling writes a verdict or hold in one step (aida review rule --fix-first), so an approved head leaves train candidacy
+description: |
+  advisor-122 2026-11-26 19:08 (filed by product-15). Incident: at 18:17 the advisor ruled #4702 TASK-3922 FIX FIRST (restart_step echoed the raw argv, a secret-leak class), but only by MESSAGE. The gate ledger's last final record at head 1e0b7323 was still "approved", so the auto-train admitted it into train #4707 at 19:0x while the r1 rework lane had not pushed. The advisor then had to record a CR by hand at 19:08 and rely on the final-gate recheck to eject it.
+
+  ## Acceptance
+  - AC1: one command, e.g. `aida review rule PR-N --fix-first --reason "..."` (advisor role), that in ONE step records a request-changes verdict (an advisor ruling, attributed, with the reason) at the current head, or sets a supported merge hold, so the PR leaves train candidacy immediately. It is idempotent per head.
+  - AC2: `aida pr train --check` (and train-status) names a fix-first ruling as the reason a PR is not admitted, with the reason text and who ruled.
+  - AC3: a later push (a new head) clears the hold, so the normal review applies to the new head; the ruling never carries over.
+  - AC4: tests: a fix-first ruling on an approved head → excluded from the next train; a new head → eligible for review again; --check prints the cause.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T02:05:03.817488762Z
+modified_at: 2026-11-27T02:05:03.817488762Z
+req_type: Task
+tags:
+- advisor
+- review
+- train
+filed_at:
+  code_sha: 7461b694e0109a4a1ca68401e9bda5e773f03f87
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7461b694e01
+  vendor: claude
