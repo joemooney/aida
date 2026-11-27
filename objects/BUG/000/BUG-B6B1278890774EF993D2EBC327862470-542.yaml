@@ -2,20 +2,26 @@ id: 01a21ad3-97f1-7170-87b7-1ded18a206f6
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-542
 agreed_id: BUG-2781
 title: 'A lane killed after committing (SIGTERM/137 mid final gate) loses its committed fix: no salvage-push of a fast-forward commit; the kill cause is not logged'
-description: |
-  advisor-122 2026-11-26 19:28 (filed by product-15). Incident: the TASK-3922 r1 lane on dell1 (#4702) COMMITTED its fix (95d33632, 2 files +164/-20) and then started its final `make check-ci-fast` lane job (j20261127T014833361-12-0, timeout 3600s). One of the agent's tool calls was SIGKILLed (exit 137) at 19:09 MST; the implementer then exited with code 143 (SIGTERM) at about 19:22, and the lane job was "stopped at lane end rc=137 after 1288s". Result: "host post-exit commit skipped: the lane exited non-zero; a failed exit is not published", so a finished, committed fix was NOT pushed. Product-15 salvaged it by hand (fetched the clone branch into the primary, verified a fast-forward, pushed). The killer is not identified (no lane wall timeout hit; dell1 had 7 lanes and 28 GiB available). The final gate also ran far longer than usual (21+ min vs ~90s) on a cold or "overlay-stale" lane target.
+description: 'advisor-122 2026-11-26 19:28 (filed by product-15). Incident: the TASK-3922 r1 lane on dell1 (#4702) COMMITTED its fix (95d33632, 2 files +164/-20) and then started its final `make check-ci-fast` lane job (j20261127T014833361-12-0, timeout 3600s). One of the agent''s tool calls was SIGKILLed (exit 137) at 19:09 MST; the implementer then exited with code 143 (SIGTERM) at about 19:22, and the lane job was "stopped at lane end rc=137 after 1288s". Result: "host post-exit commit skipped: the lane exited non-zero; a failed exit is not published", so a finished, committed fix was NOT pushed. Product-15 salvaged it by hand (fetched the clone branch into the primary, verified a fast-forward, pushed). The killer is not identified (no lane wall timeout hit; dell1 had 7 lanes and 28 GiB available). The final gate also ran far longer than usual (21+ min vs ~90s) on a cold or "overlay-stale" lane target.
+
 
   ## Acceptance
+
   - AC1: when an implementer lane ends non-zero (a signal, a crash or a timeout) with COMMITTED, unpushed work on its PR branch that fast-forwards the remote branch, the host pushes it (salvage-push) and marks the attempt "pushed, unverified: final gate incomplete", so the work reaches review and CI instead of being lost. It never pushes uncommitted changes, a non-fast-forward, or to any branch other than the claimed one.
+
   - AC2 (alternative or in addition, the implementer contract): push the committed work BEFORE running the final local gate, and re-push after a fix.
+
   - AC3: the lane log records WHICH signal ended the agent, and from whom when knowable (OOM killer per dmesg, lane-job timeout, operator), so the next incident names its cause.
+
   - AC4: tests: a SIGTERM after a commit → salvage-pushed; uncommitted work only → nothing pushed and retained; a non-fast-forward → refused and retained.
+
+  '
 status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-27T02:26:44.337877077Z
-modified_at: 2026-11-27T04:11:37.839030277Z
+created_at: 2026-11-27 02:26:44.337877+00:00
+modified_at: 2026-11-27 04:11:37.839030+00:00
 req_type: Bug
 tags:
 - lanes
@@ -25,86 +31,114 @@ comments:
 - id: 01a21ad7-fc77-7213-8d1e-25489a05c8a2
   author: joe
   content: 'ADVISOR RULING (2026-11-26 19:40): STRICT (it pushes on the lane''s behalf). Binding for AC1: the host salvage-push targets a SALVAGE ref (refs/heads/salvage/<lane-id>) unless the branch already has an open PR (then it updates that PR branch, fast-forward only). It is announced on the spec and PR as ''salvaged, unverified: final gate incomplete (signal X)'', and a salvaged head is never auto-train eligible until a fresh CI + independent review at that head. AC2 (push before the final gate) is the PREFERRED fix; do it first, and AC1 becomes the backstop. AC3: also record the final-gate wall time and whether the target was overlay-stale (today''s gate took 21 min vs ~90s; that may be the real trigger). Tests for each.'
-  created_at: 2026-11-27T02:31:10.673940646Z
-  modified_at: 2026-11-27T02:31:10.673940646Z
+  created_at: 2026-11-27 02:31:10.673940+00:00
+  modified_at: 2026-11-27 02:31:10.673940+00:00
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
 - id: 01a21ada-a621-7e90-ac23-c6355b1acc66
   author: joe
-  content: |-
-    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 19:34):
-    # BUG-2781: salvage-push committed fast-forward work when a lane ends non-zero; log the kill cause (advisor-122 19:28; product-15). Lane: CLAUDE. STRICT (it pushes on the operator's behalf). MAIN, NEW branch bug-2781-salvage-push. <=250 lines. Completing (BUG-2781) trailer.
+  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 19:34):
+
+    # BUG-2781: salvage-push committed fast-forward work when a lane ends non-zero; log the kill cause (advisor-122 19:28; product-15). Lane: CLAUDE. STRICT (it pushes on the operator''s behalf). MAIN, NEW branch bug-2781-salvage-push. <=250 lines. Completing (BUG-2781) trailer.
+
     READ: `aida show BUG-2781` (the #4702 incident and AC1-AC4) and the lane host post-exit path ("host post-exit commit skipped: the lane exited non-zero" in the standalone implementer / lane runner).
-    AC1: on a non-zero lane end with COMMITTED work on the CLAIMED PR branch that FAST-FORWARDS the remote branch, the HOST pushes it (from the host's trusted git, never the seat clone's config: fetch the seat branch into a host ref, verify the fast-forward, push, drop the temp ref) and records "pushed, unverified: final gate incomplete". It never pushes uncommitted changes, a non-fast-forward, or another branch. AC3: log the terminating signal and its source when knowable. AC4: tests (SIGTERM after a commit → pushed; uncommitted only → nothing pushed, retained; non-fast-forward → refused, retained).
-    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work, and PUSH it before running make check-ci-fast (dogfood AC2).
-  created_at: 2026-11-27T02:34:05.542953720Z
-  modified_at: 2026-11-27T02:34:05.542953720Z
+
+    AC1: on a non-zero lane end with COMMITTED work on the CLAIMED PR branch that FAST-FORWARDS the remote branch, the HOST pushes it (from the host''s trusted git, never the seat clone''s config: fetch the seat branch into a host ref, verify the fast-forward, push, drop the temp ref) and records "pushed, unverified: final gate incomplete". It never pushes uncommitted changes, a non-fast-forward, or another branch. AC3: log the terminating signal and its source when knowable. AC4: tests (SIGTERM after a commit → pushed; uncommitted only → nothing pushed, retained; non-fast-forward → refused, retained).
+
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work, and PUSH it before running make check-ci-fast (dogfood AC2).'
+  created_at: 2026-11-27 02:34:05.542953+00:00
+  modified_at: 2026-11-27 02:34:05.542953+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a21b25-a680-7f61-a2d8-cc507846621e
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: 1d373bcd65 (git diff origin/main...HEAD, 10 files +625/-13)
 
+
     Acceptance evidence:
+
     - AC2 [behavioral-test]: LANE_JOB_CONTRACT (standalone_implementer.rs) now says commit+push BEFORE the final gate and re-push after a fix; implementer_prompt_names_the_sanctioned_path asserts the order. Dogfooded: this branch was pushed before the gate ran.
-    - AC1 [behavioral-test]: lane_salvage.rs. On a non-zero exit of a self-publishing seat-clone lane with committed, unpushed work (HEAD moved, origin not at HEAD, head_has_unpushed==Some(true); unknown means no), the host checks the seat is recorded, the lease owns the branch, and no punt/hold veto applies. It then bundles only the claimed branch through the seat sandbox and quarantines it in refs/aida/seat-import/<branch>. It verifies a fast-forward against a pinned remote head (merge-base --is-ancestor), pushes with no force to the open PR's branch or to salvage/<lease-id> when there is no PR, and always drops the host ref. Announced on the spec and PR as 'salvaged, unverified: final gate incomplete (<signal>)'. The attempt still finishes FailedAfterStart and mark_done refuses a non-clean exit, so it is never completed. Train eligibility stays head-bound (fresh CI + review at that head).
-    - AC3 [behavioral-test]: exit_cause names the signal (also 128+N wrapper codes) and what the launcher knows of its source; it is logged and appended to the attempt detail and result line. lane_job end line = '<id> <how> rc=N after Ns; target overlay-stale|overlay fresh'.
+
+    - AC1 [behavioral-test]: lane_salvage.rs. On a non-zero exit of a self-publishing seat-clone lane with committed, unpushed work (HEAD moved, origin not at HEAD, head_has_unpushed==Some(true); unknown means no), the host checks the seat is recorded, the lease owns the branch, and no punt/hold veto applies. It then bundles only the claimed branch through the seat sandbox and quarantines it in refs/aida/seat-import/<branch>. It verifies a fast-forward against a pinned remote head (merge-base --is-ancestor), pushes with no force to the open PR''s branch or to salvage/<lease-id> when there is no PR, and always drops the host ref. Announced on the spec and PR as ''salvaged, unverified: final gate incomplete (<signal>)''. The attempt still finishes FailedAfterStart and mark_done refuses a non-clean exit, so it is never completed. Train eligibility stays head-bound (fresh CI + review at that head).
+
+    - AC3 [behavioral-test]: exit_cause names the signal (also 128+N wrapper codes) and what the launcher knows of its source; it is logged and appended to the attempt detail and result line. lane_job end line = ''<id> <how> rc=N after Ns; target overlay-stale|overlay fresh''.
+
     - AC4 [behavioral-test]: seat_clone::bug_2781_lane_salvage_tests: SIGTERM after commit leads to a push to salvage/<lane>; with an open PR the branch is fast-forwarded; uncommitted-only work pushes nothing and is retained; a non-fast-forward is refused and the commits are retained, with no import refs left. 9/9 targeted tests pass (lane job j20261127T034826097-25-0).
 
-    Probes: (5 authority) push requires recorded seat + owning lease + no veto + ff check, and git push has no '+', so a race is refused by origin. Fail-closed: unreadable seat state, origin Unknown or a bundle/fetch error means nothing is pushed. No existing test weakened. Only change to an existing test: seat_with_commit made pub(crate).
 
-    Residual risks: (1) salvage covers seat-clone lanes only; a plain-worktree self-publishing lane that is killed is still not salvaged. (2) The signal's source is not observed (no dmesg/OOM probe); the line says 'not recorded by the launcher' and points to journalctl -k for SIGKILL. (3) A salvaged PR head runs the host fast gate path like any self-pushed head. (4) Production lines are about 310, over the 250 budget, mostly doc comments. (5) make check-ci-source could not complete here: the lane runner accepts only cargo, a direct run dies at the 60s tool cap, and test_lane_autobuild fails on the sandbox's read-only /tmp (environmental). CI is the gate evidence.
-  created_at: 2026-11-27T03:56:22.016710482Z
-  modified_at: 2026-11-27T03:56:22.016710482Z
+    Probes: (5 authority) push requires recorded seat + owning lease + no veto + ff check, and git push has no ''+'', so a race is refused by origin. Fail-closed: unreadable seat state, origin Unknown or a bundle/fetch error means nothing is pushed. No existing test weakened. Only change to an existing test: seat_with_commit made pub(crate).
+
+
+    Residual risks: (1) salvage covers seat-clone lanes only; a plain-worktree self-publishing lane that is killed is still not salvaged. (2) The signal''s source is not observed (no dmesg/OOM probe); the line says ''not recorded by the launcher'' and points to journalctl -k for SIGKILL. (3) A salvaged PR head runs the host fast gate path like any self-pushed head. (4) Production lines are about 310, over the 250 budget, mostly doc comments. (5) make check-ci-source could not complete here: the lane runner accepts only cargo, a direct run dies at the 60s tool cap, and test_lane_autobuild fails on the sandbox''s read-only /tmp (environmental). CI is the gate evidence.'
+  created_at: 2026-11-27 03:56:22.016710+00:00
+  modified_at: 2026-11-27 03:56:22.016710+00:00
   session_id: 01a21b0de4d7
   harness_version: 2.1.319 (Claude Code)
 - id: 01a21b32-d9fd-7db0-bed1-7afe16ea71ef
   author: aida-orchestrator
   content: 'Shelved by leases::shelve_spec_on_failure during reviewer: verdict:request-changes'
-  created_at: 2026-11-27T04:10:47.165081249Z
-  modified_at: 2026-11-27T04:10:47.165081249Z
+  created_at: 2026-11-27 04:10:47.165081+00:00
+  modified_at: 2026-11-27 04:10:47.165081+00:00
   session_id: 01a21b2e0719
 - id: 01a21b33-9f22-7b20-abc9-77eba1c09fb7
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2781):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2781):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 1d373bcd65e4
+
     Recorded: 2026-11-27T04:10:39.920441410+00:00
+
     Findings:
-    1. [p1] Required CI is red at the reviewed head 1d373bcd65e4. Three jobs fail: 'CI (fast gates)' (the check-ci-source step exits 2), 'CI (fast compile)' (step 'Ratchet set', scripts/check-ratchets.py --profile dev, exits 1) and Build ('Require every CI lane'). Runs on other branches in the same window are green, so the failure belongs to this PR. The job logs could not be fetched from the review sandbox, so diagnose with `make check-ci-fast` and fix. Likely contributor: scripts/store-writers.toml has no entries for aida-cli-lib/src/lane_salvage.rs. Its new writer sites are push() calling ship_from_seat::stage_bundle (an inventoried fs::write/write_all writer, so a wrapper sink), push() running git update-ref -d through git_text, and announce() calling comment_cmd::add_comment_cli. standalone_implementer::run also gains a new wrapper edge through lane_salvage::on_failed_exit. Regenerate and review the inventory as scripts/check-store-writers.py requires. Also confirm the Ratchet set compiles and passes with the new seat_clone test module.
-    2. [unmet-claimed-ac] BUG-2781 AC3 requires the lane log to record the signal 'and from whom when knowable (OOM killer per dmesg, lane-job timeout, operator)'. lane_salvage::exit_cause (aida-cli-lib/src/lane_salvage.rs:125-153) never determines a source; every branch prints 'not recorded by the launcher' and a SIGKILL only says to check `journalctl -k`. It does not try the knowable case the AC names: an oom-kill line in the kernel log (journalctl -k / dmesg) for the agent's pid or process group during the lane's window. Nor does it correlate a lane-job timeout or stop with the end. Probe the kernel log when it is readable, name the OOM killer when it matches, and keep the current fallback text when it is unreadable. Add a test with an injected log reader.
-    3. [untested-path, file aida-cli-lib/src/standalone_implementer.rs] This code pushes on the operator's behalf (advisor ruling: STRICT), yet the new failed-exit block in run() (standalone_implementer.rs:1945-1985) has no test. The untested parts are: the open_pr derivation (Outcome::PrOpened, else launch_seat.pr), passing launch_seat.head as launch_head, reading the real seat with bg::SeatState::read, and folding the salvage note into leftover_note so persist_exit_notes writes 'salvaged, unverified' to the attempt. The AC4 tests call lane_salvage::on_failed_exit directly with a hand-built SeatState, so a wrong open_pr or launch_head mapping in run() would get through. Two refusal paths of lane_salvage::push have no salvage-specific test either: a branch the lease does not own (require_publication_branch) and a publication veto (refuse_publication_veto). Add a test that runs the run()-level decision through an extracted helper, plus refusal tests for those two paths.
+
+    1. [p1] Required CI is red at the reviewed head 1d373bcd65e4. Three jobs fail: ''CI (fast gates)'' (the check-ci-source step exits 2), ''CI (fast compile)'' (step ''Ratchet set'', scripts/check-ratchets.py --profile dev, exits 1) and Build (''Require every CI lane''). Runs on other branches in the same window are green, so the failure belongs to this PR. The job logs could not be fetched from the review sandbox, so diagnose with `make check-ci-fast` and fix. Likely contributor: scripts/store-writers.toml has no entries for aida-cli-lib/src/lane_salvage.rs. Its new writer sites are push() calling ship_from_seat::stage_bundle (an inventoried fs::write/write_all writer, so a wrapper sink), push() running git update-ref -d through git_text, and announce() calling comment_cmd::add_comment_cli. standalone_implementer::run also gains a new wrapper edge through lane_salvage::on_failed_exit. Regenerate and review the inventory as scripts/check-store-writers.py requires. Also confirm the Ratchet
+    set compiles and passes with the new seat_clone test module.
+
+    2. [unmet-claimed-ac] BUG-2781 AC3 requires the lane log to record the signal ''and from whom when knowable (OOM killer per dmesg, lane-job timeout, operator)''. lane_salvage::exit_cause (aida-cli-lib/src/lane_salvage.rs:125-153) never determines a source; every branch prints ''not recorded by the launcher'' and a SIGKILL only says to check `journalctl -k`. It does not try the knowable case the AC names: an oom-kill line in the kernel log (journalctl -k / dmesg) for the agent''s pid or process group during the lane''s window. Nor does it correlate a lane-job timeout or stop with the end. Probe the kernel log when it is readable, name the OOM killer when it matches, and keep the current fallback text when it is unreadable. Add a test with an injected log reader.
+
+    3. [untested-path, file aida-cli-lib/src/standalone_implementer.rs] This code pushes on the operator''s behalf (advisor ruling: STRICT), yet the new failed-exit block in run() (standalone_implementer.rs:1945-1985) has no test. The untested parts are: the open_pr derivation (Outcome::PrOpened, else launch_seat.pr), passing launch_seat.head as launch_head, reading the real seat with bg::SeatState::read, and folding the salvage note into leftover_note so persist_exit_notes writes ''salvaged, unverified'' to the attempt. The AC4 tests call lane_salvage::on_failed_exit directly with a hand-built SeatState, so a wrong open_pr or launch_head mapping in run() would get through. Two refusal paths of lane_salvage::push have no salvage-specific test either: a branch the lease does not own (require_publication_branch) and a publication veto (refuse_publication_veto). Add a test that runs the run()-level decision through an extracted helper, plus refusal tests for those two paths.
+
     4. [p3] aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs:383 widens seat_with_commit to pub(crate), but its parameter type Fixture is pub(super) (bug_2169_seat_clone_tests.rs), which triggers the private_interfaces lint. The only new caller is a sibling module under seat_clone, so pub(super) is enough.
-    5. [style] aida-cli-lib/src/lib.rs:310-312: rustfmt turned the existing `// trace:STORY-2844 | ai:codex` comment into a trailing continuation of the new `mod lane_salvage;` line, so it no longer sits directly above `pub(crate) mod landing_gaps;`, the line it traces. Put the lane_salvage trace on its own line above the mod (the file's convention) and restore the STORY-2844 comment above landing_gaps.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-27T04:11:37.634761489Z
-  modified_at: 2026-11-27T04:11:37.634761489Z
+
+    5. [style] aida-cli-lib/src/lib.rs:310-312: rustfmt turned the existing `// trace:STORY-2844 | ai:codex` comment into a trailing continuation of the new `mod lane_salvage;` line, so it no longer sits directly above `pub(crate) mod landing_gaps;`, the line it traces. Put the lane_salvage trace on its own line above the mod (the file''s convention) and restore the STORY-2844 comment above landing_gaps.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-27 04:11:37.634761+00:00
+  modified_at: 2026-11-27 04:11:37.634761+00:00
 history:
 - id: 01a21ad7-b05c-7db2-817a-811e696dae3f
   author: joe
-  timestamp: 2026-11-27T02:31:12.732231864Z
+  timestamp: 2026-11-27 02:31:12.732231+00:00
   changes: []
 - id: 01a21b0e-46ac-7383-a8e1-bdc80825b4a5
   author: aida-session-start
-  timestamp: 2026-11-27T03:30:50.156639937Z
+  timestamp: 2026-11-27 03:30:50.156639+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a21b32-d9fd-7db0-bed1-7ae738d6b45b
   author: aida-orchestrator
-  timestamp: 2026-11-27T04:10:47.165076166Z
+  timestamp: 2026-11-27 04:10:47.165076+00:00
   session_id: 01a21b2e0719
   changes:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a21b33-4b66-7063-9212-a8e241e08b28
+  author: fast-gate
+  timestamp: 2026-11-27 04:11:16.198509+00:00
+  session_id: 01a21b0de4d7
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 - id: 01a21b33-945d-7f30-87a5-5c896e6cac2f
   author: joe
-  timestamp: 2026-11-27T04:11:34.877186273Z
+  timestamp: 2026-11-27 04:11:34.877186+00:00
   changes:
   - field_name: status
     old_value: InProgress
