@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:35:29.174799431Z
-modified_at: 2026-11-27T23:59:46.373946075Z
+modified_at: 2026-11-27T23:59:49.241294671Z
 req_type: Task
 tags:
 - admission
@@ -175,6 +175,20 @@ comments:
   created_at: 2026-11-27T23:19:30.848362304Z
   modified_at: 2026-11-27T23:19:30.848362304Z
   session_id: 01a21f21a198
+- id: 01a21f73-7137-7d20-b0f8-8339790dcf09
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4768):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 84e504039c3f
+    Recorded: 2026-11-27T23:54:47.979411527+00:00
+    Findings:
+    1. admission_owner.rs parked_position: the ticket only confers the fairness position when `p.owner == me`. The token is readable by any process from .aida/train/recovery.parked, so the owner check is the real authority that lets a resume skip the parked withhold. No test exercises a correct token held by a different (live) owner. task3920_review_watch_admits_while_recovery_parked only tries a wrong token ('forged'), so deleting `&& p.owner == me` survives every test. Add an assertion that a record owned by another live process (e.g. a spawned sleeping child), resumed with its real token through resume_train / yield_reason_before, is refused and given no position.
+    2. pr_train_journal.rs parked(): a record that does not parse (or that has a newer version or unknown fields, given deny_unknown_fields and version==1) is ignored at once, so trains are admitted, and it is pruned after 30 s. Only an I/O error fails closed. Atomic rename makes torn reads unlikely, and safety rests on slice 2's re-validation, so this only wastes CI. Still, the PR body's 'unreadable record refuses trains' wording overstates it. Document the distinction, or decide in S2 whether an unparsable record should withhold until it is pruned.
+    3. pr_train_journal.rs parked(): the two lifetime bounds (`expires_at - now <= max` and `expires_at - parked_at <= max`) are each covered only jointly. The only future-dated case in the test (ttl 30 days, age 0) fails both, so removing either check alone survives. Add a case with parked_at far in the past and expires_at within the bound of now, and the reverse. Either mutation only makes trains refuse more often (fail-closed direction).
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-27T23:59:49.047671233Z
+  modified_at: 2026-11-27T23:59:49.047671233Z
 history:
 - id: 01a218f0-1d5d-7983-a93f-c3e8f06dcafd
   author: joe
