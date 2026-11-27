@@ -1848,6 +1848,7 @@ fn run(
         &main_root,
         launch.vendor,
         &run_log,
+        launch.lease_id,
         status.success(),
         &outcome,
     );
@@ -1881,7 +1882,8 @@ fn run(
         let (_, code) = report(&Outcome::NoPr, status.code(), None);
         return Err(anyhow::Error::new(StandaloneImplementerExit {
             code,
-            message: detail,
+            // trace:STORY-3134 | ai:claude
+            message: crate::vendor_outage::exit_message(outage_note.as_deref(), detail),
             vendor_exit: code != NO_PR_EXIT_CODE,
         }));
     }
@@ -1989,6 +1991,7 @@ fn run(
                 lane: launch.lease_id,
                 seat_clone,
                 launch_seat: &launch_seat,
+                side_branch_only: outage_note.is_some(), // trace:STORY-3134 | ai:claude
             },
             &cause,
             &outcome,
@@ -2126,6 +2129,18 @@ fn run(
             );
         }
     }
+    // A usage-limit stop ends with no retained lease once its committed work
+    // is on the side branch. trace:STORY-3134 | ai:claude
+    let outage_end = outage_note.is_some().then(|| {
+        crate::vendor_outage::end_lane(seat.uncommitted, &|| {
+            let ended = end_finished_lease(launch.project_root, launch.lease_id);
+            let kept = ended.as_ref().err().map(|e| anyhow::anyhow!("{e:#}"));
+            if let Err(e) = attempt.record_cleanup(&worktree, ended) {
+                eprintln!("Warning: could not record the lane's cleanup: {e:#}");
+            }
+            kept.map_or(Ok(()), Err)
+        })
+    });
     let line = crate::lane_fast_gate::result_line(&main_root, launch.branch, &attempt.line()?);
     // trace:BUG-2705 | ai:claude
     let line = match &leftover_note {
@@ -2140,8 +2155,10 @@ fn run(
     // Make retained work visible on the same line consumed by host launchers.
     // Unknown evidence also forbids treating an exit as a disposable seat.
     // trace:BUG-2606 | ai:codex
+    let released = outage_end.as_ref().is_some_and(|(ended, _)| *ended);
     let line = if (seat.uncommitted != Some(0) || seat.head_has_unpushed != Some(false))
         && worktree.is_dir()
+        && !released
     {
         crate::lane_result::retained_work_line(line, &worktree)
     } else if cleanup_failed {
@@ -2190,9 +2207,11 @@ fn run(
             ),
         }
     };
-    if let Some(note) = outage_note {
-        message = format!("{note}; {message}"); // trace:STORY-3134 | ai:claude
+    // trace:STORY-3134 | ai:claude
+    if let Some((_, lease)) = &outage_end {
+        message = format!("{message}; {lease}");
     }
+    let message = crate::vendor_outage::exit_message(outage_note.as_deref(), message);
     Err(anyhow::Error::new(StandaloneImplementerExit {
         vendor_exit: matches!(outcome, Outcome::NoPr) && code != NO_PR_EXIT_CODE,
         code,

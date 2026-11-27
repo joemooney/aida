@@ -18,6 +18,9 @@ pub(crate) struct Outage {
     /// Whether `until` came from the vendor rather than the default hold.
     pub(crate) until_known: bool,
     pub(crate) message: String,
+    /// The lane whose run hit the limit, when a lane recorded it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) lane: Option<String>,
 }
 
 impl Outage {
@@ -30,15 +33,32 @@ impl Outage {
             until,
             until_known,
             message,
+            lane: None,
         }
     }
 
-    pub(crate) fn describe(&self) -> String {
+    fn until_text(&self) -> String {
         let until = self.until.with_timezone(&Local).format("%Y-%m-%d %H:%M %Z");
-        let hold = (!self.until_known).then_some(" (no reset time given)");
-        let hold = hold.unwrap_or_default();
-        let (vendor, message) = (&self.vendor, &self.message);
-        format!("`{vendor}` is unavailable until {until}{hold} ({message})")
+        let hold = if self.until_known {
+            ""
+        } else {
+            " (no reset time given)"
+        };
+        format!("{until}{hold}")
+    }
+
+    /// The lane exit's lead: `agent usage limit: <vendor> until <reset>`.
+    pub(crate) fn exit_note(&self) -> String {
+        let (vendor, until) = (&self.vendor, self.until_text());
+        format!(
+            "agent usage limit: {vendor} until {until} ({})",
+            self.message
+        )
+    }
+
+    pub(crate) fn describe(&self) -> String {
+        let (vendor, until, message) = (&self.vendor, self.until_text(), &self.message);
+        format!("`{vendor}` is unavailable until {until} ({message})")
     }
 }
 
@@ -86,6 +106,73 @@ pub(crate) fn refuse_launch(root: &Path, vendor: &str) -> Result<()> {
             path.display()
         ),
         None => Ok(()),
+    }
+}
+
+/// Every unexpired outage recorded on the main checkout of `root`, by vendor.
+/// Unreadable records are skipped, as [`refuse_launch`] skips them.
+// trace:STORY-3134 | ai:claude
+pub(crate) fn active(root: &Path) -> Vec<Outage> {
+    let dir = crate::main_worktree_root_from(root).join(".aida/vendor-outages");
+    let entries = std::fs::read_dir(dir).into_iter().flatten().flatten();
+    let read = entries.filter_map(|e| serde_json::from_slice(&std::fs::read(e.path()).ok()?).ok());
+    let mut out: Vec<Outage> = read.filter(|o: &Outage| o.until > Utc::now()).collect();
+    out.sort_by(|a, b| a.vendor.cmp(&b.vendor));
+    out
+}
+
+/// The `vendor-outage` findings `aida doctor` and `aida status` show: each
+/// active outage with its reset time and the lane it came from.
+// trace:STORY-3134 | ai:claude
+pub(crate) fn doctor_findings(root: &Path) -> Vec<crate::doctor_root::DoctorFinding> {
+    let main = crate::main_worktree_root_from(root);
+    let finding = |o: Outage| {
+        let lane = o.lane.as_deref().map(|l| format!(", hit by lane {l}"));
+        let until = o.until_text();
+        crate::doctor_root::DoctorFinding {
+            category: "vendor-outage".into(),
+            id: o.vendor.clone(),
+            summary: format!(
+                "`{}` hit its usage limit{}; launches and reviews on it are refused until {until}",
+                o.vendor,
+                lane.unwrap_or_default()
+            ),
+            action: format!(
+                "none: it clears on its own at {until}; to retry earlier, remove {}",
+                path(&main, &o.vendor).display()
+            ),
+            safe_heal: false,
+        }
+    };
+    active(root).into_iter().map(finding).collect()
+}
+
+/// End a lane stopped by a usage limit with no retained lease, once its
+/// committed work is on a remote (`end` is `session end`, whose own guard
+/// refuses commits no remote has). Uncommitted edits keep the lease, so they
+/// are never discarded. Returns whether the lease ended, and the note.
+// trace:STORY-3134 | ai:claude
+pub(crate) fn end_lane(uncommitted: Option<usize>, end: &dyn Fn() -> Result<()>) -> (bool, String) {
+    match uncommitted {
+        Some(0) => match end() {
+            Ok(()) => (true, "lease released".into()),
+            Err(e) => (false, format!("lease kept: {e:#}")),
+        },
+        Some(n) => (
+            false,
+            format!("lease kept: {n} uncommitted file(s) in the seat"),
+        ),
+        None => (false, "lease kept: the seat could not be read".into()),
+    }
+}
+
+/// `message` led by the lane's usage-limit note, when it has one, so a stop
+/// on a usage limit always names itself.
+// trace:STORY-3134 | ai:claude
+pub(crate) fn exit_message(note: Option<&str>, message: String) -> String {
+    match note {
+        Some(note) => format!("{note}; {message}"),
+        None => message,
     }
 }
 
