@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2777",
+  "publishes": [
+    {
+      "at": "2026-11-27T01:49:55.104269471Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-26T20:40:09.428070192Z",
+      "spec": "BUG-2777",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4685,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "36ffea9bc51797e6a523d58c668abd4888c859e1"
+      }
+    },
+    {
+      "ts": "2026-11-26T20:40:16.110697159Z",
+      "spec": "BUG-2777",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2777 adds a typed stacked-diff-drift row to the train-culprit sidecar, routes a drift ejection in the same pass (update-branch pinned to the ejected head plus a review queue, or an advisor conflict-repair request), refuses the drifted head even when the PR is named, and reports drift older than 30 minutes as its own landing-drought cause. The unit pieces are sound and tested: AC1 is verified by bug2777_drift_routes_to_update_and_review_or_conflict_repair, bug2777_drift_row_is_typed_and_naming_does_not_clear_it and the STACKED_DRIFT prefix assertion in build_drops_...; AC2 by bug2777_a_drifted_head_is_refused_even_when_named; AC3 by bug2777_stacked_diff_drift_over_30m_is_its_own_cause. AC4 is only partly met, because nothing tests the train-handler wiring that ties these together. That wiring is new code on the strict train/landing path: the post-drive loop in pr_train_handler_with_dispatch_ctx filters on the prefix, dedupes per PR, re-checks dispatch authority before the forge branch mutation, and calls record_drift. Under ADR-76 an untested refusal path in authority code blocks. Bug protocol: the PR touches at least one test file (met). CI was pending at review time: fast gates green, fast compile pending. The other findings are p3 follow-ups.",
+        "recovery_hint": "address the review findings, move BUG-2777 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-26T22:18:36.562405148Z",
+      "spec": "BUG-2777",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4685,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "4cbdf727160da85e30e54b7a37db8b4a9a0c9ed3"
+      }
+    },
+    {
+      "ts": "2026-11-26T22:18:48.701000354Z",
+      "spec": "BUG-2777",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2777 round 2 at 4cbdf727. Most of round 1 is resolved. Advisor binding (2): the drift hold is written even when authority is lost, tested in bug2777_train_routes_and_records_a_drift_ejection_only_under_authority. Binding (3): the route text is accurate, and the TASK-1960 gate is untouched. Binding (4): landing_drought::scan reads train state from the main worktree via main_worktree_root_from, tested from a git-worktree seat in bug2777_scan_reads_train_state_from_the_main_worktree. Binding (5): a drift row and a red row at the same head have an explicit, tested precedence. AC2 is met by bug2777_a_drifted_head_is_refused_even_when_named: the head is refused even when named and the route is printed. AC3 is met by bug2777_stacked_diff_drift_over_30m_is_its_own_cause. AC1 is met at the extracted-loop level: route_drift_ejections, fed by a real build() drift ejection through a fake DriftRouter, checks routing, the typed row, per-PR dedupe and that a red ejection is not routed. One blocking gap remains on the strict train/authority path, which ADR-76 treats as blocking. The live authority adapter LiveDriftRouter::authority has no test: neither its dispatch_abort short-circuit nor its mapping of a dispatch_check failure. Neither does the handler call site that feeds it. A mutation that makes authority() always return Ok, or that drops the route_drift_ejections call, passes every test in this PR, and round 1 named this gap (items b and d). The implementer's self-review says the abort caching is covered by inspection only. The tests module is a child of pr_train, and existing tests build LiveTrainForge with dispatch_ctx None and a fake forge, so the missing test is cheap to write. The base moved by one commit (BUG-2775, review vendor table); it touches none of these files, so no finding depends on it. CI was pending at review time: fast gates pass, fast compile pending, and merge-hold-gate is awaiting clearance.",
+        "recovery_hint": "address the review findings, move BUG-2777 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-26T23:36:50.237551593Z",
+      "spec": "BUG-2777",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4685,
+        "verdict": "APPROVED",
+        "reviewed_sha": "7f1fa7dfed0edf8dc9313469364795b5f3f05194"
+      }
+    },
+    {
+      "ts": "2026-11-27T01:44:52.980522172Z",
+      "spec": "BUG-2777",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4685
+      }
+    },
+    {
+      "ts": "2026-11-27T01:49:54.869295516Z",
+      "spec": "BUG-2777",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "168dc38578de59a6fc6f8e8d6914117513a19dce",
+        "pr": 4685,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
