@@ -1,0 +1,18 @@
+{
+  "id": "0bd7e2ce-8dc2-49f8-b495-1672ebd9dfb0",
+  "thread_id": "0bd7e2ce-8dc2-49f8-b495-1672ebd9dfb0",
+  "from": "aida-throughput-guard",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795815311798,
+  "body": "- [STUCK-REVIEW] #4751 at 2e13e2c9 has had no verdict, no reviewer and no lane for 33 min, and its CI is red (Build (ubuntu-latest) run 46067593083 attempt 1 tier FAST conclusion failure (selected, not superseded), CI (fast compile) run 46067593083 attempt 1 tier FAST conclusion failure (selected, not superseded))\n  -> launch a reviewer for #4751 at 2e13e2c9, or route a lane for its red CI\n\n9 stall(s) in all are listed in `aida schedule due --seat advisor`; `aida land stalls` prints the current picture. When done: `aida schedule done throughput-guard-route-advisor`.",
+  "subject": "Throughput guard: 1 new stall(s) for the advisor seat",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
