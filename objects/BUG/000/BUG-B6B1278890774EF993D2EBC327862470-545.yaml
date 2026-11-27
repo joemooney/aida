@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T04:27:12.923122169Z
-modified_at: 2026-11-27T06:57:42.799966895Z
+modified_at: 2026-11-27T06:59:30.021932356Z
 req_type: Bug
 comments:
 - id: 01a21b43-1a62-7921-9b1a-11e036f97be5
@@ -112,6 +112,21 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-27T06:57:42.633397173Z
   modified_at: 2026-11-27T06:57:42.633397173Z
+- id: 01a21bcd-9625-7890-8a6d-6c0d46b80aab
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 23:59):
+    # BUG-2784 r1 on #4733 (advisor-122 ruling 2026-11-27 00:00 at 9afeaa25: REWORK, ONE round; product-15). Lane: CLAUDE. MAIN, existing branch bug-2784-ratchet-union-merge / PR #4733. Keep the title.
+    BINDING:
+     (1) On ANY driver failure (a same-key edit, duplicates, invalid JSON, a missing or unreadable script, any non-zero exit), the driver writes STANDARD 3-way conflict markers into %A (fall back to `git merge-file` semantics on %O/%A/%B) and exits non-zero, so a resolver NEVER sees a clean-looking OURS file and nothing is silently dropped. TEST each failure mode (same-key, duplicates, invalid JSON, a missing script): %A contains <<<<<<< / ======= / >>>>>>> and both sides' content.
+     (2) A TEST pinning the sandbox git-config wiring: the GIT_CONFIG_COUNT and every key/value (core.hooksPath=/dev/null and core.fsmonitor=false still set, plus the merge driver keys), exercised through the real sandbox_args path, not only json_union_merge_config directly.
+     (4) Apply the merge env to merge_publication_head (seat_clone.rs ~3664) if that's <= ~20 lines; otherwise record it as remaining scope in a BUG-2784 comment and the PR body.
+     (3) Record as a RESIDUAL (a spec comment + the PR body): under a [contained] read_allowlist, main's scripts/json-union-merge.py is not visible in the commit sandbox, so the driver fails (and with (1) fails SAFE with markers).
+    One targeted test run, make check-ci-fast, then push to #4733. COMMIT and PUSH before the final gate.
+  created_at: 2026-11-27T06:59:30.021932356Z
+  modified_at: 2026-11-27T06:59:30.021932356Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21b42-8a60-77d1-97c9-cf16dffb949c
   author: joe
