@@ -18,12 +18,11 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-27T21:46:24.605413037Z
+modified_at: 2026-11-27T21:55:11.659014305Z
 req_type: Task
 tags:
 - review
 - story-3076
-- track:integration
 relationships:
 - rel_type: Supersedes
   target_id: 01a21a4f-9bb8-7d00-8c20-a0d815312e69
@@ -500,6 +499,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a21f01-58ab-79b1-9294-c63a025bb4d7
+  author: joe
+  timestamp: 2026-11-27T21:55:11.659011479Z
+  changes:
+  - field_name: tags
+    old_value: review, story-3076, track:integration
+    new_value: review, story-3076
 execution_mode: drain
 filed_at:
   code_sha: 6c832e0d3a8b189ff57b0665563aafb822a7a71d
