@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T04:27:12.923122169Z
-modified_at: 2026-11-27T07:42:55.661261546Z
+modified_at: 2026-11-27T07:53:51.786657121Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -155,6 +155,15 @@ comments:
     - RESIDUAL (finding 3): under a configured [contained] read_allowlist the commit sandbox binds only essential paths, the allowlist, the clone and main/.git, so MAIN's checkout scripts/json-union-merge.py is not visible; the driver then fails into the text-merge fallback (markers on conflict, never a silent OURS). No such config is set today; add the script path to the allowlist if one is configured.
   created_at: 2026-11-27T07:42:55.661261546Z
   modified_at: 2026-11-27T07:42:55.661261546Z
+  session_id: 01a21bedcc3c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21bff-15aa-71d1-948f-e87896fcdcc6
+  author: dirtlab
+  content: |-
+    ## Round 2 update: finding 3 resolved, not residual
+    The commit sandbox (commit_sandbox_args) now binds MAIN's scripts/json-union-merge.py read-only (--ro-bind-try, after every other mount), so the driver runs under a [contained] read_allowlist and when MAIN sits under the sandbox's private /tmp (the bwrap e2e tests hit exactly that: without the bind the driver failed into the text-merge fallback and the rework reported a marker-carrying conflict, i.e. it failed safe). Remaining residual: if that file is absent or unreadable the wrapper text-merges (markers on a conflict; a clean text merge passes as git's default would). The earlier comment's RESIDUAL note is superseded.
+  created_at: 2026-11-27T07:53:51.786657121Z
+  modified_at: 2026-11-27T07:53:51.786657121Z
   session_id: 01a21bedcc3c
   harness_version: 2.1.319 (Claude Code)
 history:
