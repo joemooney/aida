@@ -242,6 +242,16 @@ pub enum AdvisorLoopsCommand {
     /// End an active drain; the loops take their admission claims again.
     // trace:BUG-2703 | ai:claude
     Resume,
+    /// Release a waiting manual train, so the auto-train stops yielding to it.
+    ///
+    /// `aida advisor loops train-status` lists each waiting manual train with
+    /// its id. A waiter is also released when the process that retries it
+    /// exits, or 15 minutes after its last attempt.
+    // trace:TASK-3924 | ai:claude
+    ReleaseWaiter {
+        /// The waiter id shown by `train-status`.
+        id: String,
+    },
     #[clap(hide = true)]
     TrainWorker,
     #[clap(hide = true)]
