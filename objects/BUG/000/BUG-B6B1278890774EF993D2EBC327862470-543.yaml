@@ -12,12 +12,12 @@ description: |
   - AC2: the PRE-PUSH lane gate needs no compile beyond what the lane's own targeted test already built. Options for the advisor sketch: (a) split `check-ratchets` out of `check-ci-fast` into `check-ci-compile` (CI already runs `check-ratchets.py --profile dev` in its own job), so lanes run `check-ci-source` + their one targeted cargo run; (b) make check-ratchets reuse the lane's already-built test binaries and the binary from its targeted run (the same --profile agent), skipping a rebuild when the tree is unchanged; (c) verify-manual runs only when docs/cli or CLI surface files are touched. Whichever is chosen, the documented ~90s must be TRUE on a lane, or the doc must change.
   - AC3: any check-ci-fast step blocked >120s with ~0% CPU fails fast, naming the step and what it waits on (e.g. "cargo build lock held by pid N").
   - AC4: a regression timing check: check-ci-fast on a lane with a warm overlay and no Rust change completes under the documented budget.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T02:39:43.224402332Z
-modified_at: 2026-11-27T04:33:19.828148587Z
+modified_at: 2026-11-27T05:40:40.659041875Z
 req_type: Bug
 tags:
 - ci
@@ -134,6 +134,20 @@ history:
   author: dirtlab
   timestamp: 2026-11-27T04:33:22.084734659Z
   changes: []
+- id: 01a21b85-260d-7072-8ee5-60283a19936f
+  author: aida-auto-bump
+  timestamp: 2026-11-27T05:40:40.589405927Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21b85-2653-7ff0-a932-da610f5bb427
+  timestamp: 2026-11-27T05:40:40.659036823Z
+  agent: aida
+  commit_sha: 809cf02565b10c7b07a7cf4344f93a7ea5f54363
+  summary: 'BUG-2782 per advisor ruling (a)+(c). AC1 verified: check-ci-gates prints RUN/ok/FAIL with duration per gate; check-ratchets.py adds a ''ratchets: step: <why>'' line per command (test_auto_skips_build_without_surface_change_and_ci_default_always_runs asserts every step has a why). AC2 verified: check-ci-fast = check-ci-gates.py --tier fast --no-build (skips and names the one cargo fast gate, ''Rust structural ratchets'', whose two halves check-ratchets runs); check-ci-compile depends on check-ratchets; check-ratchets uses --manual auto with fail-to-run on git errors; CI unchanged (Ratchet set step defaults to --manual always; fast-gates still runs check-ci-source); integration-sync-main.sh adds make check-ratchets; doc figure changed from ~90s. Tests: test_check_ci_fast_closure_has_no_cargo_or_ratchet_step, test_ratchets_run_in_check_ci_compile_and_integration_sync, ManualCheckGate.*. AC3 verified: stall watchdog armed only for --no-build (default 120s, AIDA_GATE_STALL_SECS), kills the tree and prints STALL <step>, pid/comm/wchan and last output; StallWatchdog tests (idle sleep killed, busy loop not). /proc stat field indexing (utime..cstime = fields[11:15]) checked correct. AC4 verified as briefed: test asserting check-ci-fast''s Makefile closure and resolved plan contain no cargo build/test/check step; timing evidence 496s in spec comment (doc figure slightly low, follow-up). Type protocol: BUG-2782 ''PR touches at least one test file'' — met (tests/test_bug_2782_ccf_no_build.py, tests/test_ratchet_set.py; new file wired into CI tier fixtures step). Stale base (3 commits behind): no finding depends on base changes. CI pending at review time (fast gates pass, fast compile pending). Three non-blocking follow-ups (p2/p3): local manual-check path set misses *_cmd.rs clap files; stale ci-test-shards.md paragraph; documented 7 min vs measured 8.3 min.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 956b13f4da439b80d7c2710c6b5572adee9364df
@@ -146,3 +160,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-27T04:20:01.476882181Z
   implemented_by: dirtlab
+  completed_at: 2026-11-27T05:40:40.589399190Z
+  completion_sha: 809cf02565b10c7b07a7cf4344f93a7ea5f54363
