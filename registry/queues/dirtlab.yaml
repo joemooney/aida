@@ -178,3 +178,23 @@
   added_at: 2026-11-27T20:03:17.057307198Z
   for_role: reviewer
   added_by_machine: disrad-dvp98b3puw
+- user_id: dirtlab
+  requirement_id: 01a21e9c-66bd-79d2-a08b-569cec3b5a6e
+  position: 1557000
+  added_by: dirtlab
+  note: auto-queued by `session end` (01a21e6d); covers 1 spec
+  added_at: 2026-11-27T20:05:21.276847435Z
+  for_role: reviewer
+  added_by_machine: disrad-dvp98b3puw
+- user_id: dirtlab
+  requirement_id: 01a21e60-60a7-7e40-8794-3f57fe6d6d2a
+  position: 1558000
+  added_by: dirtlab
+  added_at: 2026-11-27T20:05:01.512620338Z
+  for_role: implementer
+- user_id: dirtlab
+  requirement_id: 01a21e99-d4fa-7e12-8cca-77a6ef3aa27f
+  position: 1559000
+  added_by: dirtlab
+  added_at: 2026-11-27T20:05:43.468609564Z
+  for_role: implementer
