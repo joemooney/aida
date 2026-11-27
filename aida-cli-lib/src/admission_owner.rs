@@ -541,13 +541,96 @@ pub(crate) fn ship_admission(root: &Path) -> Result<Option<Claim>> {
 /// to the configured bound while the auto-train yields between its passes.
 /// The auto-train's own trains never wait: they run on their own claim.
 // trace:BUG-2703 | ai:claude
-pub(crate) fn manual_train_admission(root: &Path, automatic: bool) -> Result<Option<Claim>> {
-    let bound = if automatic {
-        Duration::ZERO
-    } else {
-        wait_bound(root)?
+pub(crate) fn manual_train_admission(
+    root: &Path,
+    automatic: bool,
+    prs: &[u64],
+) -> Result<Option<Claim>> {
+    if automatic {
+        return train_mode(root, true, Mode::CooperativeTrain, Duration::ZERO);
+    }
+    let started = Utc::now();
+    let result = train_mode(root, false, Mode::CooperativeTrain, wait_bound(root)?);
+    // A manual train that gave up waiting stays recorded, so the auto-train
+    // yields before its next train; admitted, the record goes.
+    // trace:BUG-2771 | ai:claude
+    match &result {
+        Ok(_) => {
+            let _ = std::fs::remove_file(waiter_file(root));
+        }
+        Err(error) if error.downcast_ref::<AdmissionBusy>().is_some() => {
+            if let Err(why) = record_waiter(root, prs, started) {
+                eprintln!("admission: could not record the waiting manual train: {why:#}");
+            }
+        }
+        Err(_) => {}
+    }
+    result
+}
+
+/// How long a manual train that gave up waiting stays recorded after its
+/// last attempt: longer than an operator's retry interval, so the auto-train
+/// yields its next train to the retry. trace:BUG-2771 | ai:claude
+const WAITER_TTL_SECS: i64 = 15 * 60;
+
+/// A manual train that waited for admission and gave up. It grants nothing:
+/// while in effect the auto-train does not start another train.
+// trace:BUG-2771 | ai:claude
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct ManualWaiter {
+    pub(crate) prs: Vec<u64>,
+    pub(crate) since: DateTime<Utc>,
+    pub(crate) expires_at: DateTime<Utc>,
+}
+impl ManualWaiter {
+    /// `operator train for #N waiting since HH:MM; auto-train yields next`.
+    pub(crate) fn describe(&self) -> String {
+        let prs = if self.prs.is_empty() {
+            "all ready PRs".to_string()
+        } else {
+            self.prs
+                .iter()
+                .map(|pr| format!("#{pr}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        format!(
+            "operator train for {prs} waiting since {}; auto-train yields next",
+            self.since.with_timezone(&chrono::Local).format("%H:%M")
+        )
+    }
+}
+
+fn waiter_file(root: &Path) -> PathBuf {
+    directory(root).join("manual-train.waiter")
+}
+
+/// Record (or refresh) the waiting manual train, keeping the earliest time
+/// it has been waiting. trace:BUG-2771 | ai:claude
+fn record_waiter(root: &Path, prs: &[u64], started: DateTime<Utc>) -> Result<()> {
+    let dir = directory(root);
+    std::fs::create_dir_all(&dir)?;
+    let since = manual_waiter(root)
+        .filter(|w| w.prs == prs)
+        .map_or(started, |w| w.since.min(started));
+    let row = ManualWaiter {
+        prs: prs.to_vec(),
+        since,
+        expires_at: Utc::now() + chrono::Duration::seconds(WAITER_TTL_SECS),
     };
-    train_mode(root, automatic, Mode::CooperativeTrain, bound)
+    write_atomic(&waiter_file(root), &serde_json::to_vec(&row)?)
+}
+
+/// The recorded manual train still waiting, if one is in effect. Expired or
+/// unparsable records are ignored (they grant nothing either way).
+// trace:BUG-2771 | ai:claude
+pub(crate) fn manual_waiter(root: &Path) -> Option<ManualWaiter> {
+    let body = std::fs::read_to_string(waiter_file(root)).ok()?;
+    let row: ManualWaiter = serde_json::from_str(&body).ok()?;
+    let remaining = row.expires_at.signed_duration_since(Utc::now());
+    (remaining > chrono::Duration::zero()
+        && remaining <= chrono::Duration::seconds(WAITER_TTL_SECS))
+    .then_some(row)
 }
 
 /// `aida land run`'s exclusive admission, waiting up to the configured bound.
@@ -953,10 +1036,18 @@ pub(crate) fn yield_reason(root: &Path, purpose: &str) -> Option<String> {
         // Bounded: a stalled serializer holder makes the controller yield
         // (fail closed), never hang between passes. trace:BUG-2703 | ai:claude
         let _serial = lock_serial(&dir, std::time::Instant::now() + SERIAL_GRACE)?;
-        Ok(intents(&dir, Utc::now())?
+        if let Some(intent) = intents(&dir, Utc::now())?
             .iter()
             .find(|intent| yields_to(Mode::Legacy, purpose, intent.kind))
-            .map(Intent::describe))
+        {
+            return Ok(Some(intent.describe()));
+        }
+        // A manual train that gave up waiting goes before the auto-train's
+        // next train; review controllers coexist with it. trace:BUG-2771 | ai:claude
+        Ok((purpose == "legacy auto-train")
+            .then(|| manual_waiter(root))
+            .flatten()
+            .map(|waiter| waiter.describe()))
     };
     match inner() {
         Ok(reason) => reason,
@@ -1274,7 +1365,7 @@ mod tests {
     fn bug2732_manual_train_releases_stale_legacy_receipts() {
         let temp = zero_wait_train_fixture();
         let stale = stale_legacy_receipts(temp.path());
-        let _claim = manual_train_admission(temp.path(), false)
+        let _claim = manual_train_admission(temp.path(), false, &[])
             .unwrap()
             .expect("first attempt should acquire its own claim");
         for receipt in stale {
@@ -1288,14 +1379,16 @@ mod tests {
         let temp = zero_wait_train_fixture();
         let live = acquire(temp.path(), "legacy auto-train", true).unwrap();
         let stale = stale_legacy_receipts(temp.path());
-        let error = manual_train_admission(temp.path(), false).err().unwrap();
+        let error = manual_train_admission(temp.path(), false, &[])
+            .err()
+            .unwrap();
         assert!(error.downcast_ref::<AdmissionBusy>().is_some(), "{error}");
         assert!(live.receipt.is_file());
         for receipt in stale {
             assert!(!receipt.try_exists().unwrap());
         }
         drop(live);
-        assert!(manual_train_admission(temp.path(), false)
+        assert!(manual_train_admission(temp.path(), false, &[])
             .unwrap()
             .is_some());
     }
