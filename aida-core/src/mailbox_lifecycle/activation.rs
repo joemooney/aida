@@ -337,11 +337,15 @@ pub(crate) fn admission_gap(
                 HostVerdict::Admitting => unreachable!(),
             }
         };
-        gap.writers.push(format!(
-            "pid {} ({}, {}, {sha}, {kind})",
+        let comm = comm.unwrap_or_default();
+        let step = restart_step(
             host.pid,
-            comm.unwrap_or_default(),
-            host.exe
+            &comm,
+            view.map_or(&[][..], |p| p.cmdline.as_slice()),
+        );
+        gap.writers.push(format!(
+            "pid {} ({comm}, {}, {sha}, {kind}): {step}",
+            host.pid, host.exe
         ));
     }
     if let Some(why) = incomplete {
@@ -353,6 +357,24 @@ pub(crate) fn admission_gap(
             .push("this build could not identify itself".into());
     }
     Some(gap)
+}
+
+/// The stop and restart command for one unverified writer: an MCP server is
+/// reconnected from its client; any other writer is started again with its
+/// own arguments, which runs the current binary.
+// trace:TASK-3922 | ai:claude
+fn restart_step(pid: u32, comm: &str, cmdline: &[String]) -> String {
+    let args = cmdline.get(1..).unwrap_or_default();
+    let restart = if args.iter().any(|a| a == "mcp") {
+        "reconnect it from its MCP client (`/mcp` in Claude Code)".to_string()
+    } else if args.is_empty() {
+        format!("start `{comm}` again as it was started")
+    } else {
+        let shown = args.iter().take(6).map(String::as_str).collect::<Vec<_>>();
+        let more = if args.len() > shown.len() { " …" } else { "" };
+        format!("rerun `{comm} {}{more}`", shown.join(" "))
+    };
+    format!("stop it with `kill {pid}`, then {restart}")
 }
 
 #[cfg(test)]

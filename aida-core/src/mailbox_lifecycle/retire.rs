@@ -172,13 +172,15 @@ impl std::fmt::Display for RefusalReason {
                 if !writers.is_empty() {
                     write!(f, " (unverified: {})", writers.join("; "))?;
                 }
+                // Each named writer carries its own stop/restart command.
+                // trace:TASK-3922 | ai:claude
                 if *transient {
                     f.write_str(
-                        "; they run replaced binaries left over from a binary switch and \
-                         should exit on their own",
+                        "; they run replaced binaries left over from a binary switch, so stop \
+                         or restart each one with the command named above",
                     )?;
                 } else if !writers.is_empty() {
-                    f.write_str("; stop or restart the live writer named above")?;
+                    f.write_str("; stop or restart each live writer with the command named above")?;
                 }
                 write!(
                     f,

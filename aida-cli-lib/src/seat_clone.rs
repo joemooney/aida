@@ -3089,6 +3089,7 @@ if [ $rc -ne 0 ]; then
 fi' aida-staged < /tmp/aida-staged || exit 1
 fi
 printf '# AIDA salvage patch (contained seat clone)\n# clone: %s\n' "$PWD"
+printf '# head: %s\n' "$(git rev-parse --verify -q HEAD || echo none)"
 printf '# Every commit origin lacks, on every ref and stash entry, is in the .bundle beside this patch.\n'
 for c in $s; do printf '# stash entry: %s\n' "$c"; done
 printf '\n# Commits on HEAD not on origin:\n'
@@ -3214,16 +3215,29 @@ fn salvage_capped(main: &Path, clone: &Path, cap: u64, complete: bool) -> Result
                 clone.display()
             )
         })?;
-    if unpushed > 0 {
+    let bundle = if unpushed > 0 {
         let bundle_args = script_args(SALVAGE_BUNDLE_SCRIPT);
         let bundle_args: Vec<&std::ffi::OsStr> =
             bundle_args.iter().map(|a| a.as_os_str()).collect();
-        let bundle = run_sandboxed(clone, main, "sh", &bundle_args, cap).map_err(|failure| {
-            anyhow::anyhow!(
-                "could not bundle the {unpushed} unpushed commit(s) of {}: {failure}",
-                clone.display()
-            )
-        })?;
+        Some(
+            run_sandboxed(clone, main, "sh", &bundle_args, cap).map_err(|failure| {
+                anyhow::anyhow!(
+                    "could not bundle the {unpushed} unpushed commit(s) of {}: {failure}",
+                    clone.display()
+                )
+            })?,
+        )
+    } else {
+        None
+    };
+    // A retried teardown of an unchanged clone reuses its last salvage.
+    // trace:TASK-3922 | ai:claude
+    if !truncated {
+        if let Some(existing) = identical_salvage(&dir, &body, bundle.as_deref()) {
+            return Ok(existing);
+        }
+    }
+    if let Some(bundle) = bundle {
         let bundle_path = dir.join(format!("{stamp}.bundle"));
         std::fs::write(&bundle_path, bundle)
             .with_context(|| format!("write {}", bundle_path.display()))?;
@@ -3244,6 +3258,28 @@ fn salvage_capped(main: &Path, clone: &Path, cap: u64, complete: bool) -> Result
         );
     }
     Ok(path)
+}
+
+/// The newest salvage in `dir` when it holds exactly `body` and `bundle`
+/// (or, like `bundle`, no bundle). The patch records the clone, its HEAD and
+/// every change; the bundle every unpushed ref, checkpoints included. Teardown
+/// retries thus never write a duplicate copy of the same clone state, and
+/// any byte of difference writes a new one.
+// trace:TASK-3922 | ai:claude
+pub(crate) fn identical_salvage(dir: &Path, body: &[u8], bundle: Option<&[u8]>) -> Option<PathBuf> {
+    let newest = std::fs::read_dir(dir)
+        .ok()?
+        .filter_map(|entry| Some(entry.ok()?.path()))
+        .filter(|path| path.extension().is_some_and(|ext| ext == "patch"))
+        .max()?;
+    if std::fs::read(&newest).ok()? != body {
+        return None;
+    }
+    match (bundle, std::fs::read(newest.with_extension("bundle"))) {
+        (None, Err(error)) if error.kind() == std::io::ErrorKind::NotFound => Some(newest),
+        (Some(new), Ok(old)) if new == old.as_slice() => Some(newest),
+        _ => None,
+    }
 }
 
 /// Resolve the actual PR base before any fetch or merge. Unknown forge
@@ -6730,6 +6766,10 @@ mod tests;
 #[cfg(test)]
 #[path = "tests/task_2053_seat_clone_lifecycle_tests.rs"]
 mod lifecycle_tests;
+
+#[cfg(test)]
+#[path = "tests/task_3922_admission_followup_tests.rs"]
+mod task_3922_tests;
 
 #[cfg(test)]
 #[path = "tests/bug_2169_contained_clone_bwrap_tests.rs"]

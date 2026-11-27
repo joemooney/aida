@@ -148,6 +148,9 @@ mod work;
 // trace:TASK-3799 | ai:codex
 // trace:BUG-2549 | ai:codex
 pub(crate) use work::canonical_resume_branch;
+// trace:TASK-3922 | ai:claude
+#[cfg(test)]
+pub(crate) use work::kept_for_transient_admission;
 // trace:STORY-2749 | ai:claude
 pub(crate) use work::conflict_route_admission;
 pub(crate) use work::ResumePublicationFailure;
