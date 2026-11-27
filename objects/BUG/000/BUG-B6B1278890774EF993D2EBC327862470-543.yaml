@@ -1,0 +1,33 @@
+id: 01a21adf-7a78-7cf2-aad6-77755aa68799
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-543
+agreed_id: BUG-2782
+title: 'check-ci-fast is not build-free: check-ratchets compiles 3 test sets and the aida binary (~18 of 27 min per lane round on dell1)'
+description: |
+  Found 2026-11-26 19:40-19:55 by product-15 (advisor-122 asked 19:55; HIGH). `make check-ci-fast` is documented (CLAUDE.md) as "every CI gate needing no build (~90s)" and is every lane brief's pre-push gate. On dell1 lanes tonight it took 1222-1663s (20-28 min) EVERY round: BUG-2778 1414s, STORY-3134 1230s, TASK-3919 1397s, BUG-2777 1222s, BUG-2779 1259s, BUG-2780 1663s, BUG-2759 1627s, TASK-3922 1288s (killed mid-gate, BUG-2781).
+
+  ROOT CAUSE (evidence: lane-jobs/01a21a852a1c/j20261127T013648056-31-0.out on dell1, plus live process trees): Makefile `check-ci-fast: check-ci-source check-ratchets`, and scripts/check-ratchets.py COMPILES. It runs `cargo test -p aida-ci-guards --lib`, then `cargo test -p <group package>` for each ratchet-set group, then `cargo build --profile agent -p aida-cli --bin aida` so docs/cli/verify-manual.py can inspect a freshly built binary. Its own timing lines in that run: 77.44s, 239.55s, 342.68s and 431.52s, about 1090s of compiles out of 1627s (the 48 timed source gates sum to only 464s, also inflated by 7-lane CPU contention). Live trees show cargo/rustc under check-ratchets.py in futex_do_wait (cargo build-lock contention) and sccache in ep_poll. "overlay-stale" seed events (5-10 per lane) force rebuilds on the lane target overlay.
+
+  ## Acceptance
+  - AC1: every check-ci-fast step prints its own start/end and duration (the source gates already do; make check-ratchets' cargo steps say which build they are and why).
+  - AC2: the PRE-PUSH lane gate needs no compile beyond what the lane's own targeted test already built. Options for the advisor sketch: (a) split `check-ratchets` out of `check-ci-fast` into `check-ci-compile` (CI already runs `check-ratchets.py --profile dev` in its own job), so lanes run `check-ci-source` + their one targeted cargo run; (b) make check-ratchets reuse the lane's already-built test binaries and the binary from its targeted run (the same --profile agent), skipping a rebuild when the tree is unchanged; (c) verify-manual runs only when docs/cli or CLI surface files are touched. Whichever is chosen, the documented ~90s must be TRUE on a lane, or the doc must change.
+  - AC3: any check-ci-fast step blocked >120s with ~0% CPU fails fast, naming the step and what it waits on (e.g. "cargo build lock held by pid N").
+  - AC4: a regression timing check: check-ci-fast on a lane with a warm overlay and no Rust change completes under the documented budget.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T02:39:43.224402332Z
+modified_at: 2026-11-27T02:39:43.224402332Z
+req_type: Bug
+tags:
+- ci
+- dell1
+- lanes
+- throughput
+filed_at:
+  code_sha: 956b13f4da439b80d7c2710c6b5572adee9364df
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 956b13f4da4
+  vendor: claude
