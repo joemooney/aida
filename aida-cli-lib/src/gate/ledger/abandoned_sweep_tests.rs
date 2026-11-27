@@ -99,7 +99,7 @@ fn exited_reviewer_with_incomplete_draft_is_marked_sweep_abandoned_and_needs_rev
 }
 
 #[test]
-fn exited_reviewer_with_complete_draft_is_finalized_and_a_failed_finalize_expires() {
+fn exited_reviewer_with_complete_draft_is_finalized() {
     let (_tmp, root, _env) = setup(72, deferred());
     let seen = std::cell::Cell::new(0);
     let finalize = |_: &GateEvent, approval: &JsonObj| {
@@ -111,7 +111,10 @@ fn exited_reviewer_with_complete_draft_is_finalized_and_a_failed_finalize_expire
     };
     assert_eq!(run(&root, 72, true, true, &finalize).finalized, 1);
     assert_eq!(seen.get(), 1);
+}
 
+#[test]
+fn a_failed_finalize_expires_the_barrier_instead_of_leaving_it_standing() {
     let (_tmp, root, _env) = setup(73, deferred());
     let fail: Fin = &|_, _| Err(std::io::Error::other("store unavailable"));
     let done = run(&root, 73, true, true, fail);
