@@ -1,5 +1,5 @@
 job: seat-health-guard
-last_run: 2026-11-27T23:12:40.715110133Z
+last_run: 2026-11-27 23:12:40.715110+00:00
 last_by:
   seat: substrate
   session: 01a21f47a4c1
