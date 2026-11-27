@@ -11,12 +11,12 @@ description: |
   ## Acceptance criteria
   1. A dirty-state probe returns tri-state (clean / dirty / unknown). Unknown (any git error) → NOT eligible, and the hint names the cause. A test injects a git failure.
   2. Legacy claims without `claim_id` go through the same lane-record / session-registry check (or are ineligible, with a hint to salvage by hand). A test.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T22:55:23.049530615Z
-modified_at: 2026-11-27T00:55:26.674886622Z
+modified_at: 2026-11-27T00:59:56.678963075Z
 req_type: Bug
 comments:
 - id: 01a21a15-9400-74a3-87c6-bf99b4c09def
@@ -62,6 +62,13 @@ history:
   author: joe
   timestamp: 2026-11-26T22:56:33.491798494Z
   changes: []
+- id: 01a21a84-2186-7322-b415-0c73ab2d1416
+  author: aida-session-start
+  timestamp: 2026-11-27T00:59:56.678952264Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 52825e81d1c3fbab8e5bf382ef81641956f0e559
