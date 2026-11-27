@@ -1,5 +1,6 @@
 id: 01a21e01-384b-75c0-a6a7-65a83b9235e0
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1569
+agreed_id: TASK-3552
 title: 'Review follow-up: Follow-up: the landed-spec guard (record_refusal_on_landed_spec) returns None outside a di'
 description: |-
   From BUG-2738
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a20b16-0a8e-7413-abc1-7f3194759828
   created_at: 2026-11-27T17:15:44.055299231Z
+history:
+- id: 01a21e09-510d-7261-af1a-e2d197fa3805
+  author: joe
+  timestamp: 2026-11-27T17:24:16.781290448Z
+  changes: []
 filed_at:
   code_sha: c7431f976fdbd45012d14ba79fbd8c34b176e22f
   branch: pr-4748

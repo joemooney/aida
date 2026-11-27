@@ -1,5 +1,6 @@
 id: 01a21c92-c017-77d2-b822-7d8399ed2594
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-397
+agreed_id: STORY-3225
 title: 'Review PR-4741: [AI:claude] fix(lane-host): no agy call from init, typed probe timeout, ssh sign-in fix text, review agent docs (Refs STORY-3202)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21c7d`) for branch `story-3202-fu-agy-probe`.
@@ -35,6 +36,10 @@ history:
 - id: 01a21c92-e185-7b81-ba80-5880c638555d
   author: dirtlab
   timestamp: 2026-11-27T10:35:17.765045241Z
+  changes: []
+- id: 01a21e09-5436-7963-8f69-abd5a3f7a6dd
+  author: joe
+  timestamp: 2026-11-27T17:24:17.590158329Z
   changes: []
 filed_at:
   code_sha: f4c4400eaafc41dfbefdb9df3cf457dfa7d723c5

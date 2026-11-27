@@ -1,5 +1,6 @@
 id: 01a21bea-768e-7de2-b83c-3e292df9e3b4
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-395
+agreed_id: STORY-3223
 title: 'Review PR-4733: [AI:claude] fix(merge): union-merge driver keeps disjoint ratchet-set.json additions conflict-free (BUG-2784)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21b87`) for branch `bug-2784-ratchet-union-merge`.
@@ -47,6 +48,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a21e09-538d-7e91-9ed2-7b76674eddf8
+  author: joe
+  timestamp: 2026-11-27T17:24:17.421097599Z
+  changes: []
 filed_at:
   code_sha: f4c4400eaafc41dfbefdb9df3cf457dfa7d723c5
   branch: main

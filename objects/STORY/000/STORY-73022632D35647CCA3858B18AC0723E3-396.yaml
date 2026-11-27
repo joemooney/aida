@@ -1,5 +1,6 @@
 id: 01a21bec-633d-7593-b019-5864e5e92e84
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-396
+agreed_id: STORY-3222
 title: 'Review PR-4729: [AI:claude] feat(review-watch): opt-in shadow adversarial review beside each dispatched review [slice 1] (Refs STORY-3183)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21b7c`) for branch `story-3183-s1-shadow`.
@@ -35,6 +36,10 @@ history:
 - id: 01a21bec-9bc9-77b2-8f07-676bcdf0888b
   author: dirtlab
   timestamp: 2026-11-27T07:33:40.937234987Z
+  changes: []
+- id: 01a21e09-5352-76e1-8e4e-2541ecc06b77
+  author: joe
+  timestamp: 2026-11-27T17:24:17.362237943Z
   changes: []
 filed_at:
   code_sha: f4c4400eaafc41dfbefdb9df3cf457dfa7d723c5
