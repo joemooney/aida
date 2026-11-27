@@ -911,8 +911,19 @@ fn same_pending_delivery(pending: &JsonObj, approval: &JsonObj) -> bool {
     clean(pending) == clean(approval)
 }
 
+/// An exited reviewer's expired delivery barrier: "needs review", which is
+/// neither an approval nor a refusal ([`crate::gate::ledger::abandoned_sweep`]).
+// trace:BUG-2786 | ai:claude
+pub(crate) fn sweep_abandoned(record: &serde_json::Value) -> bool {
+    record.get("sweep_abandoned").and_then(|v| v.as_bool()) == Some(true)
+}
+
 // trace:STORY-2698 | ai:codex
 pub(crate) fn disposition_verdict(obj: &JsonObj) -> VerdictKind {
+    // trace:BUG-2786 | ai:claude — never approval, never request-changes.
+    if obj.get("sweep_abandoned").and_then(|v| v.as_bool()) == Some(true) {
+        return VerdictKind::Unknown;
+    }
     let kind = VerdictKind::parse(obj.get("verdict").and_then(|v| v.as_str()).unwrap_or(""));
     if obj.get("sweep_pending").and_then(|v| v.as_bool()) == Some(true) {
         return VerdictKind::RequestChanges;
