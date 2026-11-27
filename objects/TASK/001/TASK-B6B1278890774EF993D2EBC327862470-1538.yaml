@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T22:14:32.609326838Z
-modified_at: 2026-11-27T01:14:21.507982929Z
+modified_at: 2026-11-27T01:16:52.566955325Z
 req_type: Task
 tags:
 - lanes
@@ -88,6 +88,20 @@ comments:
   content: "DEFERRED (#4702 approval @1e0b7323, 2026-11-26; product-15):\n- aida-core/src/mailbox_lifecycle/activation.rs AdmissionGap doc comment (~line 289) still says replaced-binary writers 'exit on their own', which the new refusal text (retire.rs) now contradicts by telling the operator to stop or restart each one. Update the doc comment.\n- aida-core/src/mailbox_lifecycle/activation.rs restart_step joins the writer's argv unquoted into a backticked `rerun ...` command: an argument containing spaces or shell metacharacters renders a command that does not reproduce the original invocation when copy-pasted, and every argument (possibly a grant id or token passed on the command line) is copied into the refusal reason "
   created_at: 2026-11-27T01:12:08.447313995Z
   modified_at: 2026-11-27T01:12:08.447313995Z
+- id: 01a21a93-e5d9-7701-80aa-c6dd97f568d8
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 18:16):
+    # TASK-3922 r1 on #4702 (advisor-122 ruling 2026-11-26 18:17: FIX FIRST, since a raw argv echoed into logs is a secret-leak class; product-15). Lane: CLAUDE. STRICT. MAIN, existing branch task-3922-salvage-idempotent / PR #4702. Keep the "(TASK-3922)" title. <=120 lines.
+    BINDING:
+     (1) The writer-admission refusal (aida-core/src/mailbox_lifecycle/activation.rs restart_step, retire.rs Display) shows ONLY: the pid, comm, exe path + sha (or "(deleted)"), and a restart hint built from an ALLOWLIST (the subcommand name plus the non-secret flags we recognise, e.g. "aida deputy shell run --name <n>", "aida mcp-serve"). NEVER the raw argv. NEVER the value of any flag whose name matches grant|token|secret|key|password|session (case-insensitive, both --flag VALUE and --flag=VALUE, and bare key=value args). Unrecognised args are omitted, not echoed.
+     (2) TEST: an argv carrying `--session-grant XYZ`, `--token=ABC` and `token=DEF` produces a refusal in which none of XYZ / ABC / DEF appears; a recognised deputy argv yields the allowlisted hint.
+     (3) Fix the stale AdmissionGap doc comment (activation.rs ~289: "exit on their own").
+    One targeted cargo test run on this host, make check-ci-fast, then push to #4702. COMMIT your work.
+  created_at: 2026-11-27T01:16:52.566955325Z
+  modified_at: 2026-11-27T01:16:52.566955325Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21a57-57ee-7d81-8d4f-0e8ffd37afb2
   author: joe
