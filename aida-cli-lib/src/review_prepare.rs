@@ -3772,7 +3772,9 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         };
         let err = format!("{:#}", handle_review_prepare(&args, &store).unwrap_err());
         assert!(
-            err.contains("--post-comment refused: AIDA_REVIEW_RUNNER_CMD could quote a local secret"),
+            err.contains(
+                "--post-comment refused: AIDA_REVIEW_RUNNER_CMD could quote a local secret"
+            ),
             "{err}"
         );
         assert!(!err.contains(canary) && !posted.exists(), "{err}");
@@ -3824,7 +3826,14 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         // (codex can still read its own token).
         std::fs::remove_file(bin.join("bwrap")).unwrap();
         let probe = Command::new("bwrap")
-            .args(["--unshare-all", "--share-net", "--ro-bind", "/", "/", "true"])
+            .args([
+                "--unshare-all",
+                "--share-net",
+                "--ro-bind",
+                "/",
+                "/",
+                "true",
+            ])
             .output();
         match probe {
             Ok(out) if out.status.success() => {
@@ -3843,14 +3852,22 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
                     agent: Some("codex".into()),
                     ..args.clone()
                 };
-                let err = format!("{:#}", handle_review_prepare(&confined, &store).unwrap_err());
+                let err = format!(
+                    "{:#}",
+                    handle_review_prepare(&confined, &store).unwrap_err()
+                );
                 assert!(err.contains("refused: codex could quote") && !err.contains(canary));
                 let report = std::fs::read_to_string(root.join("out.json")).unwrap();
                 let sarif = std::fs::read_to_string(root.join("out.sarif")).unwrap();
-                assert!(report.contains("\"x\"") && !report.contains(canary), "{report}");
+                assert!(
+                    report.contains("\"x\"") && !report.contains(canary),
+                    "{report}"
+                );
                 assert!(!sarif.contains(canary) && !posted.exists(), "{sarif}");
                 use std::os::unix::fs::PermissionsExt;
-                let mode = std::fs::metadata(root.join("out.json")).unwrap().permissions();
+                let mode = std::fs::metadata(root.join("out.json"))
+                    .unwrap()
+                    .permissions();
                 assert_eq!(mode.mode() & 0o777, 0o600);
             }
             other => eprintln!("SKIP confined canary: bwrap cannot run here ({other:?})"),

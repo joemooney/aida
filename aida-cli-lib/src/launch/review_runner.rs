@@ -127,11 +127,15 @@ impl RunnerCall<'_> {
                  review with claude"
             )
         })?;
-        let inside = bwrap.canonicalize()?.starts_with(self.checkout.canonicalize()?);
+        let inside = bwrap
+            .canonicalize()?
+            .starts_with(self.checkout.canonicalize()?);
         ensure!(!inside, "bwrap must live outside the checkout");
         let home = (self.var("HOME").map(PathBuf::from))
             .filter(|h| h.is_absolute() && h.parent().is_some())
-            .with_context(|| format!("the confined {label} review runner needs an absolute HOME"))?;
+            .with_context(|| {
+                format!("the confined {label} review runner needs an absolute HOME")
+            })?;
         let source = match auth.dir_env.and_then(|key| self.var(key)) {
             Some(dir) => PathBuf::from(dir),
             None => home.join(auth.dir),
@@ -142,9 +146,11 @@ impl RunnerCall<'_> {
         for path in CONFINED_SYSTEM {
             cmd.args(["--ro-bind-try", path, path]);
         }
-        cmd.args(["--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--tmpfs"])
-            .arg(&home)
-            .args(["--dir", CONFINED_CWD, "--chdir", CONFINED_CWD]);
+        cmd.args([
+            "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--tmpfs",
+        ])
+        .arg(&home)
+        .args(["--dir", CONFINED_CWD, "--chdir", CONFINED_CWD]);
         for file in auth.files {
             cmd.arg("--ro-bind-try")
                 .arg(source.join(file))
@@ -153,7 +159,10 @@ impl RunnerCall<'_> {
         if let Some(key) = auth.dir_env {
             cmd.args(["--setenv", key]).arg(&target);
         }
-        cmd.arg("--ro-bind").args([program, program]).arg("--").arg(program);
+        cmd.arg("--ro-bind")
+            .args([program, program])
+            .arg("--")
+            .arg(program);
         Ok(cmd)
     }
 
@@ -578,7 +587,14 @@ mod tests {
                 want.extend(["--ro-bind-try", path, path]);
             }
             want.extend(["--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp"]);
-            want.extend(["--tmpfs", "/nonexistent", "--dir", "/review", "--chdir", "/review"]);
+            want.extend([
+                "--tmpfs",
+                "/nonexistent",
+                "--dir",
+                "/review",
+                "--chdir",
+                "/review",
+            ]);
             let binds: Vec<_> = auth.iter().map(|f| format!("/nonexistent/{f}")).collect();
             for bind in &binds {
                 want.extend(["--ro-bind-try", bind, bind]);
@@ -592,7 +608,9 @@ mod tests {
                 want.insert(want.len() - argv.len(), "--print-timeout=15s");
             }
             assert_eq!(wrapper.lines().collect::<Vec<_>>(), want);
-            assert!(!wrapper.lines().any(|a| a == "/etc" || a == "/" || a == "--bind"));
+            assert!(!wrapper
+                .lines()
+                .any(|a| a == "/etc" || a == "/" || a == "--bind"));
             // agy: sandboxed plan mode, and session settings that deny every
             // tool rule, reads included. trace:STORY-3202 | ai:claude
             if own == "gemini" {
@@ -683,7 +701,11 @@ mod tests {
     fn bug2783_confined_runner_fails_closed_without_bwrap() {
         let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
         let ran = bin.path().join("ran");
-        script(bin.path(), "codex", &format!("#!/bin/sh\ntouch {}\n", ran.display()));
+        script(
+            bin.path(),
+            "codex",
+            &format!("#!/bin/sh\ntouch {}\n", ran.display()),
+        );
         let path = bin.path().display().to_string();
         let run = |pairs: &[(&str, &str)]| {
             let env = vars(pairs);
@@ -694,7 +716,10 @@ mod tests {
             format!("{:#}", runner.run("p").unwrap_err())
         };
         let err = run(&[("PATH", &path), ("HOME", "/nonexistent")]);
-        assert!(err.contains("bubblewrap (bwrap) not found on PATH"), "{err}");
+        assert!(
+            err.contains("bubblewrap (bwrap) not found on PATH"),
+            "{err}"
+        );
         passthrough_bwrap(bin.path());
         for home in ["", "/", "relative"] {
             let err = run(&[("PATH", &path), ("HOME", home)]);
