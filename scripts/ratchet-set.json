@@ -66,12 +66,16 @@
         "s4_adversarial_run_suppresses_but_gates_refuted_findings",
         "s5_post_comment_is_opt_in_and_requires_pr",
         "s5_posted_comment_renders_agent_text_inert",
+        "story3202_post_comment_refuses_unverified_agy_before_any_run",
+        "story3202_pr_checkout_vendor_never_picks_the_finder",
+        "story3202_unverified_vendor_is_refused_as_a_default",
         "s5_comment_over_cap_goes_on_stdin_truncated_with_fences_balanced",
         "s5b_batch_diff_pathspecs_are_literal",
         "s5b_cut_balanced_tracks_tilde_fences_and_inline_spans",
         "s5b_pinned_post_names_repo_and_hung_gh_times_out",
         "s5c_rename_old_paths_apply_every_inventory_exclusion",
         "s5d_unavailable_challenger_keeps_finder_report_and_exits_partial",
+        "s5e_forced_same_vendor_challenger_is_labelled_in_bundle_and_report",
         "bug2775_runner_errors_name_runner_pass_batch_and_cause",
         "bug2775_run_review_agent_resolves_and_states_the_default",
         "bug2779_top_level_error_keeps_its_cause",
@@ -100,7 +104,8 @@
         "s4_challenger_refutation_drops_and_reproduction_keeps",
         "s4_challenger_spawn_contract_and_opposition",
         "s4_detect_ai_authors_from_commit_tags",
-        "s5c_challenger_agent_override_ignores_forged_tags_and_refuses_missing"
+        "s5c_challenger_agent_override_ignores_forged_tags_and_refuses_missing",
+        "story3202_auto_pick_never_chooses_agy_explicit_override_is_confined"
       ],
       "scope": "module"
     },
@@ -117,7 +122,9 @@
         "s3a_runner_spawn_contract",
         "s3a_runner_survives_default_sigpipe",
         "s3a2_runner_fails_closed_on_escaped_descendant",
-        "s3b_runner_argv_carries_only_validated_tuning"
+        "s3b_runner_argv_carries_only_validated_tuning",
+        "story3202_agy_auth_failure_is_a_typed_cause",
+        "story3202_agy_effort_mapping_and_print_timeout"
       ],
       "scope": "module"
     },

@@ -7,7 +7,7 @@
 
 use super::review_runner::RunnerCall;
 use super::review_tuning::{resolve_challenger, TrustedBase};
-use crate::vendors::review_runner::{ReviewVendor, REVIEW_VENDORS};
+use crate::vendors::review_runner::{review_vendor, ReviewVendor, REVIEW_VENDORS};
 use aida_core::review_engine::RawReviewFinding;
 use anyhow::{bail, ensure, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -36,7 +36,7 @@ pub(crate) struct AdversarialSummary {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
     /// Why the challenger could not run; set, the report is partial.
-    /// trace:STORY-3120 | ai:claude
+    // trace:STORY-3120 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub challenger_unavailable: Option<String>,
     /// Finder findings the challenger never judged. They still gate.
@@ -54,8 +54,8 @@ pub(crate) fn detect_ai_authors(messages: &str) -> BTreeSet<&'static str> {
         let Some(end) = tag.find(']') else { continue };
         let tools = tag[..end].split(':').next().unwrap_or_default();
         for tool in tools.split('+').map(str::trim) {
-            let named = REVIEW_VENDORS.iter().filter(|v| v.program == tool);
-            found.extend(named.map(|v| v.program));
+            // Aliases (`antigravity`) resolve as `--agent` does. trace:STORY-3202 | ai:claude
+            found.extend(review_vendor(tool).ok().map(|v| v.program));
         }
     }
     found
@@ -74,7 +74,11 @@ fn pick_challenger(
         });
         return (finder.agent, note);
     };
-    let mut order = REVIEW_VENDORS.to_vec();
+    // An unverified vendor (agy) is never picked; only `--challenger-agent`
+    // names it. trace:STORY-3202 | ai:claude
+    let mut order: Vec<_> = (REVIEW_VENDORS.into_iter())
+        .filter(|v| v.confinement_verified)
+        .collect();
     order.sort_by_key(|v| v.program == own.program);
     let pick = order
         .into_iter()
@@ -102,7 +106,8 @@ fn pick_challenger(
 /// deadline and caps, with its own vendor, pass name and validated tuning.
 /// `forced` is the operator's `--challenger-agent`: it wins over the pick,
 /// so no `[AI:<tool>]` tag in the change can steer it, and is refused when
-/// it is not installed. trace:STORY-3120 | ai:claude
+/// it is not installed.
+// trace:STORY-3120 | ai:claude
 pub(crate) fn challenger_call<'a>(
     finder: &RunnerCall<'a>,
     authors: &BTreeSet<&str>,
@@ -114,10 +119,17 @@ pub(crate) fn challenger_call<'a>(
         Some(v) if finder.vendor().is_some() => {
             let found = finder.on_path(v).is_some();
             ensure!(found, "--challenger-agent {}: not found on PATH", v.program);
-            (
-                Some(v),
-                Some(format!("--challenger-agent picked {}", v.program)),
-            )
+            // The finder's own vendor is weaker evidence: say so. trace:STORY-3120 | ai:claude
+            let same = finder.vendor().is_some_and(|own| own.program == v.program);
+            let note = if same {
+                format!(
+                    "same-vendor challenger ({}), forced by --challenger-agent",
+                    v.program
+                )
+            } else {
+                format!("--challenger-agent picked {}", v.program)
+            };
+            (Some(v), Some(note))
         }
         Some(_) => bail!("--challenger-agent does not apply to AIDA_REVIEW_RUNNER_CMD"),
         None => pick_challenger(finder, authors),
@@ -169,7 +181,8 @@ struct Verdicts {
 
 /// The one verdict object in untrusted challenger output, found by running a
 /// JSON parser from each `{` (no slicing, so stray braces cannot panic).
-/// None, or a second one, is an error. trace:BUG-2779 | ai:claude
+/// None, or a second one, is an error.
+// trace:BUG-2779 | ai:claude
 fn find_verdicts(raw: &str) -> Result<Verdicts> {
     let parse_at = |at: usize| {
         let mut stream = serde_json::Deserializer::from_str(&raw[at..]).into_iter::<Verdicts>();
@@ -305,7 +318,8 @@ mod tests {
 
     /// Untrusted challenger output never panics: stray, reversed or missing
     /// braces refuse the challenge, and braces inside strings or prose around a
-    /// fenced block still parse. trace:BUG-2779 | ai:claude
+    /// fenced block still parse.
+    // trace:BUG-2779 | ai:claude
     #[test]
     fn bug2779_untrusted_challenger_output_fails_closed() {
         let one = || vec![finding("real")];
@@ -363,9 +377,12 @@ mod tests {
             "[AI:claude] feat(x): y (STORY-1)\n\n[ai:Codex+agy:med] fix\n[AI:gemini] z [AI:bogus";
         assert_eq!(
             detect_ai_authors(log).into_iter().collect::<Vec<_>>(),
-            ["claude", "codex"]
+            ["agy", "claude", "codex"]
         );
         assert!(detect_ai_authors("human commit\n").is_empty());
+        // trace:STORY-3202 | ai:claude
+        let only = detect_ai_authors("[AI:antigravity] x\n");
+        assert_eq!(only.into_iter().collect::<Vec<_>>(), ["agy"]);
     }
 
     /// The challenger spawns through the S3a contract (empty cwd, cleared env,
@@ -454,7 +471,8 @@ mod tests {
 
     /// `--challenger-agent` beats the pick whatever the commit tags claim,
     /// and an override that is not installed, or under a custom runner, is
-    /// refused instead of silently replaced. trace:STORY-3120 | ai:claude
+    /// refused instead of silently replaced.
+    // trace:STORY-3120 | ai:claude
     #[test]
     fn s5c_challenger_agent_override_ignores_forged_tags_and_refuses_missing() {
         let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
@@ -475,7 +493,15 @@ mod tests {
         let (pass, summary) = challenger_call(&call, &forged, codex, None, &base).unwrap();
         assert_eq!(pass.vendor().map(|v| v.program), Some("codex"));
         assert_eq!(summary.challenger_agent.as_deref(), Some("codex"));
-        assert!(summary.note.unwrap().contains("--challenger-agent"));
+        let note = summary.note.unwrap();
+        assert!(note.contains("--challenger-agent"), "{note}");
+        assert!(!note.contains("same-vendor"), "{note}");
+        // Forcing the finder's own vendor is labelled same-vendor.
+        let claude = review_vendor("claude").ok();
+        let (_, same) = challenger_call(&call, &forged, claude, None, &base).unwrap();
+        assert_eq!(same.challenger_agent.as_deref(), Some("claude"));
+        let note = same.note.unwrap();
+        assert!(note.contains("same-vendor challenger (claude)"), "{note}");
         // Not installed: refused, never the finder's vendor in its place.
         let only_claude = tempfile::tempdir().unwrap();
         let claude = only_claude.path().join("claude");
@@ -496,6 +522,65 @@ mod tests {
         assert!(err.to_string().contains("AIDA_REVIEW_RUNNER_CMD"), "{err}");
         // Outside the allowlist: refused before anything runs.
         assert!(review_vendor("gemini").is_err() && review_vendor("sh").is_err());
+    }
+
+    /// agy's confinement is not verified live, so the automatic pick never
+    /// chooses it, not even when it is the only other installed vendor; an
+    /// explicit `--challenger-agent agy` runs it through the S3a contract with
+    /// `--sandbox`, plan mode and the deny-all settings.
+    // trace:STORY-3202 | ai:claude
+    #[test]
+    fn story3202_auto_pick_never_chooses_agy_explicit_override_is_confined() {
+        let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let dump = "#!/bin/sh\necho \"cwd=$(ls -A)\"; env | sed 's/^/env=/'\n\
+            for a in \"$@\"; do echo \"arg=$a\"; done; echo \"stdin=$(wc -c | tr -d ' ')\"\n";
+        for name in ["claude", "agy"] {
+            crate::test_exec::write_executable(&bin.path().join(name), dump);
+        }
+        let path = format!("{}:/usr/bin:/bin", bin.path().display());
+        let pairs = [
+            ("PATH", path.as_str()),
+            ("GEMINI_API_KEY", "gem"),
+            ("ANTHROPIC_API_KEY", "sentinel"),
+        ];
+        let env: Vec<(OsString, OsString)> =
+            pairs.iter().map(|(k, v)| (k.into(), v.into())).collect();
+        let (base, call) = (
+            TrustedBase::default(),
+            finder("claude", checkout.path(), &env),
+        );
+        let pick = |tags: &str, forced, effort| {
+            challenger_call(&call, &detect_ai_authors(tags), forced, effort, &base).unwrap()
+        };
+        // Only claude and agy installed, and claude wrote it: still not agy.
+        for tags in ["[AI:claude] x", "human commit"] {
+            let (pass, summary) = pick(tags, None, None);
+            assert_eq!(pass.vendor().map(|v| v.program), Some("claude"), "{tags}");
+            assert_eq!(summary.challenger_agent.as_deref(), Some("claude"));
+            assert!(summary.note.is_some(), "{tags}");
+        }
+        assert!(REVIEW_VENDORS
+            .iter()
+            .any(|v| v.program == "agy" && !v.confinement_verified));
+        let agy = review_vendor("agy").ok();
+        let (pass, summary) = pick("[AI:claude] x", agy, Some("max"));
+        assert_eq!(summary.challenger_agent.as_deref(), Some("agy"));
+        let out = pass.run("the prompt").unwrap();
+        let want = [
+            "cwd=\n",
+            "env=GEMINI_API_KEY=gem",
+            "arg=--sandbox",
+            "arg=--mode=plan",
+            "arg=--settings={\"permissions\":{\"deny\":[\"read_file(*)\"",
+            "arg=--print=",
+            "arg=max",
+            "arg=--print-timeout=15s",
+            "stdin=10",
+        ];
+        assert!(
+            want.iter().all(|w| out.contains(w)) && !out.contains("sentinel"),
+            "{out}"
+        );
     }
 
     #[test]
