@@ -1,0 +1,29 @@
+id: 01a21b19-1245-7440-b9fb-313fdb9f28d0
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-544
+agreed_id: BUG-2783
+title: 'Review runner: codex read-only sandbox can still read any user file, so a prompt-injected diff can exfiltrate secrets into the report or a posted comment'
+description: |
+  Found in the STORY-3202 #4716 pre-check discussion (2026-11-26). The review runner (`aida review prepare --run-review`, the S3a hardened spawn path) feeds an UNTRUSTED diff to the vendor CLI. Claude runs with `--tools ""` (no tools at all). Codex runs with `--sandbox=read-only`, which still allows the model to READ any file the user can read, such as ~/.ssh, ~/.gemini, ~/.config/gh/hosts.yml or ~/.aida grants. A prompt injection in the diff could make codex read a secret by absolute path and echo it into the report, SARIF or a `--post-comment` PR comment. The empty cwd doesn't stop absolute paths, and fencing makes text inert but doesn't redact it.
+
+  Not yet verified by a live run; treat as plausible until proven.
+
+  ## Acceptance criteria
+  1. Codex review runs have NO filesystem read beyond what the prompt carries. Use codex's no-tool / no-shell execution mode if one exists, or run it inside an AIDA bubblewrap with an empty HOME and only the codex auth file bind-mounted read-only. A spawn-contract test asserts the flags or the wrapper.
+  2. A red-team test: a fake codex that tries to read a planted `$HOME/.ssh/canary` gets ENOENT/EACCES, and the canary never appears in the report.
+  3. Until AC1 lands, `--post-comment` refuses when the finder or challenger vendor is codex (or any vendor without verified no-read confinement), with a clear message. Local reports are still allowed.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T03:42:37.637024707Z
+modified_at: 2026-11-27T03:42:37.637024707Z
+req_type: Bug
+filed_at:
+  code_sha: 8e59bcd029ec5f550d1970a5c25b9093dead24b4
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8e59bcd029e
+  vendor: claude
+  session: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
