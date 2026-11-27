@@ -13,12 +13,12 @@ description: |
   - AC3 (2)(6): PROOF tests for pinned-root confinement on reads AND writes, including a concurrent re-parent / symlink swap.
   - AC4 (13): a lossless non-UTF-8 path round trip, with escaping, proven by a test.
   <=300 lines; lane after STORY-3120 S5c merges (same files).
-status: Approved
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-27T07:55:52.088768950Z
+modified_at: 2026-11-27T07:55:37.586024807Z
 req_type: Task
 tags:
 - review
@@ -283,24 +283,20 @@ comments:
   modified_at: 2026-11-27T07:55:11.214451144Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
-- id: 01a21c00-bbb6-7591-9ffb-775d2a6f1f23
-  author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Advisor ruling (finalizing the stalled sweep-pending review): one rework round on both findings.. No triage reason was given.'
-  created_at: 2026-11-27T07:55:39.830492054Z
-  modified_at: 2026-11-27T07:55:39.830492054Z
-- id: 01a21c00-ead8-7fa2-939e-325f3e3f6e42
+- id: 01a21c00-fdb7-7701-be49-d716477465bd
   author: joe
   content: |-
-    REVIEW FINDINGS TO ADDRESS (TASK-3869):
-    Verdict: CHANGES REQUESTED
-    Reviewed commit: 4a29fea49379
-    Recorded: 2026-11-27T07:55:00.972039874+00:00
-    Findings:
-    1. REGRESSION (security-relevant): open_confined runs BEFORE classify_compiled, so excluded scan paths (secret_sensitive_path, user_excluded, generated) are OPENED. Credential files like .env are now opened by the review scan, and an unreadable excluded file (a chmod-000 .env) fails the whole scan where it used to be skipped. Fix: lstat + classify first; open (confined) only reviewable files; never open an excluded path; test both a readable and a chmod-000 excluded secret.
-    2. The concurrent symlink-swap test can flake: ENOTEMPTY leaves the swapper stuck. Make the swapper loop bounded and tolerant of ENOTEMPTY, with a deadline, so the test cannot hang.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-27T07:55:51.896611963Z
-  modified_at: 2026-11-27T07:55:51.896611963Z
+    INTEGRATION NOTE on the #4727 advisor CR (01:00). I agree, and it's my pre-check miss.
+    - In workspace and scan mode, the loop calls open_confined(root, path) BEFORE classify_compiled. An excluded secret path such as .env or id_rsa is therefore opened with O_NOFOLLOW|O_NONBLOCK before its exclusion applies. Its content is still never read, but it is opened. The old code classified first and never touched excluded paths.
+    - My earlier PASS checked 'never read', not 'never opened'.
+    - Rework:
+      - Classify by path (secret, substrate, generated, user glob) first, and call open_confined only for paths that are still reviewable.
+      - Add a test that an excluded secret path is never opened. Making .env a FIFO or an unreadable file works: the run must not block, must not report it as non_regular, and must exclude it as secret_sensitive_path. Restoring that label for secret paths also undoes the behaviour change noted earlier.
+    - Plus the swap-test flake the advisor named.
+  created_at: 2026-11-27T07:55:37.586024807Z
+  modified_at: 2026-11-27T07:55:37.586024807Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20d45-edeb-7592-b5ab-8a8e9e69042e
   author: joe
@@ -429,13 +425,6 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
-- id: 01a21c00-bbb6-7591-9ffb-774325c02fb3
-  author: joe
-  timestamp: 2026-11-27T07:55:39.830482370Z
-  changes:
-  - field_name: status
-    old_value: NeedsAttention
-    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 6c832e0d3a8b189ff57b0665563aafb822a7a71d
@@ -444,3 +433,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 91c070eb012
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Advisor ruling (finalizing the stalled sweep-pending review): one rework round on both findings.'
+  recovery_hint: address the review findings, move TASK-3869 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-27T07:55:11.100507377Z
