@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-27T07:55:37.586024807Z
+modified_at: 2026-11-27T07:57:34.997069989Z
 req_type: Task
 tags:
 - review
@@ -296,6 +296,19 @@ comments:
   created_at: 2026-11-27T07:55:37.586024807Z
   modified_at: 2026-11-27T07:55:37.586024807Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a21c02-c05c-7971-8073-fcefb2052977
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:57):
+    # TASK-3869 rework on #4727 (advisor-122 recorded a FINAL CR at 4a29fea4, 2026-11-27 01:00: ONE round; (a) is SECURITY-relevant; product-15). Lane: CLAUDE. STRICT. INTEGRATION, existing branch int-task-3869-fresh3 / PR #4727. Keep the title. Do NOT merge main.
+    BINDING (list each with file:line in the PR body):
+     (a) In review_prepare.rs worktree_entries: CLASSIFY FIRST (lstat + classify_compiled), and call open_confined ONLY for reviewable files. NEVER open an excluded or secret path (secret_sensitive_path, user_excluded, generated); today the scan opens .env. TESTS: a readable excluded .env is never opened (assert no open, e.g. via a counter or an fs probe); a chmod-000 excluded .env is skipped and does NOT fail the scan.
+     (b) t3869_pinned_root_survives_concurrent_symlink_swap: make the swapper BOUNDED and ENOTEMPTY-tolerant with a deadline (it never gets stuck and the test can't flake); keep the proof of confinement.
+    One targeted cargo test run (review_prepare:: t3869_), make check-ci-fast, then push to #4727. COMMIT and PUSH.
+  created_at: 2026-11-27T07:57:34.997069989Z
+  modified_at: 2026-11-27T07:57:34.997069989Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20d45-edeb-7592-b5ab-8a8e9e69042e
