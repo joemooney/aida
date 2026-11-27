@@ -59,12 +59,50 @@ pub struct RawDiffEntry {
     pub is_binary: bool,
     /// Approximate byte size of the diff patch or new file content.
     pub patch_bytes: usize,
+    /// Set when the entry is not a regular file; it is skipped, never read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub non_regular: Option<NonRegularKind>,
+}
+
+/// A git entry that is not a regular file. Review skips it and never follows
+/// or reads through it. trace:TASK-3869 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NonRegularKind {
+    /// A symbolic link, or a path reached through a symlinked directory.
+    Symlink,
+    /// A gitlink: a submodule or nested repository.
+    Gitlink,
+    /// Any other non-regular entry (FIFO, socket, device).
+    Other,
+}
+
+impl NonRegularKind {
+    /// The kind for a git tree mode (`100644`, `120000`, `160000`, ...);
+    /// `None` for a regular file or an absent side (`000000`).
+    pub fn from_git_mode(mode: &str) -> Option<Self> {
+        match mode {
+            "100644" | "100755" | "100664" | "000000" => None,
+            "120000" => Some(Self::Symlink),
+            "160000" => Some(Self::Gitlink),
+            _ => Some(Self::Other),
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Symlink => "symlink",
+            Self::Gitlink => "gitlink",
+            Self::Other => "other",
+        }
+    }
 }
 
 /// Explicit reason why a changed path was excluded from active defect review.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExclusionReason {
+    NonRegular(NonRegularKind),
     BinaryFile,
     PureDeletion,
     GeneratedOrLockfile,
@@ -76,6 +114,7 @@ pub enum ExclusionReason {
 impl ExclusionReason {
     pub fn label(&self) -> String {
         match self {
+            Self::NonRegular(kind) => format!("non_regular:{}", kind.as_str()),
             Self::BinaryFile => "binary_file".to_string(),
             Self::PureDeletion => "pure_deletion".to_string(),
             Self::GeneratedOrLockfile => "generated_or_lockfile".to_string(),
@@ -696,6 +735,10 @@ pub fn classify_compiled(
     entry: &RawDiffEntry,
     user_excludes: &[(&str, CompiledGlob)],
 ) -> Option<ExclusionReason> {
+    // trace:TASK-3869 | ai:claude
+    if let Some(kind) = entry.non_regular {
+        return Some(ExclusionReason::NonRegular(kind));
+    }
     if entry.is_binary {
         return Some(ExclusionReason::BinaryFile);
     }
@@ -1840,6 +1883,7 @@ mod tests {
                 additions: 0,
                 deletions: 0,
                 patch_bytes: 0,
+                non_regular: None,
                 is_binary: binary,
             })
             .collect()
@@ -2090,6 +2134,7 @@ mod tests {
                 deletions: 0,
                 is_binary: false,
                 patch_bytes: 0,
+                non_regular: None,
             };
             assert_eq!(
                 classify_exclusion(&entry, &[]).unwrap(),
@@ -2162,6 +2207,7 @@ mod tests {
                 deletions: 0,
                 is_binary: false,
                 patch_bytes: 4800,
+                non_regular: None,
             },
             RawDiffEntry {
                 path: "Cargo.lock".to_string(),
@@ -2171,6 +2217,7 @@ mod tests {
                 deletions: 10,
                 is_binary: false,
                 patch_bytes: 1600,
+                non_regular: None,
             },
             RawDiffEntry {
                 path: ".env.production".to_string(),
@@ -2180,6 +2227,7 @@ mod tests {
                 deletions: 0,
                 is_binary: false,
                 patch_bytes: 200,
+                non_regular: None,
             },
             RawDiffEntry {
                 path: "old_deprecated.rs".to_string(),
@@ -2189,6 +2237,7 @@ mod tests {
                 deletions: 80,
                 is_binary: false,
                 patch_bytes: 2000,
+                non_regular: None,
             },
             RawDiffEntry {
                 path: "docs/legacy/notes.md".to_string(),
@@ -2198,6 +2247,7 @@ mod tests {
                 deletions: 2,
                 is_binary: false,
                 patch_bytes: 400,
+                non_regular: None,
             },
         ];
 

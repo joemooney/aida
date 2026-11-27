@@ -21,6 +21,7 @@ use aida_core::review_engine::{FileCoverageEntry, FileCoverageStatus};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -506,8 +507,6 @@ fn review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
 // trace:TASK-3862 | ai:codex
 fn write_output(root: &Path, path: &Path, text: &str) -> Result<()> {
     use std::io::Write;
-    use std::os::fd::AsRawFd;
-    use std::os::unix::fs::OpenOptionsExt;
     use std::path::Component;
 
     let relative = if path.is_absolute() {
@@ -539,23 +538,15 @@ fn write_output(root: &Path, path: &Path, text: &str) -> Result<()> {
             "--write refuses Git metadata"
         );
     }
-    let mut dir = std::fs::File::open(root)?;
-    let pinned =
-        |file: &std::fs::File| PathBuf::from(format!("/proc/self/fd/{}", file.as_raw_fd()));
-    for component in relative.parent().into_iter().flat_map(Path::components) {
-        let Component::Normal(part) = component else {
-            continue;
-        };
-        let child = pinned(&dir).join(part);
-        match std::fs::create_dir(&child) {
-            Err(e) if e.kind() != std::io::ErrorKind::AlreadyExists => return Err(e.into()),
-            _ => {}
-        }
-        dir = std::fs::OpenOptions::new()
-            .read(true)
-            .custom_flags(libc::O_NOFOLLOW | libc::O_DIRECTORY)
-            .open(child)?;
-    }
+    let parents = relative.parent().into_iter().flat_map(Path::components);
+    let dir = confined_dir(
+        root,
+        parents.filter_map(|c| match c {
+            Component::Normal(part) => Some(part),
+            _ => None,
+        }),
+        true,
+    )?;
     let dest = pinned(&dir).join(name);
     if let Ok(meta) = dest.symlink_metadata() {
         anyhow::ensure!(meta.is_file(), "--write destination must be a regular file");
@@ -989,10 +980,16 @@ fn collect_git_diff_entries(
         };
         stats.insert(path.to_owned(), counts);
     }
-    let status = diff("--name-status", "--find-renames")?;
-    let mut fields = status.split_terminator('\0');
+    // `--raw` carries each side's mode, so a symlink or gitlink is named and
+    // never read. trace:TASK-3869 | ai:claude
+    let raw = diff("--raw", "--find-renames")?;
+    let mut fields = raw.split_terminator('\0');
     let mut entries = Vec::new();
-    while let Some(code) = fields.next() {
+    while let Some(header) = fields.next() {
+        let meta: Vec<&str> = header.trim_start_matches(':').split(' ').collect();
+        let [old_mode, new_mode, _, _, code] = meta[..] else {
+            anyhow::bail!("unexpected git diff --raw row {header:?}");
+        };
         let first = fields.next().context("missing status path")?;
         let (kind, path, old_path) = match code.as_bytes().first() {
             Some(b'R') => (
@@ -1004,6 +1001,12 @@ fn collect_git_diff_entries(
             Some(b'D') => (FileChangeKind::Deleted, first, None),
             _ => (FileChangeKind::Modified, first, None),
         };
+        // A deletion's new side is absent (`000000`); its old side names it.
+        let entry_mode = if new_mode == "000000" {
+            old_mode
+        } else {
+            new_mode
+        };
         let &(additions, deletions, is_binary) = stats.get(path).context("missing diff stats")?;
         entries.push(RawDiffEntry {
             path: path.into(),
@@ -1013,6 +1016,7 @@ fn collect_git_diff_entries(
             deletions,
             is_binary,
             patch_bytes: additions.saturating_add(deletions).saturating_mul(48),
+            non_regular: aida_core::review_engine::NonRegularKind::from_git_mode(entry_mode),
         });
     }
     if mode == "workspace" {
@@ -1129,12 +1133,9 @@ fn worktree_entries(
     kind: FileChangeKind,
     excludes: &[(&str, CompiledGlob)],
 ) -> Result<Vec<RawDiffEntry>> {
+    use std::io::Read;
     let mut entries = Vec::new();
     for path in paths.split_terminator('\0').collect::<BTreeSet<_>>() {
-        let full = root.join(path);
-        if !full.is_file() {
-            continue;
-        }
         let mut entry = RawDiffEntry {
             path: path.into(),
             old_path: None,
@@ -1143,16 +1144,22 @@ fn worktree_entries(
             deletions: 0,
             is_binary: false,
             patch_bytes: 0,
+            non_regular: None,
         };
-        if classify_compiled(&entry, excludes).is_none() {
-            let Some(bytes) = read_workspace_file(root, path)? else {
-                continue;
-            };
-            entry.is_binary = bytes.iter().take(8000).any(|&b| b == 0);
-            if !entry.is_binary {
-                entry.additions = bytes.split_inclusive(|&b| b == b'\n').count();
+        // trace:TASK-3869 | ai:claude
+        match open_confined(root, path.as_bytes())? {
+            Confined::Missing => continue,
+            Confined::NonRegular(kind) => entry.non_regular = Some(kind),
+            Confined::File(mut file) if classify_compiled(&entry, excludes).is_none() => {
+                let mut bytes = Vec::new();
+                file.read_to_end(&mut bytes)?;
+                entry.is_binary = bytes.iter().take(8000).any(|&b| b == 0);
+                if !entry.is_binary {
+                    entry.additions = bytes.split_inclusive(|&b| b == b'\n').count();
+                }
+                entry.patch_bytes = bytes.len();
             }
-            entry.patch_bytes = bytes.len();
+            Confined::File(_) => {}
         }
         entries.push(entry);
     }
@@ -1168,12 +1175,119 @@ fn read_file_at_revision(root: &Path, rev: Option<&str>, path: &str) -> Result<O
 }
 
 fn read_workspace_file(root: &Path, path: &str) -> Result<Option<Vec<u8>>> {
-    let full = root.join(path);
-    // Skip symlinks, including intermediate directory aliases to excluded paths.
-    if full.canonicalize()? != full || !full.is_file() {
+    use std::io::Read;
+    let Confined::File(mut file) = open_confined(root, path.as_bytes())? else {
         return Ok(None);
+    };
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)?;
+    Ok(Some(bytes))
+}
+
+/// A worktree path as `open_confined` found it.
+enum Confined {
+    Missing,
+    NonRegular(aida_core::review_engine::NonRegularKind),
+    File(std::fs::File),
+}
+
+/// `/proc/self/fd/N`: a path naming an open directory itself, so a lookup
+/// beneath it can never be redirected by renaming or relinking an ancestor.
+fn pinned(file: &std::fs::File) -> PathBuf {
+    use std::os::fd::AsRawFd;
+    PathBuf::from(format!("/proc/self/fd/{}", file.as_raw_fd()))
+}
+
+/// The directory `parts` beneath `root`, opened one component at a time with
+/// O_NOFOLLOW from the previous pinned descriptor: a symlink anywhere on the
+/// path, even one swapped in concurrently, fails instead of leading outside.
+/// trace:TASK-3869 TASK-3862 | ai:claude
+fn confined_dir<'a>(
+    root: &Path,
+    parts: impl IntoIterator<Item = &'a OsStr>,
+    create: bool,
+) -> std::io::Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut dir = std::fs::File::open(root)?;
+    for part in parts {
+        let child = pinned(&dir).join(part);
+        if create {
+            match std::fs::create_dir(&child) {
+                Err(e) if e.kind() != std::io::ErrorKind::AlreadyExists => return Err(e),
+                _ => {}
+            }
+        }
+        dir = match (std::fs::OpenOptions::new())
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_DIRECTORY)
+            .open(&child)
+        {
+            Ok(next) => next,
+            // Linux reports a symlinked directory as ENOTDIR here; name it.
+            Err(_) if child.symlink_metadata().is_ok_and(|m| m.is_symlink()) => {
+                return Err(std::io::Error::from_raw_os_error(libc::ELOOP));
+            }
+            Err(e) => return Err(e),
+        };
     }
-    Ok(Some(std::fs::read(full)?))
+    Ok(dir)
+}
+
+/// Open the worktree path `rel` without following any symlink on it; a
+/// symlink, directory (gitlink) or special file is reported, never opened
+/// for reading. trace:TASK-3869 | ai:claude
+fn open_confined(root: &Path, rel: &[u8]) -> Result<Confined> {
+    use aida_core::review_engine::NonRegularKind;
+    use std::os::unix::{ffi::OsStrExt, fs::OpenOptionsExt};
+    let mut parts: Vec<&OsStr> = (rel.split(|&b| b == b'/'))
+        .filter(|p| !p.is_empty())
+        .map(OsStr::from_bytes)
+        .collect();
+    let Some(leaf) = parts.pop() else {
+        return Ok(Confined::Missing);
+    };
+    if parts.iter().chain([&leaf]).any(|p| *p == "." || *p == "..") {
+        return Ok(Confined::Missing);
+    }
+    let refused = |e: std::io::Error| match e.raw_os_error() {
+        Some(libc::ELOOP) => Ok(Confined::NonRegular(NonRegularKind::Symlink)),
+        Some(libc::ENOENT | libc::ENOTDIR) => Ok(Confined::Missing),
+        _ => Err(anyhow::Error::from(e)),
+    };
+    let kind = |t: std::fs::FileType| {
+        if t.is_symlink() {
+            NonRegularKind::Symlink
+        } else if t.is_dir() {
+            NonRegularKind::Gitlink
+        } else {
+            NonRegularKind::Other
+        }
+    };
+    let dir = match confined_dir(root, parts, false) {
+        Ok(dir) => dir,
+        Err(e) => return refused(e),
+    };
+    let path = pinned(&dir).join(leaf);
+    match path.symlink_metadata() {
+        Ok(meta) if !meta.is_file() => return Ok(Confined::NonRegular(kind(meta.file_type()))),
+        Err(e) => return refused(e),
+        Ok(_) => {}
+    }
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path);
+    let file = match file {
+        Ok(file) => file,
+        Err(e) => return refused(e),
+    };
+    // Re-check the opened object: a swap after the lstat lands here.
+    let meta = file.metadata()?;
+    Ok(if meta.is_file() {
+        Confined::File(file)
+    } else {
+        Confined::NonRegular(kind(meta.file_type()))
+    })
 }
 
 fn resolve_linked_specs(
@@ -1211,8 +1325,14 @@ fn resolve_linked_specs(
         spec_ids.extend(cov.slice_refs);
     }
 
-    let Ok(store) = storage.load() else {
-        return Ok(Vec::new());
+    // IDs resolve only through the loaded AIDA store, never a file of the
+    // reviewed tree. Explicit `--specs` refuse a missing store or an unknown
+    // ID instead of silently reviewing without criteria. trace:TASK-3869 | ai:claude
+    let explicit = args.specs.is_some();
+    let store = match storage.load() {
+        Ok(store) => store,
+        Err(e) if explicit => return Err(e.context("--specs needs the AIDA store")),
+        Err(_) => return Ok(Vec::new()),
     };
     let mut seen = BTreeSet::new();
     let mut out = Vec::new();
@@ -1236,6 +1356,8 @@ fn resolve_linked_specs(
                 status: req.status.to_string(),
                 acceptance_markdown: acceptance,
             });
+        } else if explicit {
+            anyhow::bail!("--specs names `{id}`, which is not in the AIDA store");
         }
     }
     Ok(out)
@@ -2031,6 +2153,7 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             deletions: 0,
             is_binary: false,
             patch_bytes: 48,
+            non_regular: None,
         };
         let registry = PlaybookRegistry::new(Vec::new()).unwrap();
         let budget = DEFAULT_BATCH_TOKEN_BUDGET;
@@ -2122,6 +2245,7 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             deletions: 0,
             is_binary: false,
             patch_bytes: 48,
+            non_regular: None,
         };
         let registry = PlaybookRegistry::new(Vec::new()).unwrap();
         let budget = DEFAULT_BATCH_TOKEN_BUDGET;
@@ -2450,6 +2574,7 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
                 deletions: 1,
                 is_binary: false,
                 patch_bytes: 10,
+                non_regular: None,
             })
             .collect();
         let registry = PlaybookRegistry::default();
@@ -2635,6 +2760,166 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             assert!(!git_env_kept(key.as_ref()), "{key}");
         }
         assert!(git_env_kept("PATH".as_ref()) && git_env_kept("LC_ALL".as_ref()));
+    }
+
+    /// Symlinks, gitlinks, special files and paths through a symlinked
+    /// directory are skipped with a named reason and never read.
+    // trace:TASK-3869 | ai:claude
+    #[test]
+    fn t3869_non_regular_entries_skipped_with_named_reason() {
+        use aida_core::review_engine::NonRegularKind::{Gitlink, Other, Symlink};
+        let temp = tempfile::tempdir().unwrap();
+        let (root, outside) = (temp.path().join("repo"), temp.path().join("out"));
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("secret.rs"), "OUTSIDE_3869\n").unwrap();
+        std::fs::create_dir(&root).unwrap();
+        git_text(&root, &["init", "-q"]).unwrap();
+        std::fs::write(root.join("seed.rs"), "seed\n").unwrap();
+        git_text(&root, &["add", "seed.rs"]).unwrap();
+        let base = crate::test_git::commit_fixture(&root);
+        std::os::unix::fs::symlink(outside.join("secret.rs"), root.join("link.rs")).unwrap();
+        std::os::unix::fs::symlink(&outside, root.join("dirlink")).unwrap();
+        std::fs::write(root.join("ok.rs"), "fn ok() {}\n").unwrap();
+        git_text(&root, &["add", "link.rs", "ok.rs"]).unwrap();
+        let gitlink = format!("160000,{base},sub");
+        git_text(&root, &["update-index", "--add", "--cacheinfo", &gitlink]).unwrap();
+        let head = crate::test_git::commit_fixture(&root);
+        let diff = collect_git_diff_entries(&root, "range", Some(&base), Some(&head), &[]).unwrap();
+        let kinds: Vec<_> = diff
+            .iter()
+            .map(|e| (e.path.as_str(), e.non_regular))
+            .collect();
+        assert_eq!(
+            kinds,
+            [
+                ("link.rs", Some(Symlink)),
+                ("ok.rs", None),
+                ("sub", Some(Gitlink))
+            ]
+        );
+        let label = |e: &RawDiffEntry| classify_compiled(e, &[]).map(|r| r.label());
+        assert_eq!(label(&diff[0]).as_deref(), Some("non_regular:symlink"));
+        assert_eq!(label(&diff[2]).as_deref(), Some("non_regular:gitlink"));
+
+        std::fs::create_dir(root.join("sub")).unwrap();
+        let fifo = Command::new("mkfifo").arg(root.join("fifo")).status();
+        assert!(fifo.unwrap().success());
+        let listed = "link.rs\0dirlink/secret.rs\0sub/\0fifo\0ok.rs\0gone.rs\0";
+        let entries = worktree_entries(&root, listed, FileChangeKind::Scanned, &[]).unwrap();
+        let kinds: Vec<_> = entries
+            .iter()
+            .map(|e| (e.path.as_str(), e.non_regular))
+            .collect();
+        let expected = [
+            ("dirlink/secret.rs", Some(Symlink)),
+            ("fifo", Some(Other)),
+            ("link.rs", Some(Symlink)),
+            ("ok.rs", None),
+            ("sub/", Some(Gitlink)),
+        ];
+        assert_eq!(kinds, expected);
+        assert!(entries
+            .iter()
+            .all(|e| e.non_regular.is_none() || e.patch_bytes == 0));
+        assert_eq!(
+            read_workspace_file(&root, "dirlink/secret.rs").unwrap(),
+            None
+        );
+        assert_eq!(read_workspace_file(&root, "link.rs").unwrap(), None);
+        assert_eq!(label(&entries[1]).as_deref(), Some("non_regular:other"));
+    }
+
+    /// `--specs` reads only the AIDA store and refuses an unknown ID or an
+    /// unreadable store; commit-derived IDs keep skipping unknowns.
+    // trace:TASK-3869 | ai:claude
+    #[test]
+    fn t3869_specs_resolve_only_through_store_and_refuse_unknown() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let storage = Storage::new(root.join("requirements.yaml"));
+        let mut req = aida_core::Requirement::new("Known".into(), "## Acceptance\n- ok\n".into());
+        req.spec_id = Some("TASK-1".into());
+        let mut store = aida_core::RequirementsStore::new();
+        store.requirements.push(req);
+        storage.save(&store).unwrap();
+        let resolve = |specs: Option<&str>, storage: &Storage| {
+            let args = ReviewPrepareArgs {
+                specs: specs.map(str::to_owned),
+                ..Default::default()
+            };
+            resolve_linked_specs(root, storage, &args, None, None)
+        };
+        let found = resolve(Some("task-1"), &storage).unwrap();
+        assert_eq!(
+            (found.len(), found[0].acceptance_markdown.as_str()),
+            (1, "- ok")
+        );
+        let error = resolve(Some("TASK-1,TASK-999"), &storage).unwrap_err();
+        assert!(format!("{error:#}").contains("`TASK-999`, which is not in the AIDA store"));
+        let broken = Storage::new(root.join("broken.yaml"));
+        std::fs::write(root.join("broken.yaml"), "requirements: [unterminated").unwrap();
+        let error = resolve(Some("TASK-1"), &broken).unwrap_err();
+        assert!(format!("{error:#}").contains("--specs needs the AIDA store"));
+        assert!(resolve(None, &broken).unwrap().is_empty());
+    }
+
+    /// Pinned-root confinement: while another thread re-parents `d` onto a
+    /// symlink to an outside directory and back, a read never returns the
+    /// outside file and a write never lands outside. trace:TASK-3869 | ai:claude
+    #[test]
+    fn t3869_pinned_root_survives_concurrent_symlink_swap() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let temp = tempfile::tempdir().unwrap();
+        let (root, outside) = (temp.path().join("repo"), temp.path().join("out"));
+        std::fs::create_dir_all(root.join("d")).unwrap();
+        std::fs::create_dir(&outside).unwrap();
+        git_text(&root, &["init", "-q"]).unwrap();
+        std::fs::write(root.join("d/f"), "INSIDE").unwrap();
+        std::fs::write(outside.join("f"), "OUTSIDE").unwrap();
+        let stop = AtomicBool::new(false);
+        std::thread::scope(|scope| {
+            scope.spawn(|| {
+                let (d, real) = (root.join("d"), root.join("d.real"));
+                while !stop.load(Ordering::Relaxed) {
+                    let _ = std::fs::rename(&d, &real);
+                    let _ = std::os::unix::fs::symlink(&outside, &d);
+                    std::thread::yield_now();
+                    let _ = std::fs::remove_file(&d);
+                    let _ = std::fs::rename(&real, &d);
+                }
+            });
+            // Stop the swapper even when an assertion below panics; the scope
+            // joins it, so a failure would otherwise hang instead of failing.
+            struct StopOnDrop<'a>(&'a AtomicBool);
+            impl Drop for StopOnDrop<'_> {
+                fn drop(&mut self) {
+                    self.0.store(true, Ordering::Relaxed);
+                }
+            }
+            let _stop = StopOnDrop(&stop);
+            let (mut inside, mut writes) = (0, 0);
+            for i in 0..3000 {
+                match read_workspace_file(&root, "d/f").unwrap().as_deref() {
+                    Some(b"INSIDE") => inside += 1,
+                    None => {}
+                    other => panic!("read escaped the root: {other:?}"),
+                }
+                if i % 20 == 0 {
+                    writes += usize::from(write_output(&root, Path::new("d/w"), "x").is_ok());
+                }
+            }
+            stop.store(true, Ordering::Relaxed);
+            assert!(
+                inside > 0 && writes > 0,
+                "swap never let a confined op through"
+            );
+        });
+        let leaked: Vec<_> = std::fs::read_dir(&outside).unwrap().flatten().collect();
+        assert_eq!(leaked.len(), 1, "a write landed outside: {leaked:?}");
+        assert_eq!(
+            std::fs::read_to_string(outside.join("f")).unwrap(),
+            "OUTSIDE"
+        );
     }
 
     #[test]
