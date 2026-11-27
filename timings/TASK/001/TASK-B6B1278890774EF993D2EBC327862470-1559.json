@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-B6B1278890774EF993D2EBC327862470-1559",
+  "publishes": [
+    {
+      "at": "2026-11-27T22:35:58.889216112Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-27T22:35:58.593090381Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-1559",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "340621bb6a528af003bc67952f2ffaae5ba080fc",
+        "pr": 4755,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
