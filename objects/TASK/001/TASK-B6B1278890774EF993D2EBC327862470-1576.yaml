@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T20:03:47.207632415Z
-modified_at: 2026-11-27T20:39:08.181906652Z
+modified_at: 2026-11-27T20:40:11.302900414Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -55,6 +55,12 @@ comments:
   content: Implementer push c8d3152d2b9a declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-27T20:39:08.181906139Z
   modified_at: 2026-11-27T20:39:08.181906139Z
+  session_id: 01a21ea2ef37
+- id: 01a21ebc-ad26-7ca2-983f-ed4e9d7070c8
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3929-alert-flake` at head `c8d3152d2b9a45eb0e34051e0021fb39462f5c08`.'
+  created_at: 2026-11-27T20:40:11.302896358Z
+  modified_at: 2026-11-27T20:40:11.302896358Z
   session_id: 01a21ea2ef37
 history:
 - id: 01a21e9b-8e40-74c2-8dbf-64637ee9b6aa
