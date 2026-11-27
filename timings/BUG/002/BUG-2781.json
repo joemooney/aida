@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2781",
+  "publishes": [
+    {
+      "at": "2026-11-27T09:20:14.376461653Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-27T04:10:44.164877451Z",
+      "spec": "BUG-2781",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4718,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "1d373bcd65e45b34f7b31c53cfbcc904346314da"
+      }
+    },
+    {
+      "ts": "2026-11-27T04:10:48.457139111Z",
+      "spec": "BUG-2781",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "PR-4718 / BUG-2781 at 1d373bcd65e4 (2 commits behind main; the base change to seat_clone.rs only overlaps the test-module registration, and the landed tree merges cleanly). Per-AC: AC1 verified by bug_2781_sigterm_after_commit_salvage_pushes_to_a_salvage_ref, bug_2781_open_pr_branch_is_fast_forwarded and bug_2781_non_fast_forward_is_refused_and_retained. Per the advisor ruling the target is salvage/<lane> unless the PR is open, the push is host-git only, a non-fast-forward is checked and the push has no '+', the import ref is dropped, and only the committed branch is bundled. AC2 verified by implementer_prompt_names_the_sanctioned_path (push precedes make check-ci-fast; re-push after a fix). AC3 is partial: the signal is named (bug_2781_exit_cause_names_the_signal_and_its_source) and the gate end line records wall time and overlay state (bug_2781_gate_end_line_records_wall_time_and_overlay_state), but the source is never determined. AC4 verified: all three named tests are present. Type protocol checklist, BUG-2781 bug protocol, 'the PR touches at least one test file': met. Verdict REQUEST-CHANGES: required CI is red at this head and specific to this PR, AC3's source clause is unmet, and the run() wiring is untested.",
+        "recovery_hint": "address the review findings, move BUG-2781 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-27T04:58:47.837327475Z",
+      "spec": "BUG-2781",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4718,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "74d946754d98298ded33fb47399603add4adc4ec"
+      }
+    },
+    {
+      "ts": "2026-11-27T04:58:57.758431311Z",
+      "spec": "BUG-2781",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2781 r2: the code addresses AC1-AC4 and round-1 findings 2-5. Salvage is host-git, bundles the claimed branch only, refuses a branch the lease does not own and a veto, checks the fast-forward and pushes without a force; it targets the PR branch or salvage/<lane>. exit_cause names the signal and its source from OOM, job-timeout and operator records, and the run()-level step is tested. Blocking: the required 'CI (fast gates)' check-ci-source step is still red (exit 2) at 74d946754d98 while other branches are green; fix the failing source gate.",
+        "recovery_hint": "address the review findings, move BUG-2781 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-27T05:16:28.331279603Z",
+      "spec": "BUG-2781",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4718,
+        "verdict": "APPROVED",
+        "reviewed_sha": "a32d61ace2455758b3789fc6b9ccf271063086d7"
+      }
+    },
+    {
+      "ts": "2026-11-27T07:04:59.127217301Z",
+      "spec": "BUG-2781",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4718,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "b75b306e3651c7a582d9979f7651a8f48c1166b4"
+      }
+    },
+    {
+      "ts": "2026-11-27T07:05:13.878512866Z",
+      "spec": "BUG-2781",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2781 AC2 (push before the final gate in LANE_JOB_CONTRACT, tested in implementer_prompt_names_the_sanctioned_path), AC3 (exit_cause and end_line with unit tests) and AC4 (real-git salvage tests) are met. AC1's salvage push has one blocking gap. When the target is an open PR's branch, lane_salvage::push_fast_forward moves that PR's head without the BUG-2618 PR-head protection check (pr_head_guard::check_branch). The normal seat publication path (ship_from_seat.rs:2291) and every other head-moving path run that check, and this project enables it ([pr-head] protect = true). So a salvage can move a PR head that is approved or pinned by a train. The 2 commits main gained since this head (train, ledger and review_engine changes) do not touch the salvage path, so the finding stands on the current base. The removed clippy allow from the previous round is confirmed gone. CI pending at review time.",
+        "recovery_hint": "address the review findings, move BUG-2781 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-27T08:09:01.694718629Z",
+      "spec": "BUG-2781",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4718,
+        "verdict": "APPROVED",
+        "reviewed_sha": "654544da3f9f922cbc67b344a85adfb760a64c26"
+      }
+    },
+    {
+      "ts": "2026-11-27T09:16:20.283022555Z",
+      "spec": "BUG-2781",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4718
+      }
+    },
+    {
+      "ts": "2026-11-27T09:20:14.113295897Z",
+      "spec": "BUG-2781",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "eb2205f7179edd611daaf38dab0d6bd8fbbcd4ec",
+        "pr": 4718,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
