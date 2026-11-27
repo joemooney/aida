@@ -67,9 +67,12 @@ fn pick_challenger(
     finder: &RunnerCall<'_>,
     authors: &BTreeSet<&str>,
 ) -> (Option<&'static ReviewVendor>, Option<String>) {
+    // trace:BUG-2775 | ai:claude
     let Some(own) = finder.vendor() else {
-        let note = "AIDA_REVIEW_RUNNER_CMD runs both passes (AIDA_REVIEW_PASS=challenger)";
-        return (finder.agent, Some(note.into()));
+        let note = finder.runner_cmd_set().then(|| {
+            "AIDA_REVIEW_RUNNER_CMD runs both passes (AIDA_REVIEW_PASS=challenger)".to_owned()
+        });
+        return (finder.agent, note);
     };
     let mut order = REVIEW_VENDORS.to_vec();
     order.sort_by_key(|v| v.program == own.program);
@@ -115,10 +118,6 @@ pub(crate) fn challenger_call<'a>(
                 Some(v),
                 Some(format!("--challenger-agent picked {}", v.program)),
             )
-        }
-        // trace:STORY-3120 | ai:claude
-        Some(_) if finder.agent.is_none() && finder.var("AIDA_REVIEW_RUNNER_CMD").is_none() => {
-            bail!("--challenger-agent needs --agent")
         }
         Some(_) => bail!("--challenger-agent does not apply to AIDA_REVIEW_RUNNER_CMD"),
         None => pick_challenger(finder, authors),
@@ -275,6 +274,25 @@ mod tests {
             .is_empty());
     }
 
+    // trace:BUG-2775 | ai:claude
+    #[test]
+    fn bug2775_runner_cmd_note_only_when_the_variable_is_set() {
+        let checkout = tempfile::tempdir().unwrap();
+        let none = BTreeSet::new();
+        let unset: Vec<(OsString, OsString)> = vec![("PATH".into(), "/bin".into())];
+        let call = RunnerCall {
+            agent: None,
+            ..finder("claude", checkout.path(), &unset)
+        };
+        assert_eq!(pick_challenger(&call, &none).1, None);
+        let mut set = unset.clone();
+        set.push(("AIDA_REVIEW_RUNNER_CMD".into(), "/bin/true".into()));
+        let note = pick_challenger(&finder("claude", checkout.path(), &set), &none).1;
+        assert!(note
+            .unwrap()
+            .contains("AIDA_REVIEW_RUNNER_CMD runs both passes"));
+    }
+
     #[test]
     fn s4_detect_ai_authors_from_commit_tags() {
         let log =
@@ -412,16 +430,6 @@ mod tests {
             panic!("accepted")
         };
         assert!(err.to_string().contains("AIDA_REVIEW_RUNNER_CMD"), "{err}");
-        // Without --agent the refusal names the missing flag.
-        let env = vec![path(only_claude.path())];
-        let call = RunnerCall {
-            agent: None,
-            ..finder("claude", checkout.path(), &env)
-        };
-        let Err(err) = challenger_call(&call, &forged, codex, None, &base) else {
-            panic!("accepted")
-        };
-        assert_eq!(err.to_string(), "--challenger-agent needs --agent");
         // Outside the allowlist: refused before anything runs.
         assert!(review_vendor("gemini").is_err() && review_vendor("sh").is_err());
     }

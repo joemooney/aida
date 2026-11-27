@@ -893,7 +893,12 @@ pub(crate) const EXIT_CODES: &[(i32, &str)] = &[
     ),
     (
         auto_complete::DRIVE_EXIT_HARD_FAIL,
-        "`--auto-complete` drive hard failure; review prepare: partial, challenger unavailable",
+        "`--auto-complete` drive hard failure",
+    ),
+    // trace:STORY-3120 | ai:claude
+    (
+        crate::review_prepare::PARTIAL_REVIEW_EXIT_CODE,
+        "review prepare: partial, challenger unavailable",
     ),
     (drain_next_n::DRAIN_CAP_EXIT_CODE, "drain cap reached"),
     (pr_rebase::REBASE_EXIT_CODE_CONFLICT, "pr rebase conflict"),

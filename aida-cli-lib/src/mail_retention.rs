@@ -152,6 +152,7 @@ pub(crate) fn failed_step_refusal(tree: &Path, failure: String) -> RetentionRefu
         checkout: tree.to_path_buf(),
         reason: failure,
         needs_activation: false,
+        transient_admission: false,
         retained_dir: None,
     }
 }
@@ -303,6 +304,7 @@ mod tests {
             checkout: "/w".into(),
             reason: "the mailbox holds mail".into(),
             needs_activation,
+            transient_admission: false,
             retained_dir: Some("/anchor/retained/k/3".into()),
         }
     }

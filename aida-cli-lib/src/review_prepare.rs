@@ -7,7 +7,7 @@
 use crate::launch::review_challenger::{self as challenger, AdversarialSummary, RefutedFinding};
 use crate::launch::review_runner::{RunnerCall, STDERR_CAP, STDOUT_CAP};
 use crate::launch::review_tuning::{resolve_for_run, trusted_review_base};
-use crate::vendors::review_runner::review_vendor;
+use crate::vendors::review_runner::{review_vendor, ReviewVendor, DEFAULT_REVIEW_VENDOR};
 use crate::{detect_forge_from_origin, extract_acceptance_section, find_project_root, Storage};
 use aida_core::exec_context::Environment;
 use aida_core::review_engine::{
@@ -311,7 +311,7 @@ pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage)
     } else if let Some(trusted) = &trusted {
         // trace:STORY-3120 | ai:claude
         let parent_env = Environment::capture().to_pairs();
-        let agent = args.agent.as_deref().map(review_vendor).transpose()?;
+        let agent = run_review_agent(args.agent.as_deref(), &project_root, &parent_env)?;
         let forced = (args.challenger_agent.as_deref().map(review_vendor))
             .transpose()
             .context("--challenger-agent")?;
@@ -766,6 +766,51 @@ fn batch_prompt(
     Ok(prompt)
 }
 
+/// One-line runner error naming who ran, the pass, the batch and the whole
+/// cause chain: agent-mode errors keep only the first line. trace:BUG-2775 | ai:claude
+/// A vendor challenger's failure also names the way out: it may be signed
+/// out or rate-limited, and `--challenger-agent` picks another vendor. Never
+/// under `AIDA_REVIEW_RUNNER_CMD`, where the flag does not apply. trace:STORY-3120 | ai:claude
+fn runner_failure(call: &RunnerCall<'_>, batch: &str, e: anyhow::Error) -> anyhow::Error {
+    let (who, pass) = (call.label(), call.pass);
+    let hint = if pass == "challenger" && call.vendor().is_some() {
+        "; if it is not signed in or is rate-limited, pick another with --challenger-agent"
+    } else {
+        ""
+    };
+    anyhow::anyhow!("{who} {pass} pass, {batch}: {e:#}{hint}")
+}
+
+/// The finder's vendor: `--agent`, else none under `AIDA_REVIEW_RUNNER_CMD`,
+/// else `[agents] vendor` (claude or codex only), else claude, stated on stderr. trace:BUG-2775 | ai:claude
+fn run_review_agent(
+    flag: Option<&str>,
+    root: &Path,
+    env: &[(std::ffi::OsString, std::ffi::OsString)],
+) -> Result<Option<&'static ReviewVendor>> {
+    if let Some(name) = flag {
+        return review_vendor(name).map(Some);
+    }
+    let custom = env
+        .iter()
+        .any(|(k, v)| k == "AIDA_REVIEW_RUNNER_CMD" && !v.is_empty());
+    if custom {
+        return Ok(None);
+    }
+    let (vendor, from) = match aida_core::agents_config::resolve_default_vendor(root) {
+        Some(name) => (
+            review_vendor(&name).context("[agents] vendor")?,
+            "[agents] vendor",
+        ),
+        None => (
+            DEFAULT_REVIEW_VENDOR,
+            "the built-in default (no [agents] vendor)",
+        ),
+    };
+    eprintln!("run review: using {} from {from}", vendor.program);
+    Ok(Some(vendor))
+}
+
 /// Run each batch prompt; any runner error, unparsable output, finding outside
 /// the inventory or its batch, or ledger row outside its batch refuses the
 /// whole run. The
@@ -787,12 +832,16 @@ fn review_batches(
     let mut unchallenged = Unchallenged::default();
     for (i, batch) in batches.iter().enumerate() {
         let context = prompt(batch)?;
+        let fail = |pass: &RunnerCall<'_>, what: &str, e: anyhow::Error| {
+            runner_failure(pass, &format!("{what} {}", i + 1), e)
+        };
         let out = call
             .run(&format!("{PROMPT_HEAD}{context}"))
-            .with_context(|| format!("review batch {}", i + 1))?;
+            .map_err(|e| fail(call, "review batch", e))?;
         let (rows, files) = aida_core::review_engine::parse_runner_findings_json(&out)
             .map_err(anyhow::Error::msg)
-            .with_context(|| format!("review batch {} output", i + 1))?;
+            .context("runner output rejected")
+            .map_err(|e| fail(call, "review batch", e))?;
         ensure_in_inventory(inventory, &rows)?;
         // A batch's runner saw only its own files. trace:STORY-3120 | ai:claude
         for row in &rows {
@@ -820,20 +869,13 @@ fn review_batches(
                 // Never report an adversarial pass the challenger did not
                 // make: keep the finder's rows, unchallenged, with the
                 // cause. trace:STORY-3120 | ai:claude
-                let who = pass.vendor().map_or("the custom runner", |v| v.program);
                 let verdicts = pass
                     .run(&challenger::challenge_prompt(&rows, &context)?)
-                    .with_context(|| {
-                        format!(
-                            "challenge batch {}: challenger {who} failed; if it is not \
-                             signed in or is rate-limited, pick another with --challenger-agent",
-                            i + 1
-                        )
-                    })
                     .and_then(|out| {
                         challenger::apply_verdicts(rows.clone(), &out)
-                            .with_context(|| format!("challenge batch {} output", i + 1))
-                    });
+                            .context("runner output rejected")
+                    })
+                    .map_err(|e| fail(pass, "challenge batch", e));
                 match verdicts {
                     Ok((kept, dropped)) => {
                         refuted.extend(dropped);
@@ -874,9 +916,11 @@ struct Unchallenged {
     cause: Option<String>,
 }
 
-/// `aida review prepare` exits 3 when the challenger was unavailable: the
-/// report is the finder's alone. trace:STORY-3120 | ai:claude
-pub(crate) const PARTIAL_REVIEW_EXIT_CODE: i32 = 3;
+/// `aida review prepare` exits 4 when the challenger was unavailable: the
+/// report is the finder's alone. No other review-prepare path uses 4, so it
+/// never reads as `--fail-on` (1) or an `--auto-complete` hard failure (3).
+/// trace:STORY-3120 | ai:claude
+pub(crate) const PARTIAL_REVIEW_EXIT_CODE: i32 = 4;
 
 /// Carries [`PARTIAL_REVIEW_EXIT_CODE`] past the top-level error printer.
 #[derive(Debug)]
@@ -2010,6 +2054,101 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         assert!(run("not json".into()).is_err());
     }
 
+    /// Every runner failure is one line (agent mode keeps only the first)
+    /// naming the runner, the pass, the batch and the concrete cause.
+    // trace:BUG-2775 | ai:claude
+    #[test]
+    fn bug2775_runner_errors_name_runner_pass_batch_and_cause() {
+        let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let entry = RawDiffEntry {
+            path: "a.rs".into(),
+            old_path: None,
+            kind: FileChangeKind::Modified,
+            additions: 1,
+            deletions: 0,
+            is_binary: false,
+            patch_bytes: 48,
+        };
+        let registry = PlaybookRegistry::new(Vec::new()).unwrap();
+        let budget = DEFAULT_BATCH_TOKEN_BUDGET;
+        let inventory = classify_with_exclusions(&[entry], &registry, &[], budget, |_| false);
+        let batch = ReviewBatch {
+            batch_index: 1,
+            label: "b".into(),
+            playbook_ids: Vec::new(),
+            files: vec!["a.rs".into()],
+            estimated_tokens: 1,
+        };
+        let path = format!("{}:/usr/bin:/bin", bin.path().display());
+        let first_line = |name: &str, body: &str, custom: Option<&str>, cap: usize| {
+            let (src, cmd) = (bin.path().join("src"), bin.path().join(name));
+            std::fs::write(&src, format!("#!/bin/sh\ncat >/dev/null\n{body}\n")).unwrap();
+            let installed = Command::new("install")
+                .arg("-m755")
+                .args([&src, &cmd])
+                .status();
+            assert!(installed.unwrap().success());
+            let mut env: Vec<(std::ffi::OsString, std::ffi::OsString)> =
+                vec![("PATH".into(), path.clone().into())];
+            if let Some(runner) = custom {
+                env.push(("AIDA_REVIEW_RUNNER_CMD".into(), runner.into()));
+            }
+            let call = RunnerCall {
+                agent: review_vendor("claude").ok(),
+                checkout: checkout.path(),
+                parent_env: &env,
+                pass: "finder",
+                deadline: std::time::Duration::from_secs(2),
+                stdout_cap: cap,
+                stderr_cap: STDERR_CAP,
+                tuning: Default::default(),
+            };
+            let batches = [batch.clone()];
+            let res = review_batches(&call, None, &batches, |_| Ok("p".into()), &inventory);
+            let err = format!("{:?}", res.unwrap_err());
+            err.lines().next().unwrap().to_owned()
+        };
+        let runner = bin.path().join("custom").display().to_string();
+        let exit3 = "echo first >&2; echo auth needed >&2; exit 3";
+        let cases = [
+            ("claude", "sleep 30", None, "exceeded its 2s deadline"),
+            ("claude", "head -c 4096 /dev/zero", None, "cap (64 bytes"),
+            ("claude", exit3, None, "3); stderr: first / auth needed"),
+            ("claude", "echo not json", None, "runner output rejected"),
+            ("custom", "exit 0", Some("rel"), "must be an absolute path"),
+            ("custom", "exit 4", Some(runner.as_str()), "exit status: 4"),
+        ];
+        for (name, body, custom, cause) in cases {
+            let line = first_line(name, body, custom, 64);
+            let who = custom.map_or("claude", |_| "AIDA_REVIEW_RUNNER_CMD");
+            let head = format!("{who} finder pass, review batch 1: ");
+            assert!(line.starts_with(&head) && line.contains(cause), "{line}");
+        }
+    }
+
+    // trace:BUG-2775 | ai:claude
+    #[test]
+    fn bug2775_run_review_agent_resolves_and_states_the_default() {
+        let root = tempfile::tempdir().unwrap();
+        let env = |pairs: &[(&str, &str)]| -> Vec<(std::ffi::OsString, std::ffi::OsString)> {
+            pairs.iter().map(|(k, v)| (k.into(), v.into())).collect()
+        };
+        let pick = |flag, e: &[(std::ffi::OsString, std::ffi::OsString)]| {
+            run_review_agent(flag, root.path(), e).map(|v| v.map(|v| v.program))
+        };
+        let custom = env(&[("AIDA_REVIEW_RUNNER_CMD", "/bin/true")]);
+        assert_eq!(pick(None, &custom).unwrap(), None);
+        assert_eq!(pick(Some("codex"), &custom).unwrap(), Some("codex"));
+        let std_dir = root.path().join(".aida");
+        std::fs::create_dir_all(&std_dir).unwrap();
+        std::fs::write(
+            std_dir.join("agents.toml"),
+            "[agents]\nvendor = \"codex\"\n",
+        )
+        .unwrap();
+        assert_eq!(pick(None, &env(&[])).unwrap(), Some("codex"));
+    }
+
     /// `--adversarial` end to end: the finder reports two findings, the
     /// challenger refutes the high one and reproduces the low one. The refuted
     /// one still fails `--fail-on high` and is a suppressed SARIF result; a
@@ -2108,7 +2247,7 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
 
     /// A rate-limited challenger keeps the finder's report: every finding is
     /// unchallenged in the bundle, Markdown and SARIF, the challenger is asked
-    /// once, `--fail-on` gates (exit 1, winning), and otherwise exit 3.
+    /// once, `--fail-on` gates (exit 1, winning), and otherwise exit 4.
     // trace:STORY-3120 | ai:claude
     #[test]
     fn s5d_unavailable_challenger_keeps_finder_report_and_exits_partial() {
@@ -2166,16 +2305,22 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         assert_eq!(challenges(), 1, "no challenge after the first failure");
         args.fail_on = None;
         let err = handle_review_prepare(&args, &store).unwrap_err();
-        assert_eq!(crate::exit_code_for_error(&err), 3, "{err:#}");
+        let partial = crate::exit_code_for_error(&err);
+        assert_eq!(partial, PARTIAL_REVIEW_EXIT_CODE, "{err:#}");
+        assert_eq!(partial, 4);
+        // Distinct from the `--auto-complete` hard failure and `--fail-on`.
+        let hard = crate::auto_complete::DRIVE_EXIT_HARD_FAIL;
+        assert!(partial != hard && partial != 1 && hard == 3);
         assert!(err.to_string().contains("partial: challenger unavailable"));
         assert_eq!(challenges(), 2);
         let read = |name: &str| std::fs::read_to_string(root.join(name)).unwrap();
         let out: serde_json::Value = serde_json::from_str(&read("out.json")).unwrap();
         let adv = &out["adversarial"];
-        assert!(adv["challenger_unavailable"]
-            .as_str()
-            .unwrap()
-            .contains("rate limit exceeded"));
+        let cause = adv["challenger_unavailable"].as_str().unwrap();
+        // main's runner_failure wording; no vendor hint under a custom runner.
+        let head = "AIDA_REVIEW_RUNNER_CMD challenger pass, challenge batch 1: ";
+        assert!(cause.starts_with(head) && cause.contains("rate limit exceeded"));
+        assert!(!cause.contains("--challenger-agent"), "{cause}");
         assert_eq!(adv["unchallenged"].as_array().unwrap().len(), 2);
         assert_eq!(out["anchored_findings"], serde_json::json!([]));
         let sarif: serde_json::Value = serde_json::from_str(&read("out.sarif")).unwrap();
@@ -2191,6 +2336,21 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         let md = read("out.md");
         assert!(md.contains("**challenger: unavailable** (`"), "{md}");
         assert_eq!(md.matches("**Unchallenged**").count(), 2, "{md}");
+        // A vendor challenger's failure names the way out; the finder's does not.
+        let env = Vec::new();
+        let call = |pass| RunnerCall {
+            agent: review_vendor("codex").ok(),
+            checkout: &root,
+            parent_env: &env,
+            pass,
+            deadline: RUN_DEADLINE,
+            stdout_cap: STDOUT_CAP,
+            stderr_cap: STDERR_CAP,
+            tuning: Default::default(),
+        };
+        let line = |pass| runner_failure(&call(pass), "b 1", anyhow::anyhow!("x")).to_string();
+        assert!(line("challenger").ends_with("pick another with --challenger-agent"));
+        assert_eq!(line("finder"), "codex finder pass, b 1: x");
     }
 
     /// A rename's old path reaches the runner's diff only when it passes

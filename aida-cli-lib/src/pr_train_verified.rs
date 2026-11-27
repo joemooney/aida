@@ -535,6 +535,7 @@ fn collect(
                 .map_err(anyhow::Error::msg)?;
         let mut originals: Bodies = Vec::new();
         let mut superseded_here = Vec::new();
+        let mut authority = AuthorityAnswers::default();
         for (key, record, verdict) in verdicts {
             if verdict.is_closed() {
                 continue;
@@ -569,20 +570,21 @@ fn collect(
                 verdict.kind.approves(),
                 "train source has a refusing review"
             );
-            let policy = approval::ship_approval_policy(
-                &live.main_worktree,
-                &ids,
-                Some(&source.head_ref),
-                std::slice::from_ref(&verdict),
-            );
-            anyhow::ensure!(
+            // trace:BUG-2584 | ai:claude
+            let refused = authority.refused(&verdict, || {
+                let policy = approval::ship_approval_policy(
+                    &live.main_worktree,
+                    &ids,
+                    Some(&source.head_ref),
+                    std::slice::from_ref(&verdict),
+                );
                 crate::gate::ship::approval_authority_refusal(
                     std::slice::from_ref(&verdict),
-                    &policy
+                    &policy,
                 )
-                .is_none(),
-                "train original review authority refused"
-            );
+                .is_some()
+            });
+            anyhow::ensure!(!refused, "train original review authority refused");
             originals.push((key.clone(), record.clone()));
             if !mapped.contains(&(key.clone(), record.clone())) {
                 mapped.push((key.clone(), record.clone()));
@@ -644,6 +646,31 @@ fn collect(
         "specs": all_specs, "bound_source_event": bound.as_ref().map(compact_event).transpose()?}),
         mapped,
     ))
+}
+
+/// One car's approval-authority answers in one evidence pass, by verdict.
+///
+/// A member's ledger history expands into one body per prior verdict event,
+/// and every expanded body parses to the same top-level verdict. The policy
+/// re-reads the authorship ledger, every lease and session manifest, and the
+/// reviewed commit's date (fetching it when absent) for each body, so a
+/// 110-event history cost 226 policy reads per member per pass. The policy's
+/// inputs are fixed for the car within the pass (its spec ids, branch and
+/// checkout), so an equal verdict gets an equal answer: it is asked once.
+/// A refusal is remembered too, and the next pass asks afresh.
+// trace:BUG-2584 | ai:claude
+#[derive(Default)]
+struct AuthorityAnswers(Vec<(rv::RecordedVerdict, bool)>);
+
+impl AuthorityAnswers {
+    fn refused(&mut self, verdict: &rv::RecordedVerdict, ask: impl FnOnce() -> bool) -> bool {
+        if let Some((_, refused)) = self.0.iter().find(|(seen, _)| seen == verdict) {
+            return *refused;
+        }
+        let refused = ask();
+        self.0.push((verdict.clone(), refused));
+        refused
+    }
 }
 
 // trace:BUG-2538 | ai:codex

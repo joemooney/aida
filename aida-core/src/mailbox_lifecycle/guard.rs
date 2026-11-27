@@ -36,6 +36,7 @@ use super::retire::{
 };
 use super::LifecycleError;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 /// A retired source awaiting its caller's destructive step. Holds the
 /// per-source retirement claim, so no other driver adopts the operation and
@@ -100,6 +101,7 @@ impl Retirement {
                     super::ACTIVATION_COMMAND
                 ),
                 needs_activation: false,
+                transient_admission: false,
                 retained_dir: Some(self.retained_dir.clone()),
             })),
             kept @ (Emptied::Kept(_) | Emptied::Unsupported(_)) => {
@@ -120,6 +122,7 @@ impl Retirement {
                     checkout,
                     reason,
                     needs_activation: false,
+                    transient_admission: false,
                     retained_dir: Some(self.retained_dir.clone()),
                 };
                 self.reopen()?;
@@ -145,6 +148,10 @@ pub struct RetentionRefusal {
     /// legacy retirement needs activation
     /// (QC1); the reason names [`super::ACTIVATION_COMMAND`].
     pub needs_activation: bool,
+    /// The fresh scan's only unverified writers run deleted or stale
+    /// binaries, so a bounded pre-start retry may clear the refusal.
+    // trace:BUG-2778 | ai:claude
+    pub transient_admission: bool,
     /// A preserved copy that is also kept.
     pub retained_dir: Option<PathBuf>,
 }
@@ -204,10 +211,17 @@ fn retire_with(
         reason: reason.to_string(),
         ..RetireOptions::default()
     };
-    let refusal = |reason: String, needs_activation, retained_dir| RetentionRefusal {
+    let refusal = |reason: &RefusalReason, needs_activation, retained_dir| RetentionRefusal {
         checkout: checkout.to_path_buf(),
-        reason,
+        reason: reason.to_string(),
         needs_activation,
+        transient_admission: matches!(
+            reason,
+            RefusalReason::WriterAdmissionUnknown {
+                transient: true,
+                ..
+            }
+        ),
         retained_dir,
     };
     match run(&opts) {
@@ -239,17 +253,70 @@ fn retire_with(
             },
             _,
         )) => Err(refusal(
-            reason.to_string(),
+            &reason,
             matches!(
                 reason,
-                RefusalReason::WriterAdmissionUnknown
+                RefusalReason::WriterAdmissionUnknown { .. }
                     | RefusalReason::MailBearingBeforeActivation
                     | RefusalReason::ActivationForOtherBuild { .. }
             ),
             retained_dir,
         )),
-        Err(e) => Err(refusal(lifecycle_failure(&e), false, None)),
+        Err(e) => Err(RetentionRefusal {
+            reason: lifecycle_failure(&e),
+            ..refusal(&RefusalReason::LockBusy, false, None)
+        }),
     }
+}
+
+/// Waits between pre-start retries of a transient writer-admission
+/// refusal: three tries over about five minutes (BUG-2778).
+const ADMISSION_RETRY_WAITS: [Duration; 2] = [Duration::from_secs(100), Duration::from_secs(150)];
+
+/// Run a pre-start retention `attempt`, retrying with jittered backoff while
+/// `transient` says its outcome is a transient writer-admission refusal (see
+/// [`RetentionRefusal::transient_admission`]). Any other outcome, including a
+/// refusal naming a live unknown writer, returns at once: fail closed.
+// trace:BUG-2778 | ai:claude
+pub fn retry_transient_admission<T>(
+    attempt: impl FnMut() -> T,
+    transient: impl Fn(&T) -> bool,
+) -> T {
+    retry_transient_admission_with(attempt, transient, std::thread::sleep)
+}
+
+pub(crate) fn retry_transient_admission_with<T>(
+    mut attempt: impl FnMut() -> T,
+    transient: impl Fn(&T) -> bool,
+    mut sleep: impl FnMut(Duration),
+) -> T {
+    let mut outcome = attempt();
+    for (n, wait) in ADMISSION_RETRY_WAITS.into_iter().enumerate() {
+        if !transient(&outcome) {
+            break;
+        }
+        let wait = jittered(wait);
+        eprintln!(
+            "mail retention: writers on replaced binaries are not yet verified; retrying in {}s \
+             (try {} of {})",
+            wait.as_secs(),
+            n + 2,
+            ADMISSION_RETRY_WAITS.len() + 1
+        );
+        sleep(wait);
+        outcome = attempt();
+    }
+    outcome
+}
+
+/// `wait` within plus or minus a fifth, so relaunched lanes do not rescan in step.
+fn jittered(wait: Duration) -> Duration {
+    let seed = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| u64::from(d.subsec_nanos()))
+        ^ u64::from(std::process::id());
+    let span = wait.as_millis() as u64 / 5;
+    wait - Duration::from_millis(span) + Duration::from_millis(seed % (2 * span + 1))
 }
 
 /// Does `checkout` hold a mailbox of its own? Not when the checkout is gone,
@@ -313,6 +380,7 @@ fn unanchored(checkout: &Path, why: &str) -> RetentionRefusal {
         checkout: checkout.to_path_buf(),
         reason: format!("{why}, so its mail cannot be fenced and retained"),
         needs_activation: false,
+        transient_admission: false,
         retained_dir: None,
     }
 }
@@ -517,6 +585,7 @@ pub fn remove_retired<T>(
         checkout: checkout.to_path_buf(),
         reason: why,
         needs_activation: false,
+        transient_admission: false,
         retained_dir: Some(retirement.retained_dir.clone()),
     };
     match retirement.reopen() {

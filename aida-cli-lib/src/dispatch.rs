@@ -2544,9 +2544,12 @@ pub(crate) fn prepare_lane_worktree(
     if wt_path.exists() {
         // Reuse: retire the previous occupant's mail so the next one never
         // sees it; a refusal keeps the tree as it is. trace:STORY-1843 | ai:claude
-        let retirement =
-            aida_core::mailbox_lifecycle::guard::retire_checkout(wt_path, "lane reuse")
-                .map_err(|refusal| anyhow::anyhow!("refusing to reuse worktree: {refusal}"))?;
+        // A transient writer-admission refusal retries first. trace:BUG-2778 | ai:claude
+        let retirement = aida_core::mailbox_lifecycle::guard::retry_transient_admission(
+            || aida_core::mailbox_lifecycle::guard::retire_checkout(wt_path, "lane reuse"),
+            |gate| matches!(gate, Err(refusal) if refusal.transient_admission),
+        )
+        .map_err(|refusal| anyhow::anyhow!("refusing to reuse worktree: {refusal}"))?;
         // The quiet re-check runs right before the checkout. trace:STORY-1843 | ai:claude
         // Keep branch resets from writing inferred upstream config. trace:BUG-2211 | ai:codex
         let checkout = || {
