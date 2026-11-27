@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T13:12:13.855583833Z
-modified_at: 2026-11-27T01:51:58.608969750Z
+modified_at: 2026-11-27T01:57:16.167726711Z
 req_type: Bug
 tags:
 - admission
@@ -173,6 +173,17 @@ comments:
   content: PR-4679 at a68c57341021443485650e7f20ddbe165affcfbd conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-27T01:49:43.505945590Z
   modified_at: 2026-11-27T01:49:43.505945590Z
+- id: 01a21ab8-df33-7a62-a4a0-7decd4d14b73
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 18:57):
+    # BUG-2771 FRESH #2 (replaces closed #4679; product-15 2026-11-26 18:55). Lane: CLAUDE. MAIN, NEW branch train-fair-admission-fresh2 (cut from the current main tip). Keep #4679's title, ending in (BUG-2771).
+    PORT #4679 onto current main: `git diff origin/main...origin/train-fair-admission-fresh` is the reference (originally approved as #4659 @d50327f9). Resolve against today's landed train changes: BUG-2777 S1 (stacked-diff drift hold), TASK-3912 (max_prs_per_train), BUG-2774 (stale-deputy reporting), TASK-3919. Keep its tests.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main whose body says "Replaces #4679 (conflicted; closed)". COMMIT your work.
+  created_at: 2026-11-27T01:57:16.167726711Z
+  modified_at: 2026-11-27T01:57:16.167726711Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a217ff-2dc1-7641-9cda-5abfd4de3de4
   author: joe
