@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T04:27:12.923122169Z
-modified_at: 2026-11-27T08:24:10.828561975Z
+modified_at: 2026-11-27T08:24:26.955280352Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -197,6 +197,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2784 at 5ba01320 (1 commit behind main; the base commit touches only .aida/config.toml, so no finding depends on it). The round-1 findings are fixed. AC1 passes: tests/test_json_union_merge.py::test_disjoint_additions_to_one_group_merge_cleanly, the host merge-tree test, and the bwrap e2e rework and publication tests. The driver output round-trips scripts/ratchet-set.json byte-identically. AC2 passes: same-key, removal-vs-edit, duplicate, invalid-JSON and clean-text-merge failures all leave standard markers with both sides (exit 3 maps to 1). A missing script or a quoted path falls back to git merge-file, so a failed driver never leaves a clean OURS file. Sandbox wiring is sound. SANDBOX_GIT_CONFIG and sandbox_git_config_env keep core.hooksPath=/dev/null and core.fsmonitor=false when the driver key raises GIT_CONFIG_COUNT to 3. An over-long list panics rather than dropping keys. bug_2784_lane_merge_env_keeps_sandbox_forced_git_config pins this through commit_sandbox_args. The bwrap e2e test plants a seat post-merge hook and checks that it does not run. The read-only --ro-bind-try exposes one trusted file from main. python3 -I keeps the seat''s cwd and the script dir off sys.path, and the seat cannot influence the driver string. No fail-open path was found. One blocker remains: CI is red at this head (Ratchet set, fast gates, and the Require-every-lane rollup). Static analysis attributes the red to this PR (finding 1).. No triage reason was given.'
   created_at: 2026-11-27T08:24:10.828555652Z
   modified_at: 2026-11-27T08:24:10.828555652Z
+- id: 01a21c1b-15af-7782-8edd-bc8520214b59
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2784):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5ba01320a9ea
+    Recorded: 2026-11-27T08:22:36.700474160+00:00
+    Findings:
+    1. Two new #[test] names in aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs contain the structural-guard marker 'ratchet': bug_2784_rework_unions_ratchet_additions_in_sandbox_without_seat_hooks (line ~7091) and bug_2784_publication_merge_unions_ratchet_additions (line ~7130). The file previously had no marker-named fn. tests/test_ci_structural_guards.py::candidates() (MARKERS = ('ratchet','inventor')) therefore now treats the whole module as a mixed ratchet module, so every one of its ~108 #[test]s becomes a candidate. None is in aida-ci-guards/lib.rs, scripts/ratchet-set.json or scripts/ci-structural-exclusions.json, so test_selection_is_a_checked_cover fails. check-ratchets.py runs that unittest, which matches CI's red 'Ratchet set' step (fast compile) and the red fast-gates job at 5ba01320. This is the same trap the implementer already avoided in seat_clone.rs by renaming. Fix: rename both tests (and preferably the bug_2784_ratchet_fixture helper) so that 'ratchet' and 'inventor' do not appear, e.g. ..._unions_json_list_additions_..., then confirm the Ratchet set step is green. Until then the PR cannot pass required CI, and if it landed, main's gate would go red.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-27T08:24:26.799900581Z
+  modified_at: 2026-11-27T08:24:26.799900581Z
 history:
 - id: 01a21b42-8a60-77d1-97c9-cf16dffb949c
   author: joe
