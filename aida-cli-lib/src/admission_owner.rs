@@ -465,11 +465,15 @@ fn acquire_mode(
     // no other train, land or ship while its CI result stands. Review
     // controllers are still admitted (run.lock is free; they never merge).
     // trace:TASK-3920 | ai:claude
-    let (parked, position) = parked_position(root, ticket)?;
+    // Only trains read it: a junk record can never refuse a review controller.
     let train = mode == Mode::CooperativeTrain
         || mode == Mode::Exclusive
         || (mode == Mode::Legacy && purpose == "legacy auto-train");
-    if let Some(parked) = parked.filter(|_| train && position.is_none()) {
+    let (parked, position) = match train {
+        true => parked_position(root, ticket)?,
+        false => (None, None),
+    };
+    if let Some(parked) = parked.filter(|_| position.is_none()) {
         return Err(AdmissionBusy(parked.describe()).into());
     }
     // Serialize trains from discovery onward, even before run.lock exists.
@@ -1218,7 +1222,10 @@ pub(crate) fn yield_reason_before(
         // Bounded: a stalled serializer holder makes the controller yield
         // (fail closed), never hang between passes. trace:BUG-2703 | ai:claude
         let _serial = lock_serial(&dir, std::time::Instant::now() + SERIAL_GRACE)?;
-        let (_, position) = parked_position(root, ticket)?;
+        let (_, position) = match ticket {
+            Some(_) => parked_position(root, ticket)?,
+            None => (None, None),
+        };
         let before = |at: DateTime<Utc>| position.is_none_or(|p| at <= p);
         if let Some(intent) = intents(&dir, Utc::now())?.iter().find(|intent| {
             yields_to(Mode::Legacy, purpose, intent.kind) && before(intent.registered_at)
@@ -2633,5 +2640,11 @@ mod tests {
         park(root, me, 0, 120);
         let error = manual_train_admission(root, false, &[]).err().unwrap();
         assert!(error.to_string().contains("parked since"), "{error}");
+        // Unreadable evidence refuses trains but never a review controller.
+        std::fs::remove_file(&path).unwrap();
+        std::fs::create_dir(&path).unwrap();
+        drop(acquire(root, "legacy review-watch", true).unwrap());
+        assert_eq!(yield_reason(root, "legacy review-watch"), None);
+        assert!(manual_train_admission(root, false, &[]).is_err());
     }
 }
