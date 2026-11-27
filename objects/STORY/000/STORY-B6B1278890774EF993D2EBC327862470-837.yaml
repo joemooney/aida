@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T23:26:17.322312937Z
-modified_at: 2026-11-27T05:17:41.922857699Z
+modified_at: 2026-11-27T05:19:43.340877709Z
 req_type: Story
 tags:
 - containment
@@ -239,6 +239,18 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-27T05:17:41.757809818Z
   modified_at: 2026-11-27T05:17:41.757809818Z
+- id: 01a21b72-396d-75a2-810e-e22819b66a49
+  author: joe
+  content: |-
+    ADVISOR RULING 22:19 (review CR), binding in #4716 r2 together with the golden fix:
+    - The default review vendor (run_review_agent → resolve_default_vendor) resolves ONLY from trusted config: the main worktree or merge-base .aida config, plus the user's ~/.aida/agents.toml. Never from the PR checkout under review.
+    - agy is never a default vendor.
+    - Tests: a PR checkout that sets [agents] vendor = agy or codex does not change the finder, and agy is refused as a default.
+    Integration note: this gap predates this PR. BUG-2775's run_review_agent(…, &project_root, …) is already on main, and my S5c/S5d pre-checks missed that it reads [agents] from the checkout under review. The docs from S5e #4721 say the [agents] reviewer seat is read from the merge base; that claim should be checked once r2 lands.
+  created_at: 2026-11-27T05:19:43.340877709Z
+  modified_at: 2026-11-27T05:19:43.340877709Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21a33-32c4-79e2-bbf0-90030b092cf3
   author: joe
