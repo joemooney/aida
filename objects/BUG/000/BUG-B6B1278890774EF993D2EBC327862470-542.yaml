@@ -10,12 +10,12 @@ description: |
   - AC2 (alternative or in addition, the implementer contract): push the committed work BEFORE running the final local gate, and re-push after a fix.
   - AC3: the lane log records WHICH signal ended the agent, and from whom when knowable (OOM killer per dmesg, lane-job timeout, operator), so the next incident names its cause.
   - AC4: tests: a SIGTERM after a commit → salvage-pushed; uncommitted work only → nothing pushed and retained; a non-fast-forward → refused and retained.
-status: Approved
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T02:26:44.337877Z
-modified_at: 2026-11-27T05:28:42.965911928Z
+modified_at: 2026-11-27T06:04:34.036745359Z
 req_type: Bug
 tags:
 - lanes
@@ -181,6 +181,12 @@ comments:
   modified_at: 2026-11-27T05:28:42.965911928Z
   session_id: 01a21b3a5cd9
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21b9b-0574-7852-a0ba-6fec64301e1d
+  author: aida-publication-done
+  content: Implementer push a32d61ace245 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-27T06:04:34.036744734Z
+  modified_at: 2026-11-27T06:04:34.036744734Z
+  session_id: 01a21b3a5cd9
 history:
 - id: 01a21ad7-b05c-7db2-817a-811e696dae3f
   author: joe
@@ -242,6 +248,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a21b9b-0574-7852-a0ba-6fd263b78013
+  author: aida-publication-done
+  timestamp: 2026-11-27T06:04:34.036742815Z
+  session_id: 01a21b3a5cd9
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
 filed_at:
   code_sha: 956b13f4da439b80d7c2710c6b5572adee9364df
   branch: main
