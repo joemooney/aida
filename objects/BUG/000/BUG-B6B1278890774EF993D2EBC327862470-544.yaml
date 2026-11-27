@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:42:37.637024707Z
-modified_at: 2026-11-27T21:11:38.474596398Z
+modified_at: 2026-11-27T21:18:28.653673599Z
 req_type: Bug
 comments:
 - id: 01a21b1a-ee60-7891-ba06-fa2ea0739f94
@@ -278,6 +278,12 @@ comments:
   modified_at: 2026-11-27T21:11:38.474596398Z
   session_id: 01a21ebc8d27
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21edf-bb2d-73d1-9819-622febfbc5a8
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-2783-s2-no-read-confinement` at head `2e13e2c923356162a669f95ffbd221ec42d45d5a`.'
+  created_at: 2026-11-27T21:18:28.653670282Z
+  modified_at: 2026-11-27T21:18:28.653670282Z
+  session_id: 01a21ebc8d27
 history:
 - id: 01a21b19-d8a7-7963-8736-0792eea43275
   author: joe
