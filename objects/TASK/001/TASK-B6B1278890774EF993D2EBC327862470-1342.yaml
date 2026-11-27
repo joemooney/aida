@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-27T03:24:02.688755055Z
+modified_at: 2026-11-27T03:46:45.734652808Z
 req_type: Task
 tags:
 - review
@@ -200,6 +200,19 @@ comments:
   created_at: 2026-11-27T03:24:02.688751571Z
   modified_at: 2026-11-27T03:24:02.688751571Z
   session_id: 01a21abb24f8
+- id: 01a21b1d-235e-7162-ac37-63f2f11729ef
+  author: joe
+  content: |-
+    INTEGRATION RE-CHECK PR #4710 against integration 4fc9b9ab6c5 (after the #4713 re-sync and S6 #4715): NEEDS A MERGE, one trivial conflict.
+    - merge-tree(integration, d75fd4a6d9) conflicts only in scripts/ratchet-set.json. S6's s6_* test names sit next to the t3869_* names. The resolution is a union.
+    - review_prepare.rs, review_engine.rs, docs/review-process.md and scripts/store-writers.toml auto-merge.
+    - Semantic check: #4710 adds the RawDiffEntry.non_regular field. No new RawDiffEntry literal has landed in integration since #4710's base 85b2fee16d7 (BUG-2779, the exit-4 pass-through and S6 have none), so there is no compile break from the new field.
+    - Rework r2: in the lane, run git merge origin/integration (4fc9b9ab6c5 or later) as a merge commit. Union ratchet-set.json. Run the targeted tests (review_prepare::, review_engine, t3869_, s6_, s5d_, bug2779) and check-ci-fast. Re-push.
+    - I re-pre-check the merge commit. The independent review must be final at the new head (strict tier).
+  created_at: 2026-11-27T03:46:45.734652808Z
+  modified_at: 2026-11-27T03:46:45.734652808Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20d45-edeb-7592-b5ab-8a8e9e69042e
   author: joe
