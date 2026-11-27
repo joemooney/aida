@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T23:26:17.322312937Z
-modified_at: 2026-11-27T01:42:45.494845350Z
+modified_at: 2026-11-27T01:45:22.533526428Z
 req_type: Story
 tags:
 - containment
@@ -68,6 +68,20 @@ comments:
   modified_at: 2026-11-26T23:31:03.439544502Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a21aae-0532-7843-8faf-b704b161b1cf
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 18:45):
+    # STORY-3202 (advisor-122 approved, NARROWED 16:42: STRICT, <=300, no sketch; product-15). Lane: CLAUDE. INTEGRATION, NEW branch int-story-3202-agy-review (cut from the integration tip AFTER STORY-3120 S5d merged). Completing (STORY-3202) trailer unless split.
+    READ: `aida show STORY-3202 --comments` (the narrowing comment: containment ACs stay in STORY-2460), the S3a hardened spawn helper (aida-cli-lib/src/launch/review_runner.rs, vendors/review_runner.rs REVIEW_VENDORS), and the existing agy host diagnostics (vendors/host_diagnostics.rs).
+    (A) agy as a `review prepare` vendor through the S3a hardened spawn helper ONLY: empty cwd, a per-vendor env allowlist, the prompt on stdin, setsid, agy's print mode (`-p`/`--print`, `--output-format json` if usable, `--print-timeout` within the S3a deadline), `--effort` mapped to agy's low|medium|high|xhigh|max via the effort allowlist, and NO repo/project settings, hooks or tools (use `--settings` to disable them if needed). Add it to REVIEW_VENDORS so the opposite-vendor challenger pick can choose agy.
+    (B) a NON-INTERACTIVE agy auth probe in `aida doctor --lane-host` (run the way a lane would, with no TTY), which names the keyring-only token problem (live finding: on dell1 an interactive login works, but a non-interactive `agy -p` says 'authentication required'; on the imac ~/.gemini/oauth_creds.json exists, on dell1 it doesn't) and the fix.
+    (C) fake-agy tests: the argv/env/cwd contract, effort mapping, the auth-failure classification (a typed cause, not a hang), and the challenger pick choosing agy when claude is the finder.
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to integration. COMMIT your work.
+  created_at: 2026-11-27T01:45:22.533526428Z
+  modified_at: 2026-11-27T01:45:22.533526428Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21a33-32c4-79e2-bbf0-90030b092cf3
   author: joe
