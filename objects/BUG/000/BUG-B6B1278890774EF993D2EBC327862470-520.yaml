@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T01:04:40.825248848Z
-modified_at: 2026-11-27T00:52:44.707419829Z
+modified_at: 2026-11-27T00:55:48.582819591Z
 req_type: Bug
 tags:
 - hubs
@@ -72,6 +72,18 @@ comments:
   content: 'SLICE 2 scope update (product-15 2026-11-24 21:20): the reconcile refusal cause is now KNOWN, NOT a block-range collision. It was the one-hub email-consent gate (remote_create.rs ~3110: `emails_in(newly_published_registry)` over the ADDED registry diff lines), which FALSE-POSITIVES: it flags any added registry line carrying an email even when that email is already present on EVERY hub (here, the operator''s address, already in both hubs'' blocks/nodes). Slice 2 AC replaces the block-range design: (1) the gate refuses only for emails not already present on the receiving hub''s registry; (2) its message must not say "on one hub only" unless that is true; (3) the agent-mode multiline output AC (advisor 19:28). Tests for each.'
   created_at: 2026-11-25T04:19:41.437377608Z
   modified_at: 2026-11-25T04:19:41.437377608Z
+- id: 01a21a80-9b9c-7402-a544-520a7b1c4a20
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 17:55):
+    # BUG-2759 SLICE 2 (slice 1 #4555 landed via reference merge 45206d90a1df; product-15 2026-11-26 18:00). Lane: CLAUDE. MAIN, NEW branch bug-2759-s2-consent-gate. <=250 lines. Completing (BUG-2759) trailer.
+    READ: `aida show BUG-2759 --comments`, especially comment 4 (advisor-122: in agent-output mode, i.e. redirected stdout such as cron, the multiline cause chain is NOT truncated; join the causes with " | " or emit all lines; test with redirected output) and comment 7 (the slice 2 scope update: the reconcile refusal cause is the one-hub EMAIL-CONSENT gate in remote_create.rs ~3110, `emails_in(newly_published_registry)` over the ADDED registry diff lines, which FALSE-POSITIVES when the email is already present on EVERY hub; fix it to flag only emails NOT already published on all hubs, plus the concurrent-push retry from the spec title).
+    Tests: an email already on every hub → no refusal; a genuinely new email → still refused with a named cause; a concurrent-push race → one bounded retry; the redirected-output cause chain is intact. Never weaken the consent gate for a genuinely new email (privacy).
+    One targeted cargo test run on this host, make check-ci-fast, then publish a NEW PR to main. COMMIT your work.
+  created_at: 2026-11-27T00:55:48.582819591Z
+  modified_at: 2026-11-27T00:55:48.582819591Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21045-c0a3-7902-beaf-52bed2b10b7b
   author: joe
