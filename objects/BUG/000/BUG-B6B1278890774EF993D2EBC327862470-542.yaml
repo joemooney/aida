@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T02:26:44.337877Z
-modified_at: 2026-11-27T07:37:30.840611357Z
+modified_at: 2026-11-27T07:51:51.247151959Z
 req_type: Bug
 tags:
 - lanes
@@ -263,6 +263,12 @@ comments:
   modified_at: 2026-11-27T07:37:30.840611357Z
   session_id: 01a21be56dae
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21bfd-3ecf-7a42-8bdc-18416fbe08b7
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-2781-salvage-push` at head `654544da3f9f922cbc67b344a85adfb760a64c26`.'
+  created_at: 2026-11-27T07:51:51.247145782Z
+  modified_at: 2026-11-27T07:51:51.247145782Z
+  session_id: 01a21be56dae
 history:
 - id: 01a21ad7-b05c-7db2-817a-811e696dae3f
   author: joe
