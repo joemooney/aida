@@ -2965,6 +2965,9 @@ fn reconcile_pass(
             Err(e) => push_failures.push(format!("{}: {}", h.remote, one_line_cause_chain(&e))),
         }
     }
+    // Failures that are not a lost race (unreachable, declined, protected).
+    // trace:BUG-2759 | ai:claude
+    let unreachable = push_failures.len();
     if !raced.is_empty() {
         if !last_attempt {
             return Ok(ReconcilePass::Raced(raced));
@@ -3012,9 +3015,18 @@ fn reconcile_pass(
         }
     }
     if !push_failures.is_empty() {
+        // Name each hub and its cause on the one line agent mode keeps; only
+        // an unreachable hub warrants "once they are reachable".
+        // trace:BUG-2759 | ai:claude
         anyhow::bail!(
-            "the union is committed locally but {} hub(s) did not receive it — re-run `aida remote reconcile --execute` once they are reachable",
-            push_failures.len()
+            "the union is committed locally but {} hub(s) did not receive it: {} — re-run `aida remote reconcile --execute`{}",
+            push_failures.len(),
+            push_failures.join(" | "),
+            if unreachable > 0 {
+                " once they are reachable"
+            } else {
+                ""
+            }
         );
     }
     Ok(ReconcilePass::Done)
@@ -4553,6 +4565,81 @@ host = \"should.not.count\"
                 "{write} missing from {landed}"
             );
         }
+    }
+
+    // A concurrent writer wins origin on every pass: reconcile stops after
+    // RECONCILE_ATTEMPTS passes and its error names origin and the race cause,
+    // without the misleading "once they are reachable".
+    // trace:BUG-2759 | ai:claude
+    #[test]
+    fn bug_2759_reconcile_reports_the_race_after_its_bounded_retries() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+        let (project, origin, _mirror, store) = reconcile_store(tmp.path(), home.path());
+        commit_file(&store, "spec.yaml", "id: X\n", "local store write");
+        let other = tmp.path().join("other-writer");
+        git(
+            tmp.path(),
+            &[
+                "clone",
+                "-q",
+                "--branch",
+                STORE_BRANCH,
+                origin.to_str().unwrap(),
+                other.to_str().unwrap(),
+            ],
+        );
+
+        let mut origin_pushes = 0;
+        let mut push = |repo: &Path, remote: &str, sha: &str| {
+            if remote == "origin" {
+                origin_pushes += 1;
+                let file = format!("theirs-{origin_pushes}.yaml");
+                commit_file(&other, &file, "id: Y\n", "concurrent write");
+                git(&other, &["push", "-q", "origin", STORE_BRANCH]);
+            }
+            aida_core::git_ops::push_exact_outcome(repo, remote, sha, STORE_BRANCH)
+        };
+        let err = reconcile_with_push(&project, true, true, false, &mut push)
+            .unwrap_err()
+            .to_string();
+        assert_eq!(origin_pushes, RECONCILE_ATTEMPTS, "{err}");
+        assert!(err.contains("1 hub(s) did not receive it"), "{err}");
+        assert!(
+            err.contains(&format!(
+                "origin: rejected — a concurrent push moved it again after {RECONCILE_ATTEMPTS} reconcile attempts"
+            )),
+            "{err}"
+        );
+        assert!(!err.contains("once they are reachable"), "{err}");
+        assert!(!err.contains("mirror"), "{err}");
+    }
+
+    // An unreachable hub's error names the hub and git's cause, and keeps the
+    // "once they are reachable" advice.
+    // trace:BUG-2759 | ai:claude
+    #[test]
+    fn bug_2759_unreachable_hub_error_names_hub_and_cause() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+        let (project, _origin, _mirror, store) = reconcile_store(tmp.path(), home.path());
+        commit_file(&store, "spec.yaml", "id: X\n", "local store write");
+        let mut push = |repo: &Path, remote: &str, sha: &str| {
+            if remote == "mirror" {
+                anyhow::bail!("ssh: connect to host mirror: Connection refused");
+            }
+            aida_core::git_ops::push_exact_outcome(repo, remote, sha, STORE_BRANCH)
+        };
+        let err = reconcile_with_push(&project, true, true, false, &mut push)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("mirror: ssh: connect to host mirror: Connection refused"),
+            "{err}"
+        );
+        assert!(err.contains("once they are reachable"), "{err}");
     }
 
     // Agent output mode (redirected stdout) keeps only an error's first line:
