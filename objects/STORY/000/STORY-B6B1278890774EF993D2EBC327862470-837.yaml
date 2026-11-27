@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T23:26:17.322312937Z
-modified_at: 2026-11-27T10:04:45.864422425Z
+modified_at: 2026-11-27T10:07:30.160043928Z
 req_type: Story
 tags:
 - containment
@@ -400,6 +400,20 @@ comments:
   modified_at: 2026-11-27T08:08:27.864379953Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a21c79-b35d-7d10-ba8b-a03f94534fc7
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 03:07):
+    # STORY-3202 follow-up (advisor-122 01:13, BINDING small; after p54 landed it on main; product-15). Lane: CLAUDE. MAIN, NEW branch story-3202-fu-agy-probe (cut from main after p54). <=80 lines. Title "... (Refs STORY-3202)" unless this completes the story.
+     (a) NO outward agy call from `aida init`: lane_host::report (reached from init_cmd.rs ~2252) must skip agy_lane_probe / the networked `agy models` call; only `aida doctor --lane-host` runs it. TEST: init's report path makes no agy spawn (a fake agy on PATH that would record a call).
+     (b) agy_auth_probe classifies a Timeout by a TYPED deadline error from RunnerCall::run (as AuthRequired already does), not `e.to_string().contains("deadline")`. TEST: a stderr containing "deadline" from a failing fake agy is reported as Failed, and a real deadline as Timeout.
+    One targeted cargo test run, make check-ci-fast, then publish a NEW PR to main. COMMIT and PUSH before the final gate.
+     (c) From the p54 #4736 review: the KeyringOnly fix text in vendors/host_diagnostics.rs agy_auth_probe_check says `env -u DBUS_SESSION_BUS_ADDRESS agy` (or GEMINI_API_KEY). The LIVE finding (STORY-3202 comment, product-15 23:42) is that agy picks FILE-based token storage when it detects an SSH session and the keyring otherwise. So the fix text must say: "sign in once from an ssh session (`ssh -t <host> agy`), which writes ~/.gemini/antigravity-cli/antigravity-oauth-token; lanes run over ssh and read that file". TEST the text.
+     (d) docs/review-process.md "Running the review with an agent": list `--agent agy` too (explicit only; never a default or an automatic challenger until its confinement is verified), and state that `[agents] vendor` is read from the MERGE BASE / trusted config (never the PR checkout).
+  created_at: 2026-11-27T10:07:30.160043928Z
+  modified_at: 2026-11-27T10:07:30.160043928Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21a33-32c4-79e2-bbf0-90030b092cf3
   author: joe
