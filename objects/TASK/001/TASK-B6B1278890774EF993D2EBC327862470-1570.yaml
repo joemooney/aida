@@ -15,13 +15,34 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T17:52:18.836279689Z
-modified_at: 2026-11-27T19:03:20.808997033Z
+modified_at: 2026-11-27T19:04:49.914324716Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a1a7b3-0b59-7e62-ae47-3c0283f551ac
   created_at: 2026-11-27T17:53:12.928434498Z
   created_by: joe
+comments:
+- id: 01a21e65-5ffa-76f3-b707-76adaff4690f
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit + fixture):** `seat_preflight` refusal message gains `exit <code>` plus the last 20 lines of combined output (already bounded to 4 KiB), each line code-spanned, with key/token/secret/password/bearer assignments and >=32-char base64/hex runs redacted. The conformance harness records the tail of `stderr.txt` (where the lane's RuntimeError lands) as `report["launch"]["diagnostic"]` when the launch is not accepted.
+    - **AC2 (unit):** `tests/test_containment_preflight_diag.py` loads egress_probe.py+contained_lane.py like tests/test_store_mutation.py, runs a fake probe that exits 3 printing known lines and `token=abcd...`, asserts exit code, tail, redaction; a passing probe still returns None; a zero-exit probe lacking the grant line still refuses.
+
+    ### Expected files
+    - `aida-cli-lib/src/containment/contained_lane.py`
+    - `scripts/containment/conformance.py`
+    - `tests/test_containment_preflight_diag.py`
+
+    ### Ambiguities / conflicts as questions
+    - None. Pass condition unchanged.
+  created_at: 2026-11-27T19:04:49.914324716Z
+  modified_at: 2026-11-27T19:04:49.914324716Z
+  session_id: 01a21e63c521
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21e23-8061-7520-83af-3d2bf312dd03
   author: joe
