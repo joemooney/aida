@@ -557,6 +557,16 @@ def bounded_launch(argv, workspace, env, root, seconds, pass_fds=(), on_tick=Non
 # Shared-boundary experiment. Authority is created only by production CLI
 # commands; inherited managed-agent identity is deliberately never scrubbed.
 # trace:TASK-3131 | ai:codex
+def launch_diagnostic(root, limit=4096):
+    """Bounded tail of the launcher's stderr for a launch that was not accepted."""
+    path = root / "stderr.txt"
+    if not path.is_file():
+        return None
+    with path.open("rb") as stream:
+        stream.seek(max(0, path.stat().st_size - limit))
+        return stream.read(limit).decode(errors="replace")
+
+
 def aida_refuse(root, report, reason):
     report["unsupported_reason"] = reason
     # trace:BUG-2602 | ai:codex
@@ -1086,7 +1096,10 @@ def continue_aida(root):
                                 preserve_session=True)
         report["launch"] = launch
         if not observed:
-            outcome = (f"spawn failed: {launch['spawn_error']}" if "spawn_error" in launch else
+            # The lane shim's refusal (e.g. the seat preflight's exit code and
+            # redacted output tail) lands in stderr.txt. trace:TASK-3927 | ai:claude
+            launch["diagnostic"] = launch_diagnostic(root)
+            outcome =(f"spawn failed: {launch['spawn_error']}" if "spawn_error" in launch else
                        f"exit {launch['exit_code']}")
             raise ValueError(f"fixture-production-launch-not-accepted ({outcome}): inspect report.json")
         results = None

@@ -161,6 +161,20 @@ class RunCompletionTests(unittest.TestCase):
 
 
 # trace:TASK-3114 | ai:codex
+class LaunchDiagnosticTests(unittest.TestCase):
+    # trace:TASK-3927 | ai:claude
+    def test_unaccepted_launch_keeps_bounded_stderr_tail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.assertIsNone(c.launch_diagnostic(root))
+            refusal = ("RuntimeError: contained requested-seat preflight refused (exit 3); "
+                       "last 1 probe output lines:\n  `token=[REDACTED]`\n")
+            (root / "stderr.txt").write_text("x" * 9000 + "\n" + refusal)
+            diagnostic = c.launch_diagnostic(root)
+            self.assertLessEqual(len(diagnostic.encode()), 4096)
+            self.assertTrue(diagnostic.endswith(refusal))
+
+
 class PolicyRevisionTests(unittest.TestCase):
     def test_policy_resolves_in_script_repository_from_outside_cwd(self):
         original = c.command
