@@ -96,7 +96,8 @@
         "s4_challenger_refutation_drops_and_reproduction_keeps",
         "s4_challenger_spawn_contract_and_opposition",
         "s4_detect_ai_authors_from_commit_tags",
-        "s5c_challenger_agent_override_ignores_forged_tags_and_refuses_missing"
+        "s5c_challenger_agent_override_ignores_forged_tags_and_refuses_missing",
+        "story3202_challenger_picks_agy_when_claude_finds"
       ],
       "scope": "module"
     },
@@ -113,7 +114,9 @@
         "s3a_runner_spawn_contract",
         "s3a_runner_survives_default_sigpipe",
         "s3a2_runner_fails_closed_on_escaped_descendant",
-        "s3b_runner_argv_carries_only_validated_tuning"
+        "s3b_runner_argv_carries_only_validated_tuning",
+        "story3202_agy_auth_failure_is_a_typed_cause",
+        "story3202_agy_effort_mapping_and_print_timeout"
       ],
       "scope": "module"
     },

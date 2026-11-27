@@ -782,7 +782,7 @@ fn runner_failure(call: &RunnerCall<'_>, batch: &str, e: anyhow::Error) -> anyho
 }
 
 /// The finder's vendor: `--agent`, else none under `AIDA_REVIEW_RUNNER_CMD`,
-/// else `[agents] vendor` (claude or codex only), else claude, stated on stderr. trace:BUG-2775 | ai:claude
+/// else `[agents] vendor` (claude, codex or agy), else claude, stated on stderr. trace:BUG-2775 | ai:claude
 fn run_review_agent(
     flag: Option<&str>,
     root: &Path,

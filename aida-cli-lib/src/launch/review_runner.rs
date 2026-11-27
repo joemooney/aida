@@ -1,11 +1,11 @@
 // trace:STORY-3120 | ai:claude
 //! The one hardened spawn path for `aida review prepare --run-review` runners.
-//! Every runner (claude, codex, `AIDA_REVIEW_RUNNER_CMD`) starts in a fresh empty
+//! Every runner (claude, codex, agy, `AIDA_REVIEW_RUNNER_CMD`) starts in a fresh empty
 //! directory with a cleared environment, reads the prompt on stdin, and is killed
 //! with its process group at the deadline or when its output exceeds the caps.
 
 use super::review_tuning::{ReviewTuning, BASE_EFFORTS};
-use crate::vendors::review_runner::ReviewVendor;
+use crate::vendors::review_runner::{AuthRequired, ReviewVendor};
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use std::ffi::{OsStr, OsString};
 use std::io::{Read, Write};
@@ -83,7 +83,7 @@ impl RunnerCall<'_> {
             (None, Some(agent)) => self
                 .on_path(agent)
                 .with_context(|| format!("{} not found on PATH", agent.program))?,
-            (None, None) => bail!("--run-review needs --agent <claude|codex> or {RUNNER_CMD}"),
+            (None, None) => bail!("--run-review needs --agent <claude|codex|agy> or {RUNNER_CMD}"),
         };
         ensure!(path.is_absolute(), "{RUNNER_CMD} must be an absolute path");
         let real = path.canonicalize().context("review runner not found")?;
@@ -141,7 +141,13 @@ impl RunnerCall<'_> {
         if let Some(level) = effort {
             cmd.env("AIDA_REVIEW_RESOLVED_EFFORT", level);
         }
-        cmd.args(vendor.map_or_else(Vec::new, |agent| agent.argv_with(model, effort)));
+        cmd.args(vendor.map_or_else(Vec::new, |agent| {
+            let mut argv = agent.argv_with(model, effort);
+            if let Some(flag) = agent.print_timeout {
+                argv.insert(0, format!("{flag}={}s", print_timeout(self.deadline)));
+            }
+            argv
+        }));
         let mut child = cmd
             .spawn()
             .with_context(|| format!("spawn {}", program.display()))?;
@@ -251,6 +257,11 @@ impl RunnerCall<'_> {
         );
         let secs = self.deadline.as_secs();
         ensure!(finished, "review runner exceeded its {secs}s deadline");
+        // trace:STORY-3202 | ai:claude
+        if let Some(agent) = vendor.filter(|a| !status.success() && a.auth_failed(&stderr)) {
+            let (vendor, stderr) = (agent.program, stderr_tail(&stderr));
+            return Err(AuthRequired { vendor, stderr }.into());
+        }
         ensure!(
             status.success(),
             "review runner failed ({status}); stderr: {}",
@@ -259,6 +270,13 @@ impl RunnerCall<'_> {
         wrote.context("review runner did not read the whole prompt")?;
         String::from_utf8(stdout).context("review runner output is not UTF-8")
     }
+}
+
+/// The vendor print-mode limit in whole seconds: the runner deadline less a
+/// margin for the CLI to exit, never 0 (which means no limit). trace:STORY-3202 | ai:claude
+fn print_timeout(deadline: Duration) -> u64 {
+    let margin = (deadline / 4).min(Duration::from_secs(30));
+    deadline.saturating_sub(margin).as_secs().max(1)
 }
 
 /// The last `STDERR_TAIL` bytes of `stderr` on one line, so an agent-mode
@@ -371,6 +389,7 @@ mod tests {
         let custom = script(bin, "custom", DUMP).display().to_string();
         script(bin, "claude", DUMP);
         script(bin, "codex", DUMP);
+        script(bin, "agy", DUMP);
         let path = format!("{}:/usr/bin:/bin", bin.display());
         let mut env = vars(&[
             ("PATH", &path),
@@ -380,6 +399,7 @@ mod tests {
             ("AIDA_SESSION_GRANT", "sentinel-grant"),
             ("ANTHROPIC_API_KEY", "sentinel-anthropic"),
             ("OPENAI_API_KEY", "sentinel-openai"),
+            ("GEMINI_API_KEY", "sentinel-gemini"),
             ("HTTPS_PROXY", "http://127.0.0.1:3128"),
             ("no_proxy", "localhost"),
         ]);
@@ -388,6 +408,7 @@ mod tests {
         let mut cases = vec![
             (vendor("claude"), "anthropic", "openai"),
             (vendor("codex"), "openai", "anthropic"),
+            (vendor("agy"), "gemini", "anthropic"),
         ];
         for (agent, own, other) in cases.drain(..) {
             let out = RunnerCall {
@@ -409,7 +430,11 @@ mod tests {
                 !out.contains("sentinel-gh") && !out.contains("sentinel-grant"),
                 "{out}"
             );
-            let argv: Vec<_> = out.lines().filter_map(|l| l.strip_prefix("arg=")).collect();
+            let mut argv: Vec<_> = out.lines().filter_map(|l| l.strip_prefix("arg=")).collect();
+            // agy's own print limit, inside the 20s runner deadline. trace:STORY-3202 | ai:claude
+            if agent.unwrap().print_timeout.is_some() {
+                assert_eq!(argv.remove(0), "--print-timeout=15s");
+            }
             assert_eq!(argv, agent.unwrap().argv, "prompt or extra args in argv");
         }
         env.push((RUNNER_CMD.into(), custom.into()));
@@ -441,10 +466,14 @@ mod tests {
             refuse("").contains("--agent"),
             "empty command must not default"
         );
-        for unknown in ["gemini", "agy", "antigravity", "", "claude-x"] {
+        for unknown in ["gemini", "", "claude-x", "agy-x"] {
             assert!(review_vendor(unknown).is_err(), "{unknown} accepted");
         }
         assert_eq!(review_vendor(" Codex ").unwrap(), vendor("codex").unwrap());
+        assert_eq!(
+            review_vendor("antigravity").unwrap(),
+            vendor("agy").unwrap()
+        );
     }
 
     // trace:STORY-3120 | ai:claude
@@ -541,6 +570,68 @@ mod tests {
         assert!(
             started.elapsed() < Duration::from_secs(11),
             "joined the descendant"
+        );
+    }
+
+    /// agy takes `--effort` at its native levels; its print limit tracks the
+    /// runner deadline and is never 0 (no limit). trace:STORY-3202 | ai:claude
+    #[test]
+    fn story3202_agy_effort_mapping_and_print_timeout() {
+        let agy = vendor("agy");
+        for level in ["low", "medium", "high", "xhigh", "max"] {
+            let effort = [("--effort", Some(level))];
+            let tuning = super::super::review_tuning::resolve(agy, &effort, &[]).unwrap();
+            let argv = agy.unwrap().argv_with(None, tuning.effort());
+            assert!(
+                argv.ends_with(&["--effort".into(), level.into()]),
+                "{argv:?}"
+            );
+        }
+        let effort = [("--effort", Some("extreme"))];
+        assert!(super::super::review_tuning::resolve(agy, &effort, &[]).is_err());
+        let secs = [600, 20, 0].map(|s| print_timeout(Duration::from_secs(s)));
+        assert_eq!(secs, [570, 15, 1]);
+    }
+
+    /// A keyring-only agy in a lane (no session bus, no TTY) fails at once with
+    /// a typed `AuthRequired`, not a hang or a bare exit status; a vendor
+    /// without auth markers keeps the plain failure. trace:STORY-3202 | ai:claude
+    #[test]
+    fn story3202_agy_auth_failure_is_a_typed_cause() {
+        let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let body = "#!/bin/sh\ncat >/dev/null\necho 'W composite_token_storage: Failed to load \
+            stored token from keyring' >&2\necho 'error: Authentication failed or timed out' >&2\nexit 1\n";
+        script(bin.path(), "agy", body);
+        script(bin.path(), "claude", body);
+        let path = format!("{}:/usr/bin:/bin", bin.path().display());
+        let env = vars(&[("PATH", &path)]);
+        let run = |agent| {
+            let started = Instant::now();
+            let err = RunnerCall {
+                agent: vendor(agent),
+                deadline: Duration::from_secs(30),
+                ..call(checkout.path(), &env)
+            }
+            .run("p")
+            .unwrap_err();
+            assert!(started.elapsed() < Duration::from_secs(10), "{err:#}");
+            err
+        };
+        let err = run("agy");
+        let cause = err
+            .downcast_ref::<AuthRequired>()
+            .expect("typed auth cause");
+        assert_eq!(cause.vendor, "agy");
+        let text = err.to_string();
+        assert!(
+            text.contains("not signed in") && text.contains("--lane-host"),
+            "{text}"
+        );
+        let plain = run("claude");
+        assert!(plain.downcast_ref::<AuthRequired>().is_none(), "{plain:#}");
+        assert!(
+            plain.to_string().contains("review runner failed"),
+            "{plain:#}"
         );
     }
 
