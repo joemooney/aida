@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: `aida doctor --lane-host` (and the lane-run STALE refusal) report "live binary N hours / M changes behind main; autobuild skipping since <time>: <reason from the autobuild log>" with the one command that clears it.
   - AC2: a test with a fake autobuild log showing consecutive skips and a stale live sha.
-status: Approved
+status: InProgress
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T18:59:22.407725451Z
-modified_at: 2026-11-27T20:48:07.993919968Z
+modified_at: 2026-11-27T20:52:05.765901145Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -152,6 +152,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a21ec7-9405-7282-ac7a-7299862556af
+  author: aida-session-start
+  timestamp: 2026-11-27T20:52:05.765900409Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 8e06142ac48de544984d38cafbfdb2b0a965fec5
   branch: main
