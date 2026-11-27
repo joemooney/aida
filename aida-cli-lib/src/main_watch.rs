@@ -487,6 +487,34 @@ fn read_state(land: &Path) -> Result<State> {
         .with_context(|| format!("{STATE} is not valid; fix or remove it"))
 }
 
+// trace:STORY-2897 | ai:codex
+pub(crate) fn open_episode(root: &Path) -> Option<(String, Vec<String>)> {
+    open_episode_at(&watch_root(root).ok()?)
+}
+
+/// [`open_episode`] at a resolved watch root. trace:STORY-2897 | ai:claude
+fn open_episode_at(watch_root: &Path) -> Option<(String, Vec<String>)> {
+    let dir = watch_directory(watch_root, false).ok()?;
+    let episode = read_state(&dir).ok()?.episode?;
+    if episode.failed.is_empty()
+        || episode.red_sha.len() != 40
+        || !episode.red_sha.bytes().all(|b| b.is_ascii_hexdigit())
+    {
+        return None;
+    }
+    let names: Vec<_> = episode
+        .failed
+        .into_iter()
+        .chain(episode.contributing)
+        .map(|c| c.name)
+        .chain(episode.diagnostics)
+        .collect();
+    if names.iter().any(|name| name.trim().is_empty()) {
+        return None;
+    }
+    Some((episode.red_sha, names))
+}
+
 fn write_state(land: &Path, state: &State) -> Result<()> {
     failpoint("state")?;
     let bytes = serde_json::to_vec_pretty(state)?;
