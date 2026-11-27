@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   - AC1: when the lane's fast-gate receipt for the branch reads fail, salvage pushes to salvage/<lane> (never the PR branch) and the salvage note/comment says why (red fast-gate receipt, naming it).
   - AC2: tests: red receipt -> salvage/<lane> and PR branch untouched; green or absent receipt -> PR branch as before.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T20:02:07.738693828Z
-modified_at: 2026-11-27T21:08:42.371043437Z
+modified_at: 2026-11-27T21:18:34.473283715Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -112,6 +112,12 @@ comments:
   modified_at: 2026-11-27T21:08:42.371043437Z
   session_id: 01a21eca5185
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21edf-d1e9-7c81-98a0-9767d7e38b07
+  author: aida-publication-done
+  content: Implementer push fcca407a9066 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-27T21:18:34.473280654Z
+  modified_at: 2026-11-27T21:18:34.473280654Z
+  session_id: 01a21eca5185
 history:
 - id: 01a21e9a-2ac2-7e73-b863-f2246a20de6d
   author: joe
@@ -161,6 +167,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21edf-d1e9-7c81-98a0-975dfa44de87
+  author: aida-publication-done
+  timestamp: 2026-11-27T21:18:34.473278779Z
+  session_id: 01a21eca5185
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 8e06142ac48de544984d38cafbfdb2b0a965fec5
   branch: main
