@@ -38,7 +38,12 @@ pub(crate) trait Forge {
 
 // The shared ship floor includes the operator's script-deputy PTY and its
 // existing attribution policy; a piped stdout is not an authority decision.
-fn operator_allowed(operator_present: bool, headless: bool, lane: bool, role: &str) -> bool {
+pub(crate) fn operator_allowed(
+    operator_present: bool,
+    headless: bool,
+    lane: bool,
+    role: &str,
+) -> bool {
     operator_present && !headless && !lane && !matches!(role, "implementer" | "reviewer")
 }
 

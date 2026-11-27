@@ -12614,6 +12614,10 @@ Commands:
   rollback     Swap the previous live binaries (`live/prev/`) back in, in one step. Running it again
                rolls forward. Refuses while a live drain wave is pinned to the live binary unless
                --after-wave or --force
+  provisional  Outage use only: build and smoke-test a PR's or branch's head in a fresh worktree,
+               then promote it as the live binary before it lands, marked PROVISIONAL (the previous
+               build stays in `live/prev/`; `aida dev rollback` restores it). Operator only: run it
+               from a terminal or an operator deputy job
   deactivate   Emit shell code that undoes a previous `aida dev activate`. Use as: `eval "$(aida dev
                deactivate)"`
   serve        Run aida-server (REST/gRPC) and the React dev server (vite) in the foreground. Ctrl+C
@@ -12773,6 +12777,41 @@ Options:
 
       --force
           Swap even while a live drain wave is pinned to the live binary
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida dev provisional
+Outage use only: build and smoke-test a PR's or branch's head in a fresh worktree, then promote it
+as the live binary before it lands, marked PROVISIONAL (the previous build stays in `live/prev/`;
+`aida dev rollback` restores it). Operator only: run it from a terminal or an operator deputy job
+
+Usage: aida dev provisional [OPTIONS] --reason <REASON> <TARGET>
+
+Arguments:
+  <TARGET>
+          PR number (`4615` or `#4615`) or branch name on `origin`
+
+Options:
+      --reason <REASON>
+          Why this head runs live before review (recorded in the marker)
+
+      --expect-head <EXPECT_HEAD>
+          The full 40-hex SHA you reviewed; refused unless the fetched head is exactly it. Required
+          for a PR
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -46020,6 +46059,42 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "dev",
+      "provisional"
+    ],
+    "about": "Outage use only: build and smoke-test a PR's or branch's head in a fresh worktree, then promote it as the live binary before it lands, marked PROVISIONAL (the previous build stays in `live/prev/`; `aida dev rollback` restores it). Operator only: run it from a terminal or an operator deputy job",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "expect-head",
+        "takes_value": true,
+        "help": "The full 40-hex SHA you reviewed; refused unless the fetched head is exactly it. Required for a PR"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "reason",
+        "takes_value": true,
+        "help": "Why this head runs live before review (recorded in the marker)"
       }
     ],
     "hidden": true
