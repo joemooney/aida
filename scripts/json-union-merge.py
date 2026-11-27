@@ -4,11 +4,17 @@
 Usage (git config): merge.aida-json-union.driver = python3 -I <this> %O %A %B
 Three-way merges objects key by key, unions string lists (removals on either
 side win) and matches ratchet groups by package/target/filter. Any genuine
-disagreement exits 1, so git records an ordinary conflict.
+disagreement, invalid JSON or other failure writes standard conflict markers
+into %A (git merge-file's, else one whole-file conflict) and exits 3, so a
+resolver never sees a clean-looking file. Git records exit 3 as a conflict;
+AIDA's wrapper maps it to 1 and text-merges on any other non-zero exit.
 trace:BUG-2784 | ai:claude
 """
 import json
+import subprocess
 import sys
+
+CONFLICT_EXIT = 3
 
 
 class Conflict(Exception):
@@ -66,16 +72,33 @@ def merge(base, ours, theirs):
     raise Conflict(f'both sides changed {ours!r:.60}')
 
 
+def markers(base_path, ours_path, theirs_path):
+    """Conflict text for %A: git merge-file's hunks, else a whole-file conflict."""
+    try:
+        text = subprocess.run(['git', 'merge-file', '-p', '-L', 'ours', '-L', 'base', '-L', 'theirs',
+                               ours_path, base_path, theirs_path],
+                              capture_output=True, timeout=30)
+        if 0 < text.returncode < 128 and b'\n<<<<<<< ' in b'\n' + text.stdout:
+            return text.stdout
+    except (OSError, subprocess.SubprocessError):
+        pass
+    # A clean (or failed) text merge must not pass as resolved: conflict whole files.
+    ours, theirs = (open(p, 'rb').read() for p in (ours_path, theirs_path))
+    end = lambda data: data if data.endswith(b'\n') or not data else data + b'\n'
+    return b'<<<<<<< ours\n' + end(ours) + b'=======\n' + end(theirs) + b'>>>>>>> theirs\n'
+
+
 def main(base_path, ours_path, theirs_path):
     try:
         sides = [json.loads(open(p, encoding='utf-8').read()) for p in (base_path, ours_path, theirs_path)]
-        result = merge(*sides)
-    except (ValueError, Conflict) as why:
-        print(f'aida-json-union: conflict ({why}); leaving it to git', file=sys.stderr)
-        return 1
-    with open(ours_path, 'w', encoding='utf-8') as out:
-        out.write(json.dumps(result, indent=2, ensure_ascii=False) + '\n')
-    return 0
+        out = (json.dumps(merge(*sides), indent=2, ensure_ascii=False) + '\n').encode('utf-8')
+        status = 0
+    except Exception as why:  # any failure, not only a detected one, keeps both sides
+        print(f'aida-json-union: conflict ({why}); writing conflict markers', file=sys.stderr)
+        out, status = markers(base_path, ours_path, theirs_path), CONFLICT_EXIT
+    with open(ours_path, 'wb') as result:
+        result.write(out)
+    return status
 
 
 if __name__ == '__main__':

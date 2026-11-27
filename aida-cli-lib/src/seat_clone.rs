@@ -1249,7 +1249,17 @@ pub(crate) fn commit_sandbox_args(
     repo_config: &Path,
     identity: &[(&'static str, std::ffi::OsString)],
 ) -> Result<Vec<std::ffi::OsString>> {
-    let args = sandbox_args(clone, main, read_allowlist, repo_config, identity);
+    let mut args = sandbox_args(clone, main, read_allowlist, repo_config, identity);
+    // The union merge driver runs from MAIN's checkout, which a read
+    // allowlist or the private /tmp would otherwise hide: bind just that
+    // trusted script read-only, after every other mount (before `--`).
+    // trace:BUG-2784 | ai:claude
+    let script = json_union_merge_script(main);
+    let at = args.len() - 1;
+    args.splice(
+        at..at,
+        ["--ro-bind-try".into(), script.clone().into(), script.into()],
+    );
     writable_clone_bind(args, clone)
 }
 
@@ -1309,6 +1319,40 @@ pub(crate) fn ensure_dir_identity(dir: &Path, pinned: (u64, u64)) -> Result<()> 
     Ok(())
 }
 
+/// Git config every sandboxed clone command forces: seat hooks and
+/// fsmonitor never run with host authority.
+// trace:TASK-2053 trace:BUG-2784 | ai:claude
+const SANDBOX_GIT_CONFIG: [(&str, &str); 2] =
+    [("core.hooksPath", "/dev/null"), ("core.fsmonitor", "false")];
+
+/// `GIT_CONFIG_COUNT` environment for [`SANDBOX_GIT_CONFIG`] plus `extra`.
+/// A later `GIT_CONFIG_COUNT` replaces an earlier one, so every caller that
+/// adds keys must come through here to keep the forced keys.
+// trace:BUG-2784 | ai:claude
+fn sandbox_git_config_env(extra: &[(&str, String)]) -> Vec<(&'static str, std::ffi::OsString)> {
+    const SLOTS: [(&str, &str); 4] = [
+        ("GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0"),
+        ("GIT_CONFIG_KEY_1", "GIT_CONFIG_VALUE_1"),
+        ("GIT_CONFIG_KEY_2", "GIT_CONFIG_VALUE_2"),
+        ("GIT_CONFIG_KEY_3", "GIT_CONFIG_VALUE_3"),
+    ];
+    let pairs: Vec<(&str, String)> = SANDBOX_GIT_CONFIG
+        .iter()
+        .map(|(key, value)| (*key, value.to_string()))
+        .chain(extra.iter().cloned())
+        .collect();
+    assert!(
+        pairs.len() <= SLOTS.len(),
+        "sandbox git config slots exhausted"
+    );
+    let mut env = vec![("GIT_CONFIG_COUNT", pairs.len().to_string().into())];
+    for ((key, value), (key_name, value_name)) in pairs.into_iter().zip(SLOTS) {
+        env.push((key_name, key.into()));
+        env.push((value_name, value.into()));
+    }
+    env
+}
+
 // trace:TASK-2053 trace:TASK-2712 | ai:claude
 fn sandbox_args(
     clone: &Path,
@@ -1350,7 +1394,7 @@ fn sandbox_args(
         "--clearenv".into(),
     ]);
     let host_path = std::env::var_os("PATH").unwrap_or_else(|| "/usr/bin:/bin".into());
-    let env: [(&str, std::ffi::OsString); 16] = [
+    let env: [(&str, std::ffi::OsString); 11] = [
         ("PATH", host_path),
         ("HOME", "/nonexistent".into()),
         ("LC_ALL", "C".into()),
@@ -1361,14 +1405,15 @@ fn sandbox_args(
         ("GIT_CONFIG_GLOBAL", "/dev/null".into()),
         ("GIT_TERMINAL_PROMPT", "0".into()),
         ("GIT_OPTIONAL_LOCKS", "0".into()),
-        ("GIT_CONFIG_COUNT", "2".into()),
-        ("GIT_CONFIG_KEY_0", "core.hooksPath".into()),
-        ("GIT_CONFIG_VALUE_0", "/dev/null".into()),
-        ("GIT_CONFIG_KEY_1", "core.fsmonitor".into()),
-        ("GIT_CONFIG_VALUE_1", "false".into()),
         (ACCESSOR_ENV, "1".into()),
     ];
-    for (name, value) in env.into_iter().chain(extra_env.iter().cloned()) {
+    // trace:BUG-2784 | ai:claude
+    let forced = sandbox_git_config_env(&[]);
+    for (name, value) in env
+        .into_iter()
+        .chain(forced)
+        .chain(extra_env.iter().cloned())
+    {
         args.extend(["--setenv".into(), name.into(), value]);
     }
     args.push("--".into());
@@ -3398,27 +3443,46 @@ fn fetch_rework_heads(main: &Path, base: &str, branch: &str) -> Result<(String, 
 }
 
 /// Environment config registering the `aida-json-union` merge driver (see
-/// `.gitattributes`) from MAIN's trusted checkout, restating the sandbox's
-/// hook and fsmonitor overrides because `GIT_CONFIG_COUNT` replaces them.
+/// `.gitattributes`) from MAIN's trusted checkout, keeping the sandbox's
+/// forced hook and fsmonitor keys. The driver writes conflict markers itself
+/// and exits 3; on any other failure (a missing or unreadable script, no
+/// python) the wrapper falls back to git's own text merge, which leaves
+/// markers on a conflict, so a failed driver never leaves a clean OURS file.
 // trace:BUG-2784 | ai:claude
-fn json_union_merge_config(main: &Path) -> [(&'static str, std::ffi::OsString); 7] {
-    let script = main.join("scripts/json-union-merge.py");
+fn json_union_merge_config(main: &Path) -> Vec<(&'static str, std::ffi::OsString)> {
+    const TEXT_MERGE: &str = "git merge-file -L ours -L base -L theirs %A %O %B";
+    let script = json_union_merge_script(main);
     let script = script.to_string_lossy();
-    // A quote in the path would need shell escaping; `false` keeps it a conflict.
-    let driver = if script.contains("'") {
-        "false".to_string()
+    // A quote in the path would need shell escaping; text-merge instead.
+    let driver = if script.contains('\'') {
+        TEXT_MERGE.to_string()
     } else {
-        format!("python3 -I '{script}' %O %A %B")
+        format!(
+            "python3 -I '{script}' %O %A %B; rc=$?; \
+             case $rc in 0) exit 0;; 3) exit 1;; esac; {TEXT_MERGE}"
+        )
     };
-    [
-        ("GIT_CONFIG_COUNT", "3".into()),
-        ("GIT_CONFIG_KEY_0", "core.hooksPath".into()),
-        ("GIT_CONFIG_VALUE_0", "/dev/null".into()),
-        ("GIT_CONFIG_KEY_1", "core.fsmonitor".into()),
-        ("GIT_CONFIG_VALUE_1", "false".into()),
-        ("GIT_CONFIG_KEY_2", "merge.aida-json-union.driver".into()),
-        ("GIT_CONFIG_VALUE_2", driver.into()),
-    ]
+    sandbox_git_config_env(&[("merge.aida-json-union.driver", driver)])
+}
+
+/// MAIN's trusted copy of the `aida-json-union` driver, never the seat's.
+// trace:BUG-2784 | ai:claude
+fn json_union_merge_script(main: &Path) -> std::path::PathBuf {
+    main.join("scripts/json-union-merge.py")
+}
+
+/// Host identity plus the union driver: the environment of every clone merge
+/// the host runs for a lane (rework preparation and publication).
+// trace:BUG-2784 | ai:claude
+fn lane_merge_env(
+    main: &Path,
+    identity: &[(&'static str, std::ffi::OsString)],
+) -> Vec<(&'static str, std::ffi::OsString)> {
+    identity
+        .iter()
+        .cloned()
+        .chain(json_union_merge_config(main))
+        .collect()
 }
 
 /// Host preparation of a rework. Clone Git runs only in AIDA's writable
@@ -3479,13 +3543,9 @@ fn prepare_rework_merge_with_base(
         ("GIT_COMMITTER_EMAIL", email.into()),
     ];
     // Rework Git merges append-only JSON lists with the primary checkout's
-    // driver, never the seat's copy; a missing driver fails into a conflict.
+    // driver, never the seat's copy; a missing driver falls back to a text merge.
     // trace:BUG-2784 | ai:claude
-    let merge_env: Vec<(&'static str, OsString)> = identity
-        .iter()
-        .cloned()
-        .chain(json_union_merge_config(main))
-        .collect();
+    let merge_env = lane_merge_env(main, &identity);
     let decode = |args: &[&str], bytes: Vec<u8>| -> Result<String> {
         let text = String::from_utf8(bytes).context("rework Git returned non-UTF-8 evidence")?;
         Ok(if args.contains(&"-z") {
@@ -3693,11 +3753,14 @@ pub(crate) fn merge_publication_head(
         ("GIT_COMMITTER_NAME", name),
         ("GIT_COMMITTER_EMAIL", email),
     ];
+    // Publication merges union append-only JSON lists like rework does.
+    // trace:BUG-2784 | ai:claude
+    let merge_env = lane_merge_env(main, &identity);
     merge_publication_head_with(
         &|args| {
             ensure_dir_identity(tree, pinned)?;
             let args: Vec<&OsStr> = args.iter().map(OsStr::new).collect();
-            run_commit_sandboxed(tree, main, &args, &identity)
+            run_commit_sandboxed(tree, main, &args, &merge_env)
                 .map(|out| String::from_utf8_lossy(&out).trim().to_string())
                 .map_err(|e| anyhow::anyhow!("publication Git failed: {e}"))
         },
@@ -5728,7 +5791,79 @@ mod rework_merge_tests {
             blob.contains("\"left\"") && blob.contains("\"right\""),
             "{blob}"
         );
-        assert_eq!(observe(&fx.main.join("missing")).status.code(), Some(1));
+        // A missing script, or a quoted path the wrapper cannot run, falls back
+        // to git's text merge: still a conflict, and markers keep both sides.
+        for main in [fx.main.join("missing"), fx.main.join("it's")] {
+            let failed = observe(&main);
+            assert_eq!(failed.status.code(), Some(1), "{}", main.display());
+            let out = String::from_utf8(failed.stdout).unwrap();
+            let tree = out.lines().next().unwrap();
+            let blob = g(&["show", &format!("{tree}:scripts/ratchet-set.json")]);
+            for needle in [
+                "<<<<<<< ours",
+                "=======",
+                ">>>>>>> theirs",
+                "\"left\"",
+                "\"right\"",
+            ] {
+                assert!(blob.contains(needle), "{needle} missing from {blob}");
+            }
+        }
+    }
+
+    // The commit sandbox's final environment (bwrap's last --setenv wins)
+    // keeps every forced key alongside the driver and the host identity.
+    // trace:BUG-2784 | ai:claude
+    #[test]
+    fn bug_2784_lane_merge_env_keeps_sandbox_forced_git_config() {
+        let main = Path::new("/srv/main");
+        let clone = Path::new("/srv/seat");
+        let identity = [("GIT_AUTHOR_NAME", std::ffi::OsString::from("Host"))];
+        let args = commit_sandbox_args(
+            clone,
+            main,
+            &[],
+            Path::new("/tmp/config"),
+            &lane_merge_env(main, &identity),
+        )
+        .unwrap();
+        let mut env = std::collections::BTreeMap::new();
+        for w in args.windows(3).filter(|w| w[0] == "--setenv") {
+            env.insert(
+                w[1].to_string_lossy().into_owned(),
+                w[2].to_string_lossy().into_owned(),
+            );
+        }
+        let expected = [
+            ("GIT_CONFIG_COUNT", "3"),
+            ("GIT_CONFIG_KEY_0", "core.hooksPath"),
+            ("GIT_CONFIG_VALUE_0", "/dev/null"),
+            ("GIT_CONFIG_KEY_1", "core.fsmonitor"),
+            ("GIT_CONFIG_VALUE_1", "false"),
+            ("GIT_CONFIG_KEY_2", "merge.aida-json-union.driver"),
+            ("GIT_AUTHOR_NAME", "Host"),
+        ];
+        for (key, value) in expected {
+            assert_eq!(env.get(key).map(String::as_str), Some(value), "{key}");
+        }
+        assert!(env["GIT_CONFIG_VALUE_2"]
+            .starts_with("python3 -I '/srv/main/scripts/json-union-merge.py' %O %A %B;"));
+        assert!(!env.contains_key("GIT_CONFIG_KEY_3"));
+        // Any key the sandbox forces later stays forced under the merge env.
+        for (at, (key, value)) in SANDBOX_GIT_CONFIG.iter().enumerate() {
+            assert_eq!(env[&format!("GIT_CONFIG_KEY_{at}")], *key);
+            assert_eq!(env[&format!("GIT_CONFIG_VALUE_{at}")], *value);
+        }
+        // MAIN's driver stays visible read-only, even under a read allowlist.
+        let script = "/srv/main/scripts/json-union-merge.py";
+        for allowlist in [vec![], vec!["/data".to_string()]] {
+            let args = commit_sandbox_args(clone, main, &allowlist, Path::new("/c"), &[]).unwrap();
+            let bound = args
+                .windows(3)
+                .any(|w| w[0] == "--ro-bind-try" && w[1] == script && w[2] == script);
+            assert!(bound, "{args:?}");
+            assert_eq!(args.last().map(|a| a.to_str()), Some(Some("--")));
+        }
     }
 }
 

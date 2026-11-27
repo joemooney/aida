@@ -7060,3 +7060,108 @@ fn bug_2696_resume_and_drain_self_published_exits_set_done() {
         }
     }
 }
+
+/// Commit MAIN's union driver, its attribute and a ratchet manifest, push
+/// them, and return a writer for the manifest's single test list.
+// trace:BUG-2784 | ai:claude
+#[cfg(target_os = "linux")]
+fn bug_2784_ratchet_fixture(fx: &Fixture) -> impl Fn(&Path, &[&str]) {
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    std::fs::create_dir_all(fx.main.join("scripts")).unwrap();
+    for file in [".gitattributes", "scripts/json-union-merge.py"] {
+        std::fs::copy(repo.join(file), fx.main.join(file)).unwrap();
+    }
+    let write = |tree: &Path, tests: &[&str]| {
+        let body = serde_json::json!({"groups": [{"filter": "f", "tests": tests}]});
+        let body = serde_json::to_string_pretty(&body).unwrap() + "\n";
+        std::fs::write(tree.join("scripts/ratchet-set.json"), body).unwrap();
+    };
+    write(&fx.main, &["a"]);
+    git_ok(&fx.main, &["add", "-A"]);
+    git_ok(&fx.main, &["commit", "-qm", "ratchet manifest"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "main"]);
+    write
+}
+
+// Rework preparation runs the union driver from MAIN inside the commit
+// sandbox: disjoint ratchet additions merge, and no seat hook runs.
+// trace:BUG-2784 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2784_rework_unions_ratchet_additions_in_sandbox_without_seat_hooks() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    let fx = fixture();
+    let write = bug_2784_ratchet_fixture(&fx);
+    let id = "c0ffee278401";
+    let clone = seat_with_publication_pending(&fx, "ratchet-union", id, "feat");
+    write(&clone, &["a", "left"]);
+    let tip = commit_pending(&fx.main, &clone, "feat", "fix: seat (BUG-1)")
+        .unwrap()
+        .unwrap();
+    publish_rework_merge(&fx.main, &clone, "feat", &tip).unwrap();
+    write(&fx.main, &["a", "right"]);
+    git_ok(&fx.main, &["commit", "-qam", "main ratchet"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "main"]);
+    let sentinel = fx.root.join("rework-hook-ran");
+    plant_hooks(&clone, &sentinel, &fx.root);
+    let body = format!("#!/bin/sh\necho \"$0\" >> '{}'\n", sentinel.display());
+    crate::test_exec::write_executable(&clone.join(".git/hooks/post-merge"), &body);
+    let conflicts =
+        prepare_rework_merge_fixture(&fx.main, &clone, "feat", false, 2784, id).unwrap();
+    assert!(conflicts.is_empty(), "{conflicts:?}");
+    let merged = std::fs::read_to_string(clone.join("scripts/ratchet-set.json")).unwrap();
+    assert!(
+        merged.contains("\"left\"") && merged.contains("\"right\""),
+        "{merged}"
+    );
+    assert!(!merged.contains("<<<<<<<"), "{merged}");
+    assert!(
+        !sentinel.exists(),
+        "a seat hook ran during the rework merge"
+    );
+}
+
+// The publication merge of a moved PR head uses the same driver.
+// trace:BUG-2784 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2784_publication_merge_unions_ratchet_additions() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    let fx = fixture();
+    let write = bug_2784_ratchet_fixture(&fx);
+    let clone = seat_with_pending(&fx, "ratchet-publish", "c0ffee278402", "ratchet-publish");
+    write(&clone, &["a", "left"]);
+    test_commit(
+        &fx.main,
+        &clone,
+        "ratchet-publish",
+        "lane work (Refs BUG-1)",
+    )
+    .unwrap();
+    write(&fx.main, &["a", "right"]);
+    git_ok(&fx.main, &["commit", "-qam", "remote ratchet"]);
+    let remote = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+    let message = "merge remote PR head (Refs BUG-1)";
+    let pinned =
+        crate::ship_from_seat::pending_commit_preflight(&fx.main, &clone, Some("BUG-1"), message)
+            .unwrap();
+    crate::seat_clone::merge_publication_head(
+        &fx.main,
+        &clone,
+        "ratchet-publish",
+        &remote,
+        message,
+        pinned.pinned,
+    )
+    .unwrap();
+    assert_eq!(git_ok(&clone, &["rev-parse", "HEAD^2"]), remote);
+    let merged = git_ok(&clone, &["show", "HEAD:scripts/ratchet-set.json"]);
+    assert!(
+        merged.contains("\"left\"") && merged.contains("\"right\""),
+        "{merged}"
+    );
+}
