@@ -11,12 +11,12 @@ description: |
   ## Acceptance criteria
   1. A dirty-state probe returns tri-state (clean / dirty / unknown). Unknown (any git error) → NOT eligible, and the hint names the cause. A test injects a git failure.
   2. Legacy claims without `claim_id` go through the same lane-record / session-registry check (or are ineligible, with a hint to salvage by hand). A test.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T22:55:23.049530615Z
-modified_at: 2026-11-27T02:20:32.122467874Z
+modified_at: 2026-11-27T03:07:31.404690268Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -135,6 +135,20 @@ history:
   author: dirtlab
   timestamp: 2026-11-27T02:20:35.354508536Z
   changes: []
+- id: 01a21af8-ee1a-76a2-a455-63290bf7a3f7
+  author: aida-auto-bump
+  timestamp: 2026-11-27T03:07:31.226219492Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21af8-eecc-7a90-889e-0516db1cb244
+  timestamp: 2026-11-27T03:07:31.404684754Z
+  agent: aida
+  commit_sha: 5c30ae451764a9ea227da02dbeedfafac9346fcd
+  summary: 'BUG-2780 PASS; the head is 2 commits behind main, and no finding depends on code that main has changed since. AC1 [behavioral-test] is verified by bug2780_unbound_release_fails_closed_on_unreadable_state_and_legacy_claims. That test corrupts .git/index, so git status fails, the state reads Unknown, the claim is kept and the hint names the git cause. The new aida-core git_ops::worktree_dirty_state returns Clean/Dirty/Unknown(cause). It also returns Unknown when the gitlinks are untrusted, when rev-parse fails, or when the path is not its own worktree root (the nested-directory case is tested). AC2 [behavioral-test] is verified by the same test. A legacy claim with no claim_id, or a blank one, is now matched by lane_record_names_claim on its scope, using the lane spec or the captured claim scope with case-insensitive matching; it then goes through the same lease and agent-registry checks. A lane record keeps the claim and a blank id counts as legacy; with the clone gone, it is released. Other hardening: relative or ..-bearing clone paths are refused before any probe, and every probe reads the canonicalized path. Protocol checklist, ''the PR touches at least one test file'': met (coordination.rs tests module). The deep-pass found no fail-open path: every new error branch keeps the claim. One cosmetic doc-drift finding is deferred. CI pending at review time: fast gates pass, fast compile pending.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 52825e81d1c3fbab8e5bf382ef81641956f0e559
@@ -145,3 +159,7 @@ filed_at:
   vendor: claude
   session: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-27T03:07:31.226211098Z
+  completion_sha: 5c30ae451764a9ea227da02dbeedfafac9346fcd
