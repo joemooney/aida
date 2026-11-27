@@ -54,6 +54,49 @@ class ContainedHostShutdownTests(unittest.TestCase):
                 self.assertIn('notification-shutdown-ok', result.stdout)
 
 
+class SeatPreflightDiagnosticTests(unittest.TestCase):
+    # trace:TASK-3927 | ai:claude
+    def probe(self, code, *lines):
+        script = 'import sys\nfor l in sys.argv[2:]: print(l, file=sys.stderr if "err" in l else sys.stdout)\n' \
+                 'sys.exit(int(sys.argv[1]))'
+        return [sys.executable, '-I', '-u', '-c', script, str(code), *lines]
+
+    def test_failing_probe_names_exit_code_redacted_tail(self):
+        secret = 'abcd' * 10
+        hexrun = '0123456789abcdef' * 3
+        lines = ['early-%02d' % i for i in range(30)] + [
+            'stderr err: grant file unreadable', 'token=' + secret,
+            'Authorization: Bearer sk-live-xyz', 'header bearer opaque-1', 'digest ' + hexrun, 'has `tick`']
+        with self.assertRaises(RuntimeError) as raised:
+            ns['seat_preflight'](self.probe(3, *lines))
+        message = str(raised.exception)
+        self.assertIn('preflight refused (exit 3)', message)
+        self.assertIn('last 20 probe output lines', message)
+        self.assertIn('  `stderr err: grant file unreadable`', message)
+        self.assertIn('`token=[REDACTED]`', message)
+        self.assertIn('`header bearer [REDACTED]`', message)
+        self.assertIn('`digest [REDACTED]`', message)
+        self.assertIn("`has 'tick'`", message)
+        for leaked in (secret, 'sk-live-xyz', 'opaque-1', hexrun, 'early-15'):
+            self.assertNotIn(leaked, message)
+        self.assertIn('early-16', message)
+        self.assertLessEqual(len(message.encode()), 4096)
+
+    def test_truncated_first_line_and_control_characters_are_not_shown(self):
+        with self.assertRaises(RuntimeError) as raised:
+            ns['seat_preflight'](self.probe(2, 'pw' + ' q' * 2500, 'bell\x1b[31m'))
+        message = str(raised.exception)
+        self.assertNotIn(' q q', message)
+        self.assertIn('`bell?[31m`', message)
+
+    def test_passing_probe_unchanged_and_grantless_success_still_refuses(self):
+        self.assertIsNone(ns['seat_preflight'](
+            self.probe(0, 'noise', 'seat_grant_valid=true expected_seat=true')))
+        with self.assertRaises(RuntimeError) as raised:
+            ns['seat_preflight'](self.probe(0))
+        self.assertIn('(exit 0); probe printed no output', str(raised.exception))
+
+
 class ContainedHostPreflightTests(unittest.TestCase):
     # trace:BUG-2717 | ai:codex
     def test_notification_listener_before_exec(self):
