@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-27T05:53:42.641146935Z
+modified_at: 2026-11-27T05:58:06.207283083Z
 req_type: Task
 tags:
 - review
@@ -256,27 +256,20 @@ comments:
   modified_at: 2026-11-27T05:00:11.272485960Z
   session_id: 01a21b49d867
   harness_version: 2.1.319 (Claude Code)
-- id: 01a21b91-14f1-7c21-afa3-07640c0d30b7
-  author: dirtlab
+- id: 01a21b95-611b-7652-80b7-ec06d2c6dff4
+  author: joe
   content: |-
-    ## Implementer self-review
-    Reviewed HEAD: 4a29fea493 (diff vs origin/integration; branch cut from integration tip 4fc9b9ab6c)
-
-    Acceptance evidence:
-    - AC1 [behavioral-test]: t3869_non_regular_entries_skipped_with_named_reason. git diff --raw modes (120000/160000/other) and O_NOFOLLOW worktree opens classify symlink, symlinked dir, gitlink, FIFO as non_regular:<kind>; patch_bytes stay 0, never read. PASS.
-    - AC2 [behavioral-test]: t3869_specs_resolve_only_through_store_and_refuse_unknown. explicit --specs bails on unknown ID and on unloadable store; commit-derived IDs still skip. PASS.
-    - AC3 [behavioral-test]: t3869_pinned_root_survives_concurrent_symlink_swap. 3000 reads plus writes during a rename/symlink swap loop never escape. PASS.
-    - AC4: not in this slice (Refs).
-
-    Tests: aida-cli-lib --lib review_prepare:: t3869_ s6_ s5d_ bug2779 29 passed; aida-core --lib review_engine 38 passed; make check-ci-fast exit 0.
-
-    Probe findings: (P3) a panic in the swap test would hang the scoped join because the swapper loops until `stop`. FIXED with a StopOnDrop guard. (P1/P2) --raw header parse needs 5 fields or bails; deletions take the old-side mode. (P4) `..`/`.` components are treated as Missing; a leading `/` is stripped to root-relative.
-    Conflict: scripts/ratchet-set.json resolved as a union (bug2779 + 3 t3869 names).
-    Residual risks: open_confined depends on /proc/self/fd (Linux-only, as write_output already did); an unreadable store now fails explicit --specs (intended).
-  created_at: 2026-11-27T05:53:42.641146935Z
-  modified_at: 2026-11-27T05:53:42.641146935Z
-  session_id: 01a21b49d867
-  harness_version: 2.1.319 (Claude Code)
+    INTEGRATION PRE-CHECK PR #4727 (fresh3, head 4a29fea493, replaces #4710): PASS. It is a faithful port. Strict tier, so it needs the independent review.
+    - It is based on integration 4fc9b9ab6c5 (S5d + S6) and merges cleanly with the current tip 4a76108fb71 (post-p52 re-sync).
+    - git range-diff against #4710 (d75fd4a6d9) shows two differences:
+      - (1) The ratchet-set.json union now also keeps the bug2779 and s6 names. I verified that the s5d, s6, bug2779 and t3869 entries are each present once.
+      - (2) Test robustness: the concurrent-swap test stops its swapper thread on drop through a StopOnDrop guard, so a failed assertion fails the test instead of hanging the scoped join.
+    - No production code differs, so the earlier security-lens PASS carries over: an O_NOFOLLOW walk from /proc/self/fd pins, lstat + O_NONBLOCK + an fstat recheck, store-only --specs, and a shared confined_dir.
+    - The title is (Refs TASK-3869). AC4 (the non-UTF-8 round trip) remains open on this spec.
+  created_at: 2026-11-27T05:58:06.207283083Z
+  modified_at: 2026-11-27T05:58:06.207283083Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20d45-edeb-7592-b5ab-8a8e9e69042e
   author: joe
