@@ -11,12 +11,12 @@ description: |
   1. Codex review runs have NO filesystem read beyond what the prompt carries. Use codex's no-tool / no-shell execution mode if one exists, or run it inside an AIDA bubblewrap with an empty HOME and only the codex auth file bind-mounted read-only. A spawn-contract test asserts the flags or the wrapper.
   2. A red-team test: a fake codex that tries to read a planted `$HOME/.ssh/canary` gets ENOENT/EACCES, and the canary never appears in the report.
   3. Until AC1 lands, `--post-comment` refuses when the finder or challenger vendor is codex (or any vendor without verified no-read confinement), with a clear message. Local reports are still allowed.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:42:37.637024707Z
-modified_at: 2026-11-27T13:05:28.491230096Z
+modified_at: 2026-11-27T14:17:48.271073012Z
 req_type: Bug
 comments:
 - id: 01a21b1a-ee60-7891-ba06-fa2ea0739f94
@@ -194,6 +194,11 @@ comments:
   content: 'Deferred from the #4744 review (minor, p3): the --post-comment no-read refusal fires only after every finder and challenger batch has run, although the vendors (and a custom AIDA_REVIEW_RUNNER_CMD) are known before the run, so a codex --post-comment run spends a full review and then refuses. It also replaces the --fail-on/coverage error messages. Follow-up for S2: refuse up front too, keeping the post-run check as the fail-closed backstop.'
   created_at: 2026-11-27T13:05:28.491230096Z
   modified_at: 2026-11-27T13:05:28.491230096Z
+- id: 01a21d5e-97ef-72e2-b2e5-f3f7672688cd
+  author: lane-recovery
+  content: Reference merge `0b980329f9a2ffbd5e0dd6da9b3cfd33f94c6e29` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-27T14:17:48.271064781Z
+  modified_at: 2026-11-27T14:17:48.271064781Z
 history:
 - id: 01a21b19-d8a7-7963-8736-0792eea43275
   author: joe
@@ -249,6 +254,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21d5e-97ef-72e2-b2e5-f40b8cf57c91
+  author: lane-recovery
+  timestamp: 2026-11-27T14:17:48.271072951Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 8e59bcd029ec5f550d1970a5c25b9093dead24b4
