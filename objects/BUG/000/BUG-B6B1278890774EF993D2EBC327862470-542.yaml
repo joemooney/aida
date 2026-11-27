@@ -218,6 +218,11 @@ comments:
   created_at: 2026-11-27T07:05:12.281425465Z
   modified_at: 2026-11-27T07:05:12.281425465Z
   session_id: 01a21bcf2c92
+- id: 01a21bd3-0efc-75a3-92a9-a0762737cde8
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2781 AC2 (push before the final gate in LANE_JOB_CONTRACT, tested in implementer_prompt_names_the_sanctioned_path), AC3 (exit_cause and end_line with unit tests) and AC4 (real-git salvage tests) are met. AC1''s salvage push has one blocking gap. When the target is an open PR''s branch, lane_salvage::push_fast_forward moves that PR''s head without the BUG-2618 PR-head protection check (pr_head_guard::check_branch). The normal seat publication path (ship_from_seat.rs:2291) and every other head-moving path run that check, and this project enables it ([pr-head] protect = true). So a salvage can move a PR head that is approved or pinned by a train. The 2 commits main gained since this head (train, ledger and review_engine changes) do not touch the salvage path, so the finding stands on the current base. The removed clippy allow from the previous round is confirmed gone. CI pending at review time.. No triage reason was given.'
+  created_at: 2026-11-27T07:05:46.492222829Z
+  modified_at: 2026-11-27T07:05:46.492222829Z
 history:
 - id: 01a21ad7-b05c-7db2-817a-811e696dae3f
   author: joe
@@ -295,6 +300,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a21bd3-0efc-75a3-92a9-a061768979d1
+  author: joe
+  timestamp: 2026-11-27T07:05:46.492207035Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 956b13f4da439b80d7c2710c6b5572adee9364df
   branch: main
