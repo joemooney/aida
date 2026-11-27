@@ -115,10 +115,17 @@ pub(crate) fn challenger_call<'a>(
         Some(v) if finder.vendor().is_some() => {
             let found = finder.on_path(v).is_some();
             ensure!(found, "--challenger-agent {}: not found on PATH", v.program);
-            (
-                Some(v),
-                Some(format!("--challenger-agent picked {}", v.program)),
-            )
+            // The finder's own vendor is weaker evidence: say so. trace:STORY-3120 | ai:claude
+            let same = finder.vendor().is_some_and(|own| own.program == v.program);
+            let note = if same {
+                format!(
+                    "same-vendor challenger ({}), forced by --challenger-agent",
+                    v.program
+                )
+            } else {
+                format!("--challenger-agent picked {}", v.program)
+            };
+            (Some(v), Some(note))
         }
         Some(_) => bail!("--challenger-agent does not apply to AIDA_REVIEW_RUNNER_CMD"),
         None => pick_challenger(finder, authors),
@@ -479,7 +486,15 @@ mod tests {
         let (pass, summary) = challenger_call(&call, &forged, codex, None, &base).unwrap();
         assert_eq!(pass.vendor().map(|v| v.program), Some("codex"));
         assert_eq!(summary.challenger_agent.as_deref(), Some("codex"));
-        assert!(summary.note.unwrap().contains("--challenger-agent"));
+        let note = summary.note.unwrap();
+        assert!(note.contains("--challenger-agent"), "{note}");
+        assert!(!note.contains("same-vendor"), "{note}");
+        // Forcing the finder's own vendor is labelled same-vendor.
+        let claude = review_vendor("claude").ok();
+        let (_, same) = challenger_call(&call, &forged, claude, None, &base).unwrap();
+        assert_eq!(same.challenger_agent.as_deref(), Some("claude"));
+        let note = same.note.unwrap();
+        assert!(note.contains("same-vendor challenger (claude)"), "{note}");
         // Not installed: refused, never the finder's vendor in its place.
         let only_claude = tempfile::tempdir().unwrap();
         let claude = only_claude.path().join("claude");

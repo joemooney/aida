@@ -339,7 +339,7 @@ With `--adversarial`, a second agent tries to reproduce each finding and refutes
 
 AIDA picks the challenger from the installed vendors. It prefers a vendor that is not named in the change's `[AI:<tool>]` commit tags and is not the finder's vendor. When no installed vendor qualifies, the finder's own vendor challenges, and the report's Note says so: a same-vendor challenge is weaker evidence than a cross-vendor one. Under `AIDA_REVIEW_RUNNER_CMD`, your command runs the challenger pass too.
 
-`--challenger-agent claude|codex` is the operator's override. It wins over the automatic pick, so no commit tag in the change can steer it. The report's Note records the override, and you should treat a challenger of the finder's own vendor as same-vendor. It is refused when that vendor is not on PATH, and it does not apply under `AIDA_REVIEW_RUNNER_CMD`.
+`--challenger-agent claude|codex` is the operator's override. It wins over the automatic pick, so no commit tag in the change can steer it. The report's Note records the override. When the override is the finder's own vendor, the Note, the bundle and the progress message label it `same-vendor challenger (<vendor>)`, the weaker evidence described above. It is refused when that vendor is not on PATH, and it does not apply under `AIDA_REVIEW_RUNNER_CMD`.
 
 ### Partial review: challenger unavailable
 

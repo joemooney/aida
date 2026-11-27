@@ -2413,6 +2413,55 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         assert_eq!(line("finder"), "codex finder pass, b 1: x");
     }
 
+    /// A forced challenger of the finder's own vendor is labelled
+    /// same-vendor in the bundle and the report; another vendor is not.
+    // trace:STORY-3120 | ai:claude
+    #[test]
+    fn s5e_forced_same_vendor_challenger_is_labelled_in_bundle_and_report() {
+        let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        for name in ["claude", "codex"] {
+            crate::test_exec::write_executable(&bin.path().join(name), "#!/bin/sh\n");
+        }
+        let env = vec![("PATH".into(), bin.path().as_os_str().to_owned())];
+        let finder = RunnerCall {
+            agent: review_vendor("claude").ok(),
+            checkout: checkout.path(),
+            parent_env: &env,
+            pass: "finder",
+            deadline: RUN_DEADLINE,
+            stdout_cap: STDOUT_CAP,
+            stderr_cap: STDERR_CAP,
+            tuning: Default::default(),
+        };
+        let base = crate::launch::review_tuning::TrustedBase::default();
+        let report = |forced: &str| {
+            let forced = review_vendor(forced).ok();
+            let authors = std::collections::BTreeSet::new();
+            let (_, summary) =
+                challenger::challenger_call(&finder, &authors, forced, None, &base).unwrap();
+            let mut bundle: ReviewPreparationBundle = serde_json::from_value(serde_json::json!({
+                "mode": "range",
+                "inventory": {"reviewable_files": [], "excluded_files": [],
+                    "inventory_sha256": ""},
+                "batches": [], "playbooks": [], "linked_specs": [],
+            }))
+            .unwrap();
+            bundle.adversarial = Some(summary);
+            let json = serde_json::to_value(&bundle).unwrap();
+            let note = json["adversarial"]["note"].as_str().unwrap().to_owned();
+            (note, render_bundle_markdown(&bundle))
+        };
+        let (note, md) = report("claude");
+        assert!(note.contains("same-vendor challenger (claude)"), "{note}");
+        assert!(md.contains("same-vendor challenger (claude)"), "{md}");
+        let (note, md) = report("codex");
+        assert!(note.contains("--challenger-agent picked codex"), "{note}");
+        assert!(
+            !note.contains("same-vendor") && !md.contains("same-vendor"),
+            "{md}"
+        );
+    }
+
     /// A rename's old path reaches the runner's diff only when it passes
     /// every inventory exclusion, not only the credential one.
     // trace:STORY-3120 | ai:claude
