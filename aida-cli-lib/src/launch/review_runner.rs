@@ -726,7 +726,7 @@ mod tests {
             &format!("#!/bin/sh\ncat >/dev/null\ntouch {}\n", ran.display()),
         );
         passthrough_bwrap(bin.path());
-        let path = bin.path().display().to_string();
+        let path = format!("{}:/usr/bin:/bin", bin.path().display());
         let repo = checkout.path();
         let run = |pairs: &[(&str, &str)]| {
             let env = vars(pairs);
