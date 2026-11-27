@@ -1,5 +1,6 @@
 id: 01a21c06-6369-7b60-b18a-ab00d671f99a
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1564
+agreed_id: TASK-3546
 title: 'Review follow-up: aida-cli-lib/src/vendors/host_diagnostics.rs agy_auth_probe classifies Timeout with `e.to_'
 description: |-
   From STORY-3202
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a21a2e-62ea-7e00-8684-13f8ad52587b
   created_at: 2026-11-27T08:01:50.441529628Z
+history:
+- id: 01a21c12-5c62-7103-bf6d-e65697a063fe
+  author: joe
+  timestamp: 2026-11-27T08:14:55.074283214Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 1783608c2a472560286c5a4445f3bf009084e080
   branch: pr-4716
