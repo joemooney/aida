@@ -62,6 +62,30 @@ comments:
   modified_at: 2026-11-27T05:46:34.041759551Z
   session_id: 01a21b87a95b
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21bc2-3e0c-7173-be38-4348cded6ea2
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 9afeaa251d
+
+    Acceptance evidence
+    - AC1 [behavioral-test]: tests/test_json_union_merge.py::test_disjoint_additions_to_one_group_merge_cleanly (two branches add different tests to one group plus a new group/shared module; git merge and merge-tree succeed, result is valid JSON with both). Rust: seat_clone::rework_merge_tests::bug_2784_rework_git_unions_disjoint_json_list_additions proves json_union_merge_config (the env rework prep applies to every rework Git call, host and sandboxed) makes merge-tree clean. Both pass.
+    - AC2 [behavioral-test]: test_same_key_edited_differently_stays_a_conflict (scalar edited both ways; entry removed on one side and edited on the other) plus the Rust test's missing-script case (exit 1 = conflict).
+
+    Probe findings / fixes
+    - Authority: the driver runs the primary checkout's copy of the script, never the seat's (a lane-modified driver would otherwise run host-side). A quote in the path, a missing script, or a missing python3 all fail into an ordinary conflict, which is today's behavior.
+    - GIT_CONFIG_COUNT=3 replaces the sandbox's count of 2, so the hooksPath/fsmonitor overrides are restated alongside the driver key.
+    - Fixed: the store-writer inventory flagged the driver's write (rows added); a test name containing 'ratchet' turned seat_clone.rs into a ratchet module for the structural guard (renamed).
+    - ratchet-set.json round-trips byte-identically through the driver's serializer; expected_tests counts are just list lengths and are unchanged.
+
+    Residual risks
+    - GitHub server-side merges and train merges ignore custom drivers. This fixes the local rework-prep path (the one that triggered conflict-repair gating) only.
+    - In a sandbox with a read_allowlist that omits the primary checkout, the driver can't be read and the merge falls back to a conflict.
+    - Fast gate: run in slices because the lane runner only accepts cargo. All pass except four sandbox-only failures (read-only /tmp, EPERM sockets, read-only CARGO_HOME): test-touched planner (test_lane_autobuild, test_porcelain_install), containment conformance, store mutation channel, self-hosted routing.
+  created_at: 2026-11-27T06:47:24.428583634Z
+  modified_at: 2026-11-27T06:47:24.428583634Z
+  session_id: 01a21b87a95b
+  harness_version: 2.1.319 (Claude Code)
 - id: 01a21bcb-13e8-7183-96d1-c456848a880b
   author: aida-orchestrator
   content: 'Shelved by leases::shelve_spec_on_failure during reviewer: verdict:request-changes'
@@ -107,6 +131,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21bc2-da45-7bf2-88fb-8fac40ec4853
+  author: dirtlab
+  timestamp: 2026-11-27T06:48:04.421377770Z
+  session_id: 01a21b87a95b
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 - id: 01a21bcb-13e8-7183-96d1-c4430c2d4438
   author: aida-orchestrator
   timestamp: 2026-11-27T06:57:03.464372351Z
