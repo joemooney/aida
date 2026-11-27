@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T04:27:12.923122169Z
-modified_at: 2026-11-27T07:53:51.786657121Z
+modified_at: 2026-11-27T08:01:54.237270740Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -164,6 +164,20 @@ comments:
     The commit sandbox (commit_sandbox_args) now binds MAIN's scripts/json-union-merge.py read-only (--ro-bind-try, after every other mount), so the driver runs under a [contained] read_allowlist and when MAIN sits under the sandbox's private /tmp (the bwrap e2e tests hit exactly that: without the bind the driver failed into the text-merge fallback and the rework reported a marker-carrying conflict, i.e. it failed safe). Remaining residual: if that file is absent or unreadable the wrapper text-merges (markers on a conflict; a clean text merge passes as git's default would). The earlier comment's RESIDUAL note is superseded.
   created_at: 2026-11-27T07:53:51.786657121Z
   modified_at: 2026-11-27T07:53:51.786657121Z
+  session_id: 01a21bedcc3c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21c06-723d-7cf2-be66-5dafcd20882f
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 5ba01320a9 (git diff origin/main...HEAD).
+    Acceptance evidence: AC2 fail-safe [behavioral-test]: tests/test_json_union_merge.py (same-key, removal-vs-edit, duplicates, invalid JSON, clean-text-merge whole-file conflict: all assert <<<<<<< / ======= / >>>>>>> and both sides); missing script and quoted path via the real driver string in bug_2784_rework_git_unions_disjoint_json_list_additions. Sandbox wiring: bug_2784_lane_merge_env_keeps_sandbox_forced_git_config (final bwrap --setenv map through commit_sandbox_args: COUNT=3, hooksPath=/dev/null, fsmonitor=false, driver key, identity, SANDBOX_GIT_CONFIG parity, script ro-bind with and without an allowlist); bwrap e2e rework test with planted seat hooks incl. post-merge; bwrap e2e publication merge test.
+    Probe findings: (P4) the first e2e run showed MAIN under the sandbox's private /tmp hid the script; fixed by the read-only bind, which also covers the read_allowlist finding. (P5) the bind is one trusted file from the host's primary checkout, read-only, in the commit sandbox only; the probe sandbox is unchanged. Fail-open: a missing script now text-merges (markers on a conflict) instead of failing silently.
+    Fixes during review: stale comment ('missing driver fails into a conflict'), portability ratchet /tmp literal.
+    Validation: cargo test --profile agent -p aida-cli-lib --lib -- bug_2784: 4 passed (bwrap live); python unittest 5 passed; make check-ci-fast exit 0.
+    Residual risks: a clean text merge in the fallback (script missing) is accepted as git's default would; seat-controlled .gitattributes can route other paths to the driver, which only parses JSON and runs git merge-file (no code execution from content).
+  created_at: 2026-11-27T08:01:54.237270740Z
+  modified_at: 2026-11-27T08:01:54.237270740Z
   session_id: 01a21bedcc3c
   harness_version: 2.1.319 (Claude Code)
 history:
