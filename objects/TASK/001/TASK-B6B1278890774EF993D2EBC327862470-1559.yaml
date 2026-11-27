@@ -9,16 +9,24 @@ description: |
   - AC1: manual-train waiter identity uses the ORDER-INSENSITIVE (sorted, deduplicated) PR set, not the exact argv order.
   - AC2: a manual train whose PR set equals a LIVE waiter's ADOPTS that waiter (takes over its queue position, refreshes its owner pid + start time) instead of queueing behind it, so retrying from another terminal or a deputy never self-blocks.
   - AC3: tests: the same set in a different order → adopts; the same set from a different parent → adopts; a different set → queues FIFO; a recycled pid (same pid, different start time) → treated as dead and released.
-status: Approved
+status: InProgress
 priority: Low
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T06:27:07.544697554Z
-modified_at: 2026-11-27T06:27:07.544697554Z
+modified_at: 2026-11-27T19:56:47.153116659Z
 req_type: Task
 tags:
 - admission
 - auto-train
+history:
+- id: 01a21e94-f0b1-7662-aeb9-7250525292d7
+  author: aida-session-start
+  timestamp: 2026-11-27T19:56:47.153115926Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: f4c4400eaafc41dfbefdb9df3cf457dfa7d723c5
   branch: main
