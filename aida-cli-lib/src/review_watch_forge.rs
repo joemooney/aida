@@ -275,6 +275,13 @@ impl Repository {
         );
         serde_json::from_slice(&out.stdout).context("invalid forge discovery JSON")
     }
+    // trace:BUG-2735 | ai:codex
+    pub fn discover_for_watch(&self, root: &Path) -> Result<Vec<Change>> {
+        if let Some(reason) = crate::forge::watcher_backoff(root, self.kind, Some(self)) {
+            anyhow::bail!("{reason}");
+        }
+        self.discover(root)
+    }
     pub fn discover(&self, root: &Path) -> Result<Vec<Change>> {
         let (changes, cut) = self.discover_with(root, |change, _| Ok(change))?;
         anyhow::ensure!(!cut, "forge discovery ran out of time");
