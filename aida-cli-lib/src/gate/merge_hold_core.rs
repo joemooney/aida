@@ -1493,8 +1493,19 @@ pub(crate) fn corpus_gate_bodies_at(
     let change = change.into();
     let pr = change.number;
     let head = head.map(str::trim).filter(|head| !head.is_empty());
+    // One git ancestry answer per commit for this decision: every spec key
+    // and store asks it again for each refusal bound to another change.
+    // trace:BUG-2584 | ai:claude
+    let answers = std::cell::RefCell::new(std::collections::HashMap::<String, bool>::new());
     let in_head = |sha: &str| match (roots.first(), head) {
-        (Some(repo), Some(head)) => crate::gate::review_carryover::commit_in_head(repo, sha, head),
+        (Some(repo), Some(head)) => {
+            if let Some(known) = answers.borrow().get(sha) {
+                return *known;
+            }
+            let found = crate::gate::review_carryover::commit_in_head(repo, sha, head);
+            answers.borrow_mut().insert(sha.to_string(), found);
+            found
+        }
         _ => true,
     };
     let mut keys: Vec<String> = Vec::new();
