@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:42:37.637024707Z
-modified_at: 2026-11-27T20:23:41.412301723Z
+modified_at: 2026-11-27T20:23:44.136208966Z
 req_type: Bug
 comments:
 - id: 01a21b1a-ee60-7891-ba06-fa2ea0739f94
@@ -244,6 +244,21 @@ comments:
   created_at: 2026-11-27T19:59:47.756220353Z
   modified_at: 2026-11-27T19:59:47.756220353Z
   session_id: 01a21e699afd
+- id: 01a21ead-9c47-72e0-9f33-7ee00f9f9f4b
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4751):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5d1434c3e3e1
+    Recorded: 2026-11-27T20:18:18.385705106+00:00
+    Findings:
+    1. CI is red at 5d1434c3e3e1 and the failures are caused by this PR. Three jobs fail: CI (fast compile) at its 'Ratchet set' step (exit 101, a panicking test, and the ratchet set now includes this PR's review_runner/review_prepare/review_challenger tests), CI (fast gates) at the `make check-ci-source` step (exit 2), and CI (rest) at 'Run tests' (exit 1). Build (ubuntu-latest) fails only because it requires every lane. Main at the pinned base 8e06142ac4 is fully green, and concurrent PRs on the same base (bug-2785, bug-2786) pass fast gates and rest, so these are not infrastructure failures. The job logs cannot be read from the reviewer sandbox (the blob host is denied), so the failing test names are not known here. Read the logs (gh api repos/joemooney/aida/actions/jobs/140710980675/logs --allow-escape-sequences, and jobs 140710980673 and 140711292902), fix the cause, and push a green head.
+    2. AC2's report half (the canary never reaches the report or SARIF because the read is confined) is claimed, but CI never exercises it live. In review_prepare.rs bug2783_unconfined_runner_review_is_never_posted, the real-bwrap segment prints 'SKIP confined canary' and passes whenever `bwrap --unshare-all` cannot run. That is the default on hosted ubuntu runners, where kernel.apparmor_restrict_unprivileged_userns is set. The only CI step that relaxes that sysctl is 'Live bwrap OS-wrap confinement gate' (ci.yml:734), which requires AIDA_REQUIRE_BWRAP_LIVE=1 for a fixed list of test names. This test is not on that list and ignores AIDA_REQUIRE_BWRAP_LIVE, so the only behavioral proof that the confinement blocks a $HOME/.ssh read can skip silently everywhere. This is containment code, so the gap blocks under ADR-76. Fix: split the live canary into its own test whose name matches a pattern the live gate runs and counts (for example a bug_2783_bwrap_ prefix added to the gate's grep and filter lists), and make it fail rather than skip when AIDA_REQUIRE_BWRAP_LIVE=1.
+    3. Plausible operational gap, not verified with a live run. The confined codex sees ~/.codex/auth.json only as a read-only bind mount (launch/review_runner.rs confined()). When its access token expires, codex's refresh rewrites auth.json, and an atomic rename onto a bind-mounted file fails (EBUSY/EROFS), so confined codex reviews may start failing with an auth error once the token ages out. agy's oauth token refresh is in the same position. The failure is closed (the run errors), not a leak. Verify with a live expired-token run, and if it reproduces, bind the auth directory's token into a writable copy that is not written back, or document that a host refresh is needed.
+    4. RunnerCall::no_read() (launch/review_runner.rs:93) has no production caller after review_prepare switched to may_post(); only the s3a vendor test calls it. Either drop it in favour of may_post() and the vendor flag, or keep it and note it is a test-only view, so a future gate does not mistake no_read (true for confined codex and agy, which can still read their own token) for 'safe to publish'.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-27T20:23:43.943656207Z
+  modified_at: 2026-11-27T20:23:43.943656207Z
 history:
 - id: 01a21b19-d8a7-7963-8736-0792eea43275
   author: joe
