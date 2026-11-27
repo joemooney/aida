@@ -533,6 +533,16 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
             "cfg(test) synthetic selector proving the probe's env_clear forwards none",
         ),
     ),
+    // trace:TASK-3919 | ai:claude — the script deputy runner re-execs itself
+    // onto the live AIDA build with the grant it already holds; the image is
+    // AIDA, never a Codex agent, and nothing is minted.
+    (
+        "launch/control.rs",
+        1,
+        Finalization::NotACodexLaunch(
+            "the script deputy runner's re-exec onto the live aida build under its held grant",
+        ),
+    ),
     // trace:STORY-2338 | ai:claude — the script deputy hands each job the
     // operator's own (refreshed) grant; the child is `bash` running the
     // submitted script, never a Codex agent.
