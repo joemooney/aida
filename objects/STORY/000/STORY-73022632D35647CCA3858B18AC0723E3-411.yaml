@@ -1,0 +1,33 @@
+id: 01a21f49-24bf-7e50-a2ee-c4d4a2a3ca0e
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-411
+title: 'Review PR-4766: [AI:claude] fix(review): review prepare keeps non-UTF-8 file names lossless from inventory to SARIF [AC4] (Refs TASK-3869)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a21f22`) for branch `task-3869-ac4-non-utf8`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4766>
+  - Branch: `task-3869-ac4-non-utf8` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - TASK-3869
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4766` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T23:13:36.959619976Z
+modified_at: 2026-11-27T23:13:36.959619976Z
+req_type: Story
+filed_at:
+  code_sha: 0fba3d42ee966dab2866ad59a9ffbe96d2b0e23d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0fba3d42ee
