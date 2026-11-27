@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-27T00:42:13.744865515Z
+modified_at: 2026-11-27T00:42:25.860120538Z
 req_type: Story
 tags:
 - integration
@@ -1586,6 +1586,19 @@ comments:
   created_at: 2026-11-27T00:37:57.528652843Z
   modified_at: 2026-11-27T00:37:57.528652843Z
   session_id: 01a21a317486
+- id: 01a21a74-1821-77b2-b011-cf063ab894b7
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4699):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 6fb95e670a4b
+    Recorded: 2026-11-27T00:20:32.711036153+00:00
+    Findings:
+    1. MUST-2 (advisor ruling 2026-11-27 17:16, binding; AC1(4) of the 15:10 BINDING ruling requires a DISTINCT non-zero code): 'partial: challenger unavailable' reuses exit code 3, which is already --auto-complete's DRIVE_EXIT_HARD_FAIL. orchestrator_leases.rs:896 merges the two meanings into one EXIT_CODES label, and review_prepare.rs PARTIAL_REVIEW_EXIT_CODE = 3. A caller that keys on 3 cannot tell a partial review from a drive hard failure. Fix: add a dedicated EXIT_CODES row 4 labelled 'review prepare: partial, challenger unavailable', set PARTIAL_REVIEW_EXIT_CODE = 4, restore code 3's label to '`--auto-complete` drive hard failure', and update s5d_unavailable_challenger_keeps_finder_report_and_exits_partial to assert 4, distinct from 3 and from --fail-on's 1 (which still wins).
+    2. MUST-1 (integration pre-check 2026-11-27 00:12, per the 16:30/16:52 rulings): the branch is a single commit on 24f1c9e7353, and origin/main is not an ancestor (git merge-base --is-ancestor fails). The pre-check reports merge-tree conflicts with main in aida-cli-lib/src/review_prepare.rs and scripts/ratchet-set.json. Merging as it stands leaves integration unable to absorb main, which blocks promotion (integration must contain main). Rework: merge origin/main first and resolve as the pre-check directs. Keep main's run_review_agent() and add `forced`. Use main's fail()/runner_failure() for both passes, with the --challenger-agent hint in the challenger pass only. The new Err arm that records the unchallenged cause wraps runner_failure. Move the tests to main's wording. Union the ratchet lists. Drop the '--challenger-agent needs --agent' arm and its test if main's default vendor makes it unreachable.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-27T00:42:25.697638749Z
+  modified_at: 2026-11-27T00:42:25.697638749Z
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
