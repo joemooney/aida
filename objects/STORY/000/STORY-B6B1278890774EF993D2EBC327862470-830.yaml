@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T11:23:10.721031318Z
-modified_at: 2026-11-27T02:26:51.151549675Z
+modified_at: 2026-11-27T03:18:50.093748097Z
 req_type: Story
 tags:
 - landing
@@ -422,6 +422,20 @@ comments:
   modified_at: 2026-11-27T01:58:10.978284576Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21b03-49ed-7992-bcef-a4f1d04a5987
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 86cfe4226a7a (S2 fresh #2, replaces #4695).
+    Acceptance evidence: ports #4695 (advisor binding a-d) onto main @956b13f4. Resolved against BUG-2777 drift rows: drift ejection stays its own failing cause, bypassing dwell, and a drifted head is not landable. Ready_of takes the drift row via a scripted train lookup (asserted in story_3131_s2_ready_of_maps_the_listing_row).
+    Review fixes: (1) conflict && repairing is now informational ('conflict repair in progress: the <spec> rework lane') and no longer falls through to 'unknown'. story_3131_s2_conflict_without_repair_lane asserts INFO_CATEGORY and failing()==2. (2) The supervised arm now precedes the lock arm. New test story_3131_s2_supervised_outranks_a_busy_train_lock asserts 'needs operator train' while a Busy train holds the lock.
+    Probes: multiplicity: a conflicted PR with no spec says 'a rework lane'. Ordering: a drifted conflicted PR reports drift first, whose route already names the conflict repair.
+    Tests: cargo test -p aida-cli-lib --lib -- landing_drought gave 17 passed. stalled_reviews, story_2823 and task_1945 auto-merged cleanly and were not re-run locally, so CI covers them.
+    Residual risk: a TASK-3921 capped review-watch state maps through review_heads unchanged, so a capped head counts as in flight or waiting (informational).
+  created_at: 2026-11-27T03:18:50.093748097Z
+  modified_at: 2026-11-27T03:18:50.093748097Z
+  session_id: 01a21ad3442a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21278-534b-78c3-9acc-06e202dacf55
   author: joe

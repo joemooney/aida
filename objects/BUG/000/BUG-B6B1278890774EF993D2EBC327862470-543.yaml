@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T02:39:43.224402332Z
-modified_at: 2026-11-27T03:19:04.844086644Z
+modified_at: 2026-11-27T03:21:37.229852065Z
 req_type: Bug
 tags:
 - ci
@@ -42,6 +42,29 @@ comments:
   modified_at: 2026-11-27T02:46:35.171672779Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21b05-d6cd-7cc2-9835-d5bfb206a74c
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (command-level, unittest):** check-ci-gates already prints `ok/FAIL <step> (Ns)` per gate; check-ratchets.py gains a per-step "why" label (which build and why) alongside its existing duration line. Test in tests/test_ratchet_set.py.
+    - **AC2 (options a + c per advisor-122):** `check-ci-fast: check-ci-source` only; `check-ci-compile: check-ratchets` (ratchets move there). check-ratchets.py gets `--manual {always,auto}` (default always, so CI's `--profile dev` step is unchanged); the Makefile passes `--manual auto`, which skips the aida build + verify-manual unless docs/cli/, aida-cli/, aida-cli-lib/src/**/*_args.rs, command_registry.rs, cli.rs, the help golden or check-ratchets.py changed vs origin/main (committed, staged, unstaged or untracked); a git failure means run it. scripts/integration-sync-main.sh keeps its ratchet guarantee by running `make check-ratchets` after check-ci-fast. Unit tests for the path gate.
+    - **AC3 (unittest):** check-ci-gates fast tier gets a stall watchdog: a step whose process tree uses <1s CPU over 120s (AIDA_GATE_STALL_SECS, 0 disables) is killed and fails with the step name plus each stalled process's comm/wchan and the last output line. Linux /proc only; elsewhere no watchdog. Fixture test with a 1s threshold and `sleep`.
+    - **AC4 (unittest):** test resolving check-ci-fast's Makefile prerequisite closure and the fast-tier plan, asserting no `cargo build|test|check` step. Wall time from the lane gate in the PR body.
+    - check-ci-list prints the new placement and why.
+
+    ### Expected files
+    - Makefile, scripts/check-ratchets.py, scripts/check-ci-gates.py, scripts/integration-sync-main.sh
+    - tests/test_ratchet_set.py, tests/test_ci_tiers.py (fast-tier CI step, so the new tests run in CI)
+    - CLAUDE.md (root file; no template master contains this text — will verify), aida-core/templates/.aida/discipline/implementer-discipline.md if its check-ci-fast wording is now false
+
+    ### Ambiguities / conflicts as questions
+    - verify-manual also checks spec-graph interface_changes, which a path diff cannot see; is CI-only coverage for spec-only surface changes acceptable? (Assumed yes: CI's Ratchet set still runs it unconditionally.)
+  created_at: 2026-11-27T03:21:37.229852065Z
+  modified_at: 2026-11-27T03:21:37.229852065Z
+  session_id: 01a21b0347d5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21ae3-eb20-7df1-9d88-cb4b0d85885c
   author: joe
