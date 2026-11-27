@@ -13,12 +13,12 @@ description: |
   - AC3 (2)(6): PROOF tests for pinned-root confinement on reads AND writes, including a concurrent re-parent / symlink swap.
   - AC4 (13): a lossless non-UTF-8 path round trip, with escaping, proven by a test.
   <=300 lines; lane after STORY-3120 S5c merges (same files).
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-27T07:55:11.100507377Z
+modified_at: 2026-11-27T07:55:39.830501329Z
 req_type: Task
 tags:
 - review
@@ -283,6 +283,11 @@ comments:
   modified_at: 2026-11-27T07:55:11.214451144Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a21c00-bbb6-7591-9ffb-775d2a6f1f23
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Advisor ruling (finalizing the stalled sweep-pending review): one rework round on both findings.. No triage reason was given.'
+  created_at: 2026-11-27T07:55:39.830492054Z
+  modified_at: 2026-11-27T07:55:39.830492054Z
 history:
 - id: 01a20d45-edeb-7592-b5ab-8a8e9e69042e
   author: joe
@@ -411,6 +416,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a21c00-bbb6-7591-9ffb-774325c02fb3
+  author: joe
+  timestamp: 2026-11-27T07:55:39.830482370Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 6c832e0d3a8b189ff57b0665563aafb822a7a71d
@@ -419,11 +431,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 91c070eb012
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Advisor ruling (finalizing the stalled sweep-pending review): one rework round on both findings.'
-  recovery_hint: address the review findings, move TASK-3869 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-27T07:55:11.100507377Z
