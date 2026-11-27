@@ -42,7 +42,7 @@ the PATH links once. Common checks:
 
 ```bash
 make check-ci-fast        # PRE-PUSH GATE: every CI gate needing no build (~90s)
-make check-ci-compile     # only if shared test infra or >10 files changed: compile all tests
+make check-ci-compile     # only if shared test infra or >10 files changed: ratchet set + compile all tests
 make test-touched         # same condition: targeted tests for files changed vs origin/main
 aida dev build            # build + smoke test (+ promote from clean main)
 cargo test --workspace    # operator only: CI runs the full suite, agents never do

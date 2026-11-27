@@ -1425,7 +1425,7 @@ jobs:
       # trace:STORY-2735 | ai:codex
       - name: CI tier policy fixtures
         if: matrix.shard == 'gates'
-        run: python3 -m unittest tests/test_ci_tiers.py
+        run: python3 -m unittest tests/test_ci_tiers.py tests/test_bug_2782_ccf_no_build.py
 
       # trace:STORY-2672 | ai:codex
       - name: Self-hosted routing security fixtures

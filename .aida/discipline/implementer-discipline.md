@@ -140,8 +140,8 @@ every open PR's merge latency, not just yours.
    no build; "I ran my own test file" does not substitute.
    **After merging main into a branch, run `make check-ci-compile` when the
    change touches shared test infra (`test_env`, `test_git`, ratchet baselines)
-   or more than 10 files** (compiles every test target, runs none, agent
-   profile); otherwise CI's shards are the gate. check-ci-fast
+   or more than 10 files** (runs the ratchet set, then compiles every test
+   target, runs none, agent profile); otherwise CI's shards are the gate. check-ci-fast
    builds nothing, so it cannot see a test initializer that no longer compiles
    against a struct changed on main: on 2026-10-14 two PRs passed check-ci-fast
    after a main merge and went red in CI with E0063 (TASK-1763).

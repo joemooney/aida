@@ -149,7 +149,7 @@ class RatchetSet(unittest.TestCase):
                              ('aida-cli-lib', ['--lib'], [test]))
             seen = []
 
-            def fake(command, env=None, require_tests=False, expected_tests=None):
+            def fake(command, env=None, require_tests=False, expected_tests=None, why=None):
                 seen.append(command)
                 if command[-1] == test:
                     # The guard's cargo test exits non-zero, as on an injected failure.
@@ -169,13 +169,15 @@ class RatchetSet(unittest.TestCase):
         for action in ('opened', 'synchronize', 'reopened'):
             self.assertEqual(tiers.render(full, action=action, head='integration'), 'False', action)
         self.assertEqual(tiers.JOBS['fast-compile']['if'], "needs.tier.outputs.full != 'true'")
-        # The integration-tip check refuses to push when check-ci-fast fails,
-        # and check-ci-fast runs this runner.
+        # The integration-tip check refuses to push when check-ratchets fails;
+        # check-ci-fast builds nothing, so it runs this runner separately.
+        # trace:BUG-2782 | ai:claude
         sync = (ROOT / 'scripts/integration-sync-main.sh').read_text()
         self.assertRegex(sync, r'(?m)^make check-ci-fast \|\| die "check-ci-fast failed.*NOT pushed')
+        self.assertRegex(sync, r'(?m)^make check-ratchets \|\| die "check-ratchets failed.*NOT pushed')
         makefile = (ROOT / 'Makefile').read_text()
-        self.assertIn('check-ci-fast: check-ci-source check-ratchets', makefile)
-        self.assertRegex(makefile, r'(?m)^check-ratchets:.*\n\t@python3 scripts/check-ratchets.py$')
+        self.assertRegex(makefile, r'(?m)^check-ci-compile: check-ratchets ')
+        self.assertRegex(makefile, r'(?m)^check-ratchets:.*\n\t@python3 scripts/check-ratchets.py --manual auto$')
 
     def test_fast_compile_and_preflight_run_the_same_set(self):
         import yaml
@@ -191,7 +193,7 @@ class RatchetSet(unittest.TestCase):
         config = tomllib.loads((ROOT / '.aida/config.toml').read_text())
         self.assertIn('Ratchet set', config['preflight']['guards'])
         makefile = (ROOT / 'Makefile').read_text()
-        self.assertIn('check-ci-fast: check-ci-source check-ratchets', makefile)
+        self.assertRegex(makefile, r'(?m)^check-ci-compile: check-ratchets ')
         self.assertIn('python3 scripts/check-ratchets.py', makefile)
 
 
