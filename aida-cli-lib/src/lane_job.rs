@@ -1988,9 +1988,15 @@ fn run_one_authorized(
             let _ = writeln!(f, "\nlane job {how} after {}s", started.elapsed().as_secs());
         }
     }
+    // BUG-2781 AC3: the job's end line names its wall time and whether its
+    // target overlay went stale, so a slow or killed gate shows its cause.
+    // trace:BUG-2781 | ai:claude
+    #[allow(unused_mut)]
+    let mut overlay_stale = None;
     #[cfg(unix)]
     if let Some(overlay) = &seed.overlay {
-        if crate::seat_target_overlay::stale(&overlay.lower) {
+        overlay_stale = Some(crate::seat_target_overlay::stale(&overlay.lower));
+        if overlay_stale == Some(true) {
             use std::io::Write;
             let line = format!(
                 "seed: overlay-stale (the primary rewrote a file of generation {} in place; \
@@ -2004,9 +2010,12 @@ fn run_one_authorized(
         }
     }
     finish(lane, id, rc);
-    lane.log(&format!(
-        "{id} {how} rc={rc} after {}s",
-        started.elapsed().as_secs()
+    lane.log(&end_line(
+        id,
+        how,
+        rc,
+        started.elapsed().as_secs(),
+        overlay_stale,
     ));
     // `cargo check` emits no code, so the lane's first test build is still cold.
     let built = !fast_gate_job(&job)
@@ -2015,6 +2024,24 @@ fn run_one_authorized(
             .map(|f| cargo_built(std::io::BufReader::new(f)))
             .unwrap_or(false);
     ((how == "exited").then_some(rc), built)
+}
+
+/// A lane job's end line: how it ended, its wall time and, for a job on a
+/// target overlay, whether that overlay went stale (BUG-2781 AC3).
+// trace:BUG-2781 | ai:claude
+pub(crate) fn end_line(
+    id: &str,
+    how: &str,
+    rc: i32,
+    secs: u64,
+    overlay_stale: Option<bool>,
+) -> String {
+    let target = match overlay_stale {
+        Some(true) => "; target overlay-stale",
+        Some(false) => "; target overlay fresh",
+        None => "",
+    };
+    format!("{id} {how} rc={rc} after {secs}s{target}")
 }
 
 /// Whether a cargo job's output shows its build ran to the end: cargo's

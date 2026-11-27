@@ -377,7 +377,7 @@ fn bug_home_038_bwrap_import_quarantines_the_seat_branch() {
 
 /// A leased seat clone on `branch` with one committed change titled
 /// `subject` (hooks off); returns the clone and its tip.
-fn seat_with_commit(
+pub(crate) fn seat_with_commit(
     fx: &Fixture,
     name: &str,
     id: &str,

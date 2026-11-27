@@ -127,6 +127,7 @@ to the declaration. Avoid body lines ending in `(ID)` groups, which can supply c
 /// its prompt when the launcher's lane job runner is up.
 // trace:BUG-2383 | ai:claude
 // trace:BUG-2383 | ai:codex
+// trace:BUG-2781 | ai:claude — AC2: push before the final gate.
 pub(crate) const LANE_JOB_CONTRACT: &str = "\n\nLocal tests in this lane: a tool call is capped \
 at 60 seconds and anything you detach (`setsid nohup ...`, `&`) dies with the call, so do not run \
 cargo yourself and do not background it. Hand the run to the launcher instead: \
@@ -137,8 +138,10 @@ timeout: 900 seconds on a warm target, 3600 when the output says `seed: cold` (a
 can take half an hour); set `AIDA_CARGO_TIMEOUT=<secs>` only to override it. When \
 it finishes it prints the output tail and exits with cargo's exit code; while it still runs it \
 prints the job id and exits 75, and you continue with `aida lane job wait <id>` until it \
-finishes. For the pre-push gate, run `aida lane job run -- make check-ci-fast` and wait the \
-same way. The gate runs its own Cargo metadata queries and ratchets. Only a `cargo test` with an executed-test result counts as tested; compile errors, \
+finishes. Commit and push your work BEFORE the final gate (a seat whose Git metadata is \
+read-only skips this; its host publishes), so a lane killed mid-gate keeps its work on its \
+branch; then run `aida lane job run -- make check-ci-fast` and wait the same way, and commit \
+and push again after any fix. The gate runs its own Cargo metadata queries and ratchets. Only a `cargo test` with an executed-test result counts as tested; compile errors, \
 zero-match filters, `--no-run` and `--list` do not. If it reports that this session has no lane \
 job runner, or refuses the run, say `untested=true` in your final result.";
 
@@ -1938,6 +1941,47 @@ fn run(
                 },
             },
         )?;
+    }
+    // BUG-2781: a non-zero end names what ended it (AC3); a seat clone's
+    // committed, unpushed work is salvage-pushed, unverified (AC1).
+    // trace:BUG-2781 | ai:claude
+    if !status.success() {
+        let cause = crate::lane_salvage::exit_cause(status);
+        eprintln!("implementer: the lane {cause}");
+        let mut note = format!("lane {cause}");
+        if seat_clone {
+            let open_pr = match &outcome {
+                Outcome::PrOpened { pr, .. } => Some(*pr),
+                _ => launch_seat.pr.map(|(pr, _)| *pr),
+            };
+            let lane = crate::lane_salvage::Lane {
+                main: &main_root,
+                clone: &worktree,
+                spec: launch.spec,
+                branch: launch.branch,
+                lane: launch.lease_id,
+                launch_head: launch_seat.head,
+                open_pr,
+            };
+            let seat = bg::SeatState::read(&worktree, launch.branch);
+            let announce = |text: &str, pr: Option<u64>| {
+                crate::lane_salvage::announce(&main_root, launch.spec, launch.branch, text, pr)
+            };
+            if let Some(salvage) = crate::lane_salvage::on_failed_exit(
+                &lane,
+                &outcome,
+                &seat,
+                &cause,
+                &crate::seat_clone::bundle_branch,
+                &announce,
+            ) {
+                note = format!("{note}; {salvage}");
+            }
+        }
+        leftover_note = Some(match leftover_note {
+            Some(left) => format!("{left}; {note}"),
+            None => note,
+        });
     }
 
     // trace:STORY-2640 | ai:codex
