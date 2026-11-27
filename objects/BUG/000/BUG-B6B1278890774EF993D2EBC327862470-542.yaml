@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T02:26:44.337877Z
-modified_at: 2026-11-27T05:03:18.398788503Z
+modified_at: 2026-11-27T05:21:59.620382456Z
 req_type: Bug
 tags:
 - lanes
@@ -165,6 +165,13 @@ comments:
   modified_at: 2026-11-27T05:03:18.398788503Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21b74-0b44-77e0-9c6d-1326ba6e3097
+  author: joe
+  content: |-
+    DEFERRED (#4718 approval @a32d61ac, final, 2026-11-26; product-15):
+    - aida-cli-lib/src/lane_salvage.rs:456 keeps #[allow(clippy::too_many_arguments)] on failed_exit_note, which takes 7 arguments. Clippy's default too_many_arguments threshold is 7 (the lint fires only above it), so the allow is unnecessary and hides a future real trigger. Remove it. Flagged in round 2 and still present.
+  created_at: 2026-11-27T05:21:59.620382456Z
+  modified_at: 2026-11-27T05:21:59.620382456Z
 history:
 - id: 01a21ad7-b05c-7db2-817a-811e696dae3f
   author: joe
