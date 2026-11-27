@@ -24,7 +24,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T15:20:40.004099676Z
-modified_at: 2026-11-27T05:35:05.981084912Z
+modified_at: 2026-11-27T05:50:47.658830428Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -88,6 +88,23 @@ comments:
     - Shadow runs are threads of the long-running watcher; a `--once` pass launches none (it would exit before the row is written).
   created_at: 2026-11-27T05:35:05.981084912Z
   modified_at: 2026-11-27T05:35:05.981084912Z
+  session_id: 01a21b7cc357
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21b8e-696a-7502-9e38-816e54c65e2e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 74028f03cd (slice 1, AC1 only; AC2 report is slice 2).
+
+    **Acceptance evidence (AC1, behavioral-test):** `review_shadow::tests` (5 passed via lane job j20261127T053704634-31-0): knob default-off/bool-only; knob off spawns nothing and writes nothing; knob on: the stub `aida` gets exactly `review prepare --pr 42 --run-review --adversarial --agent claude --challenger-agent claude --json` (no --post-comment); a whole-tree diff shows the only new paths are `.aida/review-shadow/` + `runs.jsonl` (0600); `.aida/gate-ledger` stays empty; no file contents (inventory/existing_code) reach the row; message capped at 500 chars; vendor pair + `same_vendor`/`vendor_pair=same-vendor` recorded; exit-4 partial and spawn failure both become rows and never error; cap of 2 and spare-capacity-only. `.aida/review-shadow/runs.jsonl` is gitignored (`git check-ignore`: `.gitignore:90 .aida/*`). Hook: `review_watch.rs` `launch_shadow`, after the real dispatcher is spawned and receipted; returns nothing, so the real admission is unaffected.
+
+    **Probe findings:** P1 same-vendor flag compares the bundle's `challenger_agent` to the finder name (both lowercase vendor ids) — consistent. P3 budget is per watcher process; one watcher per project is enforced by the review-watch lock. P5 authority: knob is read only from the trusted default-branch config (a PR cannot turn it on); the child is built by `watch_command`, which scrubs `AIDA_REVIEW_*` (no custom runner injection); never `--post-comment`; refusal path (knob off) tested.
+
+    **Fixes:** classified the new key in `scripts/config-trust.toml`; regenerated `scripts/store-writers.toml` for the results writer.
+
+    **Residual risks:** (1) a hung `review prepare` holds a shadow slot until its runner deadline fires (no extra wall cap); real reviews are unaffected. (2) a watcher restart drops in-flight shadow rows; `--once` launches none. (3) a real review admitted while 2 shadows run can briefly put the total above `max_concurrent` (shadows never delay real admission, by design). (4) diff is ~470 lines vs the 300 budget; ~200 are tests.
+  created_at: 2026-11-27T05:50:47.658830428Z
+  modified_at: 2026-11-27T05:50:47.658830428Z
   session_id: 01a21b7cc357
   harness_version: 2.1.319 (Claude Code)
 history:
