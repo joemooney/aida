@@ -310,6 +310,22 @@ comments:
   modified_at: 2026-11-27T07:57:34.997069989Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21c13-2bcb-7543-8f7c-51a17909918a
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 0d6e795c8a (rework of #4727 against the advisor's final CR at 4a29fea4).
+    Acceptance evidence for the CR items:
+    - (a)/(a') [behavioral-test] t3869_excluded_paths_are_classified_before_any_open. worktree_entries (review_prepare.rs, the classify_compiled-first block) runs classify_compiled before any open. Excluded paths get only an lstat through locate_confined. A test-only LEAF_OPENS counter proves that the only opened leaf is ok.rs. The test covers a readable .env, a FIFO .env.local, a chmod-000 .env.prod, a secret-named symlink id_rsa, a generated file and a user glob. Each one is excluded with its path label, none is non_regular, and the scan does not fail.
+    - (a') review_engine.rs classify_compiled now checks path reasons before non_regular, so a diff-mode secret-named symlink is labelled secret_sensitive_path (asserted in the same test).
+    - (b) [behavioral-test] t3869_pinned_root_survives_concurrent_symlink_swap. The swapper stops on stop/drop or a 20 s deadline. When a confined write recreates d as a real directory, the swapper removes it, so the ENOTEMPTY state cannot persist. The read/write loop is bounded by the same deadline. The test also asserts swaps > 0, and the never-outside assertions are unchanged.
+    Validation: cargo test -p aida-cli-lib --lib review_prepare:: gave 29 passed. cargo test -p aida-core --lib review_engine gave 38 passed.
+    Probes: P1: the same classify_compiled decides both the pre-open check and the final label. P3: a missing excluded path is still dropped, as on main. P5: the excluded branch swallows lstat errors only to keep the entry EXCLUDED (never read). The reviewable branch still propagates errors other than ENOENT/ENOTDIR/ELOOP.
+    Residual risks: ancestor directories of an excluded path are still opened O_DIRECTORY|O_NOFOLLOW for the lstat walk. No leaf is opened and no content is read. AC4 (the non-UTF-8 round trip) remains open.
+  created_at: 2026-11-27T08:15:48.171478888Z
+  modified_at: 2026-11-27T08:15:48.171478888Z
+  session_id: 01a21c04979d
+  harness_version: 2.1.319 (Claude Code)
 - id: 01a21c19-8e20-7ac3-839c-b93622327ea0
   author: joe
   content: |-
