@@ -13,9 +13,10 @@ use std::time::Instant;
 pub(crate) const MAX_SHADOW: usize = 2;
 /// Finding text can quote code; keep at most this many characters of it.
 const TEXT_CAP: usize = 500;
-/// The trial pairs claude with claude until codex is back.
-const FINDER: &str = "claude";
-const CHALLENGER: &str = "claude";
+/// The trial pairs the default review vendor (claude) with itself until a
+/// second vendor is available again: a labelled same-vendor run.
+const FINDER: &str = crate::vendors::review_runner::DEFAULT_REVIEW_VENDOR.program;
+const CHALLENGER: &str = FINDER;
 const RESULTS: &str = ".aida/review-shadow/runs.jsonl";
 
 fn parse(body: Option<&str>) -> Result<bool> {
