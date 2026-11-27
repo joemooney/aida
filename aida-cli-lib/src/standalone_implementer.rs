@@ -127,6 +127,7 @@ to the declaration. Avoid body lines ending in `(ID)` groups, which can supply c
 /// its prompt when the launcher's lane job runner is up.
 // trace:BUG-2383 | ai:claude
 // trace:BUG-2383 | ai:codex
+// trace:BUG-2781 | ai:claude — AC2: push before the final gate.
 pub(crate) const LANE_JOB_CONTRACT: &str = "\n\nLocal tests in this lane: a tool call is capped \
 at 60 seconds and anything you detach (`setsid nohup ...`, `&`) dies with the call, so do not run \
 cargo yourself and do not background it. Hand the run to the launcher instead: \
@@ -137,8 +138,10 @@ timeout: 900 seconds on a warm target, 3600 when the output says `seed: cold` (a
 can take half an hour); set `AIDA_CARGO_TIMEOUT=<secs>` only to override it. When \
 it finishes it prints the output tail and exits with cargo's exit code; while it still runs it \
 prints the job id and exits 75, and you continue with `aida lane job wait <id>` until it \
-finishes. For the pre-push gate, run `aida lane job run -- make check-ci-fast` and wait the \
-same way. The gate runs its own Cargo metadata queries and ratchets. Only a `cargo test` with an executed-test result counts as tested; compile errors, \
+finishes. Commit and push your work BEFORE the final gate (a seat whose Git metadata is \
+read-only skips this; its host publishes), so a lane killed mid-gate keeps its work on its \
+branch; then run `aida lane job run -- make check-ci-fast` and wait the same way, and commit \
+and push again after any fix. The gate runs its own Cargo metadata queries and ratchets. Only a `cargo test` with an executed-test result counts as tested; compile errors, \
 zero-match filters, `--no-run` and `--list` do not. If it reports that this session has no lane \
 job runner, or refuses the run, say `untested=true` in your final result.";
 
@@ -1375,7 +1378,7 @@ pub(crate) fn self_published_seat_exit(
 /// empty rework because its old PR head is still blocked, keeps the reason in
 /// its durable record, not only on stderr.
 // trace:BUG-2705 | ai:claude
-fn persist_exit_notes(
+pub(crate) fn persist_exit_notes(
     attempt: &crate::lane_result::Attempt,
     leftover: Option<&str>,
     main: &Path,
@@ -1651,7 +1654,12 @@ fn run(
     // The child is spawned, not exec'd: stamp it on the lease for every
     // vendor, so `aida ps` reads the lane as live (signoff C6), and record
     // it as the lease's worker (BUG-1918).
+    // BUG-2781 AC3: when and as which pid the agent ran, to name its end.
+    // trace:BUG-2781 | ai:claude
+    let lane_started = std::time::SystemTime::now();
+    let agent_pid = std::cell::Cell::new(None);
     let on_spawn = |pid: u32| {
+        agent_pid.set(Some(pid));
         attempt.started(pid); // trace:STORY-2690 | ai:codex
         if let Some(on_started) = on_started {
             on_started();
@@ -1938,6 +1946,49 @@ fn run(
                 },
             },
         )?;
+    }
+    // BUG-2781: a non-zero end names what ended it (AC3); a seat clone's
+    // committed, unpushed work is salvage-pushed, unverified (AC1).
+    // trace:BUG-2781 | ai:claude
+    if !status.success() {
+        let evidence = crate::lane_salvage::gather(
+            launch.project_root,
+            &main_root,
+            launch.lease_id,
+            lane_started,
+            agent_pid.get(),
+            &crate::lane_salvage::read_kernel_log,
+        );
+        let cause = crate::lane_salvage::exit_cause(status, &evidence);
+        eprintln!("implementer: the lane {cause}");
+        let announce = |text: &str, pr: Option<u64>| {
+            crate::lane_salvage::announce(&main_root, launch.spec, launch.branch, text, pr)
+        };
+        let store = crate::load_store_for_lookup(&main_root);
+        let host = crate::lane_salvage::Host {
+            bundle: &crate::seat_clone::bundle_branch,
+            pr_head: &|main: &std::path::Path, branch: &str| {
+                crate::pr_head_guard::check_branch(main, branch)
+            },
+            store: store.as_ref(),
+        };
+        leftover_note = crate::lane_salvage::failed_exit_note(
+            &crate::lane_salvage::FailedExit {
+                main: &main_root,
+                clone: &worktree,
+                spec: launch.spec,
+                branch: launch.branch,
+                lane: launch.lease_id,
+                seat_clone,
+                launch_seat: &launch_seat,
+            },
+            &cause,
+            &outcome,
+            &|| bg::SeatState::read(&worktree, launch.branch),
+            &host,
+            &announce,
+            leftover_note,
+        );
     }
 
     // trace:STORY-2640 | ai:codex

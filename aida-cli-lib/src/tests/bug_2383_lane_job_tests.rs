@@ -953,6 +953,12 @@ fn implementer_prompt_names_the_sanctioned_path() {
     assert!(contract.contains("untested=true"));
     assert!(contract.contains("do not run cargo yourself"));
     assert!(contract.contains("setsid nohup"), "names what it replaces");
+    // BUG-2781 AC2: push precedes the final gate, and a fix is re-pushed.
+    // trace:BUG-2781 | ai:claude
+    let push = contract.find("Commit and push your work BEFORE the final gate");
+    let gate = contract.find("make check-ci-fast");
+    assert!(push.is_some() && push < gate, "push before the gate");
+    assert!(contract.contains("commit and push again after any fix"));
 }
 
 // Finding 8 / round-3 ruling: the drain's phase-1 launcher leaves the
