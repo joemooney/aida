@@ -307,6 +307,8 @@ pub(crate) fn needs_preflight(
 }
 
 pub(crate) fn preflight(root: &Path, vendor: &str, sandbox: bool) -> Result<()> {
+    // A vendor past its usage limit is refused before any lease. trace:STORY-3134 | ai:claude
+    crate::vendor_outage::refuse_launch(root, vendor)?;
     crate::session::aida_contained_env()?;
     preflight_with(crate::session::process_contained(), || {
         containment_checks(root, vendor, sandbox)

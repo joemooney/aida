@@ -1843,6 +1843,14 @@ fn run(
     } = finished;
     reconcile_signals(&main_root, &worktree, launch.spec)?;
     store_commit.commit();
+    // trace:STORY-3134 | ai:claude
+    let outage_note = crate::vendors::usage_limit::note_failed_run(
+        &main_root,
+        launch.vendor,
+        &run_log,
+        status.success(),
+        &outcome,
+    );
 
     // Publish before reading the final seat state or ending its lease. A punt
     // or manual hold is an explicit instruction to leave publication alone.
@@ -2145,7 +2153,7 @@ fn run(
     if code == 0 {
         return Ok(());
     }
-    let message = if fast_rework {
+    let mut message = if fast_rework {
         format!(
             "fast gate failed for {}; one repair round queued before review",
             launch.spec
@@ -2182,6 +2190,9 @@ fn run(
             ),
         }
     };
+    if let Some(note) = outage_note {
+        message = format!("{note}; {message}"); // trace:STORY-3134 | ai:claude
+    }
     Err(anyhow::Error::new(StandaloneImplementerExit {
         vendor_exit: matches!(outcome, Outcome::NoPr) && code != NO_PR_EXIT_CODE,
         code,
