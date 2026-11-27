@@ -5,7 +5,8 @@
 use super::seat_publish_tests::{git_ok, seat_with_commit, test_bundle};
 use super::tests::{fixture, ref_exists};
 use crate::headless_background::{OriginHead, SeatState};
-use crate::lane_salvage::{on_failed_exit, Lane, UNVERIFIED};
+use crate::lane_salvage::{failed_exit_note, on_failed_exit, FailedExit, Lane, UNVERIFIED};
+use crate::standalone_implementer::LaunchSeat;
 use crate::standalone_implementer::Outcome;
 use std::cell::RefCell;
 use std::path::Path;
@@ -53,7 +54,10 @@ fn no_imports(main: &Path) {
 #[cfg(unix)]
 fn sigterm() -> String {
     use std::os::unix::process::ExitStatusExt as _;
-    crate::lane_salvage::exit_cause(std::process::ExitStatus::from_raw(15))
+    crate::lane_salvage::exit_cause(
+        std::process::ExitStatus::from_raw(15),
+        &crate::lane_salvage::EndEvidence::default(),
+    )
 }
 
 #[cfg(unix)]
@@ -206,5 +210,294 @@ fn bug_2781_non_fast_forward_is_refused_and_retained() {
         tip,
         "the commits stay in the seat"
     );
+    no_imports(&fx.main);
+}
+
+/// The run()-level step for a seat clone on `branch`, with `launch` as the
+/// seat looked at launch; returns the folded note and what was announced.
+#[cfg(unix)]
+fn run_failed_exit(
+    fx: &super::tests::Fixture,
+    clone: &Path,
+    branch: &str,
+    id: &str,
+    launch: &LaunchSeat<'_>,
+    outcome: &Outcome,
+    seat: SeatState,
+) -> (Option<String>, Vec<(String, Option<u64>)>) {
+    let said = RefCell::new(Vec::new());
+    let note = failed_exit_note(
+        &FailedExit {
+            main: &fx.main,
+            clone,
+            spec: "BUG-1",
+            branch,
+            lane: id,
+            seat_clone: true,
+            launch_seat: launch,
+        },
+        &sigterm(),
+        outcome,
+        &|| seat.clone(),
+        &test_bundle,
+        &|text, pr| said.borrow_mut().push((text.to_owned(), pr)),
+        Some("host post-exit commit skipped".into()),
+    );
+    (note, said.into_inner())
+}
+
+#[cfg(unix)]
+fn pr_branch_at_main(fx: &super::tests::Fixture, branch: &str) {
+    git_ok(
+        &fx.main,
+        &[
+            "push",
+            "-q",
+            "origin",
+            &format!("refs/remotes/origin/main:refs/heads/{branch}"),
+        ],
+    );
+}
+
+// The PR the lane launched on is the target when the lane opened none; the
+// note folds into the leftover and the attempt records it as unverified.
+#[cfg(unix)]
+#[test]
+fn bug_2781_run_step_targets_the_launch_pr_and_records_unverified() {
+    let fx = fixture();
+    let id = "c0ffee278105";
+    let (clone, tip) = seat_with_commit(&fx, "launchpr", id, "seat-launchpr", "fix: v (BUG-1)");
+    pr_branch_at_main(&fx, "seat-launchpr");
+    let launch_pr = (11, None);
+    let launch = LaunchSeat {
+        pr: Some(&launch_pr),
+        head: None,
+    };
+    let (note, said) = run_failed_exit(
+        &fx,
+        &clone,
+        "seat-launchpr",
+        id,
+        &launch,
+        &Outcome::NoPr,
+        committed(&tip),
+    );
+    let note = note.expect("a note");
+    assert_eq!(
+        git_ok(&fx.origin, &["rev-parse", "refs/heads/seat-launchpr"]),
+        tip,
+        "fast-forwarded the launch PR's branch"
+    );
+    assert!(!ref_exists(&fx.origin, &format!("refs/heads/salvage/{id}")));
+    assert_eq!(said.len(), 1);
+    assert_eq!(said[0].1, Some(11), "announced on the launch PR");
+    assert!(
+        note.starts_with("host post-exit commit skipped; lane ended by SIGTERM (15)"),
+        "{note}"
+    );
+    assert!(
+        note.contains(&format!("{UNVERIFIED}: pushed {tip} to seat-launchpr")),
+        "{note}"
+    );
+    // The attempt's durable detail carries the salvage label.
+    let tmp = tempfile::tempdir().unwrap();
+    let attempt =
+        crate::lane_result::Attempt::begin(tmp.path(), "BUG-1", Some("seat-launchpr")).unwrap();
+    crate::standalone_implementer::persist_exit_notes(
+        &attempt,
+        Some(&note),
+        &fx.main,
+        "seat-launchpr",
+    )
+    .unwrap();
+    let receipts: Vec<_> = std::fs::read_dir(tmp.path().join(".aida/lane-results"))
+        .unwrap()
+        .map(|e| std::fs::read_to_string(e.unwrap().path()).unwrap())
+        .collect();
+    assert_eq!(receipts.len(), 1);
+    let receipt: serde_json::Value = serde_json::from_str(&receipts[0]).unwrap();
+    let detail = receipt["detail"].as_str().unwrap();
+    assert!(detail.contains(UNVERIFIED), "{detail}");
+    no_imports(&fx.main);
+}
+
+// A PR this lane opened wins over the one it launched on.
+#[cfg(unix)]
+#[test]
+fn bug_2781_run_step_prefers_the_pr_the_lane_opened() {
+    let fx = fixture();
+    let id = "c0ffee278106";
+    let (clone, tip) = seat_with_commit(&fx, "opened", id, "seat-opened", "fix: u (BUG-1)");
+    pr_branch_at_main(&fx, "seat-opened");
+    let launch_pr = (11, None);
+    let launch = LaunchSeat {
+        pr: Some(&launch_pr),
+        head: None,
+    };
+    let (_, said) = run_failed_exit(
+        &fx,
+        &clone,
+        "seat-opened",
+        id,
+        &launch,
+        &Outcome::PrOpened { pr: 12, head: None },
+        committed(&tip),
+    );
+    assert_eq!(said.len(), 1);
+    assert_eq!(said[0].1, Some(12));
+    assert_eq!(
+        git_ok(&fx.origin, &["rev-parse", "refs/heads/seat-opened"]),
+        tip
+    );
+}
+
+// No PR: the salvage ref; the claimed branch is never created.
+#[cfg(unix)]
+#[test]
+fn bug_2781_run_step_without_a_pr_targets_the_salvage_ref() {
+    let fx = fixture();
+    let id = "c0ffee278107";
+    let (clone, tip) = seat_with_commit(&fx, "nopr", id, "seat-nopr", "fix: t (BUG-1)");
+    let (note, said) = run_failed_exit(
+        &fx,
+        &clone,
+        "seat-nopr",
+        id,
+        &LaunchSeat::default(),
+        &Outcome::NoPr,
+        committed(&tip),
+    );
+    let target = format!("salvage/{id}");
+    assert_eq!(
+        git_ok(&fx.origin, &["rev-parse", &format!("refs/heads/{target}")]),
+        tip
+    );
+    assert!(!ref_exists(&fx.origin, "refs/heads/seat-nopr"));
+    assert_eq!(said[0].1, None);
+    assert!(said[0].0.starts_with(UNVERIFIED), "{}", said[0].0);
+    assert!(
+        said[0].0.contains("not merge-train eligible"),
+        "{}",
+        said[0].0
+    );
+    assert!(note.unwrap().contains(&format!("pushed {tip} to {target}")));
+}
+
+// The launch head is passed through: a seat still at it salvages nothing.
+#[cfg(unix)]
+#[test]
+fn bug_2781_run_step_passes_the_launch_head() {
+    let fx = fixture();
+    let id = "c0ffee278108";
+    let (clone, tip) = seat_with_commit(&fx, "athead", id, "seat-athead", "fix: s (BUG-1)");
+    let launch = LaunchSeat {
+        pr: None,
+        head: Some(&tip),
+    };
+    let (note, said) = run_failed_exit(
+        &fx,
+        &clone,
+        "seat-athead",
+        id,
+        &launch,
+        &Outcome::NoPr,
+        committed(&tip),
+    );
+    assert!(said.is_empty(), "{said:?}");
+    assert_eq!(
+        note.as_deref(),
+        Some(
+            "host post-exit commit skipped; lane ended by SIGTERM (15); source: OOM unknown \
+             (kernel log unreadable)"
+        )
+    );
+    assert!(!ref_exists(&fx.origin, &format!("refs/heads/salvage/{id}")));
+}
+
+// A seat that is not a self-publishing clone only names the cause.
+#[cfg(unix)]
+#[test]
+fn bug_2781_run_step_outside_a_seat_clone_only_names_the_cause() {
+    let fx = fixture();
+    let note = failed_exit_note(
+        &FailedExit {
+            main: &fx.main,
+            clone: &fx.main,
+            spec: "BUG-1",
+            branch: "b",
+            lane: "l",
+            seat_clone: false,
+            launch_seat: &LaunchSeat::default(),
+        },
+        "exited with code 1",
+        &Outcome::NoPr,
+        &|| panic!("read a seat that is not a clone"),
+        &|_, _, _| panic!("bundled a seat that is not a clone"),
+        &|_, _| panic!("announced"),
+        None,
+    );
+    assert_eq!(note.as_deref(), Some("lane exited with code 1"));
+}
+
+// A branch the seat's lease does not own is refused before any bundle.
+#[cfg(unix)]
+#[test]
+fn bug_2781_branch_the_lease_does_not_own_is_refused() {
+    let fx = fixture();
+    let id = "c0ffee278109";
+    let (clone, tip) = seat_with_commit(&fx, "owned", id, "seat-owned", "fix: r (BUG-1)");
+    let note = on_failed_exit(
+        &lane(&fx.main, &clone, "someone-elses", id, None),
+        &Outcome::NoPr,
+        &committed(&tip),
+        &sigterm(),
+        &|_, _, _| panic!("bundled a branch the lease does not own"),
+        &|_, _| panic!("announced a refused salvage"),
+    )
+    .expect("a refusal note");
+    assert!(
+        note.starts_with("salvage-push refused, commits retained"),
+        "{note}"
+    );
+    assert!(note.contains("another seat"), "{note}");
+    assert!(!ref_exists(&fx.origin, &format!("refs/heads/salvage/{id}")));
+    assert!(!ref_exists(&fx.origin, "refs/heads/someone-elses"));
+    assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), tip, "retained");
+    no_imports(&fx.main);
+}
+
+// A publication veto (an operator hold) refuses the salvage.
+#[cfg(unix)]
+#[test]
+fn bug_2781_publication_veto_is_refused() {
+    let fx = fixture();
+    let id = "c0ffee278110";
+    let (clone, tip) = seat_with_commit(&fx, "vetoed", id, "seat-vetoed", "fix: q (BUG-1)");
+    crate::punt::write_hold_signal(
+        &crate::punt::hold_signal_path(&fx.main, "BUG-1"),
+        &crate::punt::HoldSignal {
+            spec: "BUG-1".into(),
+            spec_key: None,
+            branch: "seat-vetoed".into(),
+            reason: Some("manual gate".into()),
+        },
+    )
+    .unwrap();
+    let note = on_failed_exit(
+        &lane(&fx.main, &clone, "seat-vetoed", id, None),
+        &Outcome::NoPr,
+        &committed(&tip),
+        &sigterm(),
+        &|_, _, _| panic!("bundled a vetoed seat"),
+        &|_, _| panic!("announced a vetoed salvage"),
+    )
+    .expect("a refusal note");
+    assert!(
+        note.starts_with("salvage-push refused, commits retained"),
+        "{note}"
+    );
+    assert!(note.contains("implementer held (manual gate)"), "{note}");
+    assert!(!ref_exists(&fx.origin, &format!("refs/heads/salvage/{id}")));
+    assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), tip, "retained");
     no_imports(&fx.main);
 }

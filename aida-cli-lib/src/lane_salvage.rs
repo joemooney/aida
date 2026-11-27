@@ -52,9 +52,137 @@ pub(crate) fn target(branch: &str, open_pr: Option<u64>, lane: &str) -> String {
     }
 }
 
-/// What the lane's exit status says ended it: the signal and, as far as the
-/// launcher can know, its source (AC3).
-pub(crate) fn exit_cause(status: std::process::ExitStatus) -> String {
+/// What the launcher could read about who ended a lane (AC3): each probe
+/// is named in the cause line, found or not.
+// trace:BUG-2781 | ai:claude
+#[derive(Debug, Default, Clone)]
+pub(crate) struct EndEvidence {
+    /// The agent's pid, to match a kernel OOM kill against.
+    pub(crate) agent_pid: Option<u32>,
+    /// Lane jobs that hit the launcher's own job deadline during the lane.
+    pub(crate) job_timeouts: Vec<String>,
+    /// An operator stop recorded for this lane (lease interruption or a
+    /// drain stop request) during the lane.
+    pub(crate) operator_stop: Option<String>,
+    /// The kernel log since the lane started; `None` when it is unreadable.
+    pub(crate) kernel_log: Option<String>,
+}
+
+/// The kernel log reader: the log since a time, `None` when unreadable.
+pub(crate) type KernelLog<'a> = &'a dyn Fn(std::time::SystemTime) -> Option<String>;
+
+/// Read what the launcher can know about a lane's end, from the lease's
+/// job log, its lease record, the drain stop request and the kernel log.
+/// Read only; a record that cannot be read contributes nothing.
+// trace:BUG-2781 | ai:claude
+pub(crate) fn gather(
+    project_root: &Path,
+    main: &Path,
+    lease: &str,
+    since: std::time::SystemTime,
+    agent_pid: Option<u32>,
+    kernel_log: KernelLog<'_>,
+) -> EndEvidence {
+    let since_utc: chrono::DateTime<chrono::Utc> = since.into();
+    let jobs = crate::lane_job::results_dir(main, lease).join("jobs.log");
+    let job_timeouts = std::fs::read_to_string(jobs)
+        .map(|log| job_timeouts(&log, since_utc))
+        .unwrap_or_default();
+    EndEvidence {
+        agent_pid,
+        job_timeouts,
+        operator_stop: operator_stop(project_root, lease, since_utc),
+        kernel_log: kernel_log(since),
+    }
+}
+
+/// Job ids the lane job log records as `timed out` at or after `since`.
+fn job_timeouts(log: &str, since: chrono::DateTime<chrono::Utc>) -> Vec<String> {
+    log.lines()
+        .filter_map(|line| {
+            let (at, rest) = line.split_once(' ')?;
+            let at = chrono::DateTime::parse_from_rfc3339(at).ok()?;
+            let (id, how) = rest.split_once(' ')?;
+            (at >= since && how.starts_with("timed out rc=")).then(|| id.to_owned())
+        })
+        .collect()
+}
+
+/// An operator stop for this lane: its lease stamped interrupted, or a drain
+/// stop requested, at or after `since`.
+fn operator_stop(
+    project_root: &Path,
+    lease: &str,
+    since: chrono::DateTime<chrono::Utc>,
+) -> Option<String> {
+    let after = |at: &str| chrono::DateTime::parse_from_rfc3339(at).is_ok_and(|at| at >= since);
+    let lease_record = std::fs::read_to_string(crate::leases::lease_path(project_root, lease))
+        .ok()
+        .and_then(|body| toml::from_str::<toml::Value>(&body).ok());
+    if let Some(at) = lease_record
+        .as_ref()
+        .and_then(|v| v.get("interrupted_at")?.as_str())
+        .filter(|at| after(at))
+    {
+        let why = lease_record
+            .as_ref()
+            .and_then(|v| v.get("interrupted_reason")?.as_str())
+            .unwrap_or("no reason recorded");
+        return Some(format!("the lease was interrupted at {at} ({why})"));
+    }
+    let request = std::fs::read_to_string(crate::drain_cmd::drain_stop_path(project_root))
+        .ok()
+        .and_then(|body| serde_json::from_str::<serde_json::Value>(&body).ok())?;
+    let at = request
+        .get("requested_at_utc")?
+        .as_str()
+        .filter(|at| after(at))?;
+    let mode = request.get("mode").and_then(|m| m.as_str()).unwrap_or("?");
+    Some(format!("a drain stop was requested at {at} (mode {mode})"))
+}
+
+/// The host kernel log since `since`, through `journalctl -k`; `None` when
+/// it cannot be read (no journal access, no journalctl, a timeout).
+// trace:BUG-2781 | ai:claude
+pub(crate) fn read_kernel_log(since: std::time::SystemTime) -> Option<String> {
+    let secs = since.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs();
+    let mut cmd = std::process::Command::new("journalctl");
+    cmd.args(["-k", "--no-pager", "-q", "-o", "short-iso"])
+        .arg(format!("--since=@{secs}"));
+    let out = crate::command_output_with_timeout(cmd, std::time::Duration::from_secs(10))?;
+    let err = String::from_utf8_lossy(&out.stderr);
+    (out.status.success() && !err.contains("insufficient permissions"))
+        .then(|| String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// `(pid, task)` of each process the kernel log says the OOM killer killed.
+fn oom_kills(log: &str) -> Vec<(u32, String)> {
+    let mut kills: Vec<(u32, String)> = Vec::new();
+    for line in log.lines() {
+        let Some(rest) = line.split_once("Killed process ").map(|(_, r)| r) else {
+            continue;
+        };
+        let (pid, rest) = rest.split_once(' ').unwrap_or((rest, ""));
+        let Ok(pid) = pid.trim().parse::<u32>() else {
+            continue;
+        };
+        let task = rest
+            .strip_prefix('(')
+            .and_then(|r| r.split_once(')'))
+            .map(|(task, _)| task.to_owned())
+            .unwrap_or_default();
+        if !kills.iter().any(|(p, _)| *p == pid) {
+            kills.push((pid, task));
+        }
+    }
+    kills
+}
+
+/// What ended the lane: the signal from its exit status and every source the
+/// launcher could check (AC3). An exit code with no signal names a source
+/// only when one was recorded.
+// trace:BUG-2781 | ai:claude
+pub(crate) fn exit_cause(status: std::process::ExitStatus, evidence: &EndEvidence) -> String {
     #[cfg(unix)]
     let signal = std::os::unix::process::ExitStatusExt::signal(&status);
     #[cfg(not(unix))]
@@ -64,9 +192,49 @@ pub(crate) fn exit_cause(status: std::process::ExitStatus) -> String {
         .code()
         .filter(|c| (129..=192).contains(c))
         .map(|c| c - 128));
+    let mut sources = Vec::new();
+    if let Some(stop) = &evidence.operator_stop {
+        sources.push(format!("operator stop: {stop}"));
+    }
+    if !evidence.job_timeouts.is_empty() {
+        sources.push(format!(
+            "lane-job timeout: {} hit the launcher's job deadline",
+            evidence.job_timeouts.join(", ")
+        ));
+    }
     let Some(sig) = signal else {
-        return format!("exited with code {}", status.code().unwrap_or(-1));
+        let code = format!("exited with code {}", status.code().unwrap_or(-1));
+        return match sources.is_empty() {
+            true => code,
+            false => format!("{code}; source: {}", sources.join("; ")),
+        };
     };
+    match &evidence.kernel_log {
+        None => sources.push("OOM unknown (kernel log unreadable)".into()),
+        Some(log) => {
+            let kills = oom_kills(log);
+            let agent = evidence
+                .agent_pid
+                .filter(|pid| kills.iter().any(|(p, _)| p == pid));
+            if let Some(pid) = agent {
+                sources.insert(
+                    0,
+                    format!("the kernel OOM killer killed the agent (pid {pid})"),
+                );
+            } else if kills.is_empty() {
+                sources.push("no OOM kill in the kernel log during the lane".into());
+            } else {
+                let named: Vec<String> = kills
+                    .iter()
+                    .map(|(pid, task)| format!("{task} (pid {pid})"))
+                    .collect();
+                sources.push(format!(
+                    "the kernel OOM killer killed {} during the lane, not the agent's pid",
+                    named.join(", ")
+                ));
+            }
+        }
+    }
     let name = match sig {
         1 => "SIGHUP",
         2 => "SIGINT",
@@ -76,12 +244,7 @@ pub(crate) fn exit_cause(status: std::process::ExitStatus) -> String {
         15 => "SIGTERM",
         _ => "signal",
     };
-    let source = match sig {
-        9 => "not recorded by the launcher; the kernel OOM killer or an operator (check `journalctl -k`)",
-        2 | 15 => "not recorded by the launcher; an operator, a supervisor or a session stop",
-        _ => "not recorded by the launcher",
-    };
-    format!("ended by {name} ({sig}); source: {source}")
+    format!("ended by {name} ({sig}); source: {}", sources.join("; "))
 }
 
 /// Push the seat's committed `branch` to `origin/<target>` as a
@@ -201,6 +364,60 @@ pub(crate) fn on_failed_exit(
             ))
         }
     }
+}
+
+/// The lane a failed exit ended, as `run()` knows it after publication.
+// trace:BUG-2781 | ai:claude
+pub(crate) struct FailedExit<'a> {
+    pub(crate) main: &'a Path,
+    pub(crate) clone: &'a Path,
+    pub(crate) spec: &'a str,
+    pub(crate) branch: &'a str,
+    pub(crate) lane: &'a str,
+    /// Whether the seat is a host-recorded clone that publishes itself.
+    pub(crate) seat_clone: bool,
+    pub(crate) launch_seat: &'a crate::standalone_implementer::LaunchSeat<'a>,
+}
+
+/// `run()`'s failed-exit step: name what ended the lane (`cause`) and, for a
+/// self-publishing seat clone, salvage its committed work toward the PR the
+/// lane opened, else the PR it launched on, else `salvage/<lane>`. Folds the
+/// note into the attempt's `leftover` note, which the attempt then records.
+// trace:BUG-2781 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn failed_exit_note(
+    exit: &FailedExit<'_>,
+    cause: &str,
+    outcome: &Outcome,
+    read_seat: &dyn Fn() -> SeatState,
+    bundle: Bundle<'_>,
+    announce: &dyn Fn(&str, Option<u64>),
+    leftover: Option<String>,
+) -> Option<String> {
+    let mut note = format!("lane {cause}");
+    if exit.seat_clone {
+        let open_pr = match outcome {
+            Outcome::PrOpened { pr, .. } => Some(*pr),
+            _ => exit.launch_seat.pr.map(|(pr, _)| *pr),
+        };
+        let lane = Lane {
+            main: exit.main,
+            clone: exit.clone,
+            spec: exit.spec,
+            branch: exit.branch,
+            lane: exit.lane,
+            launch_head: exit.launch_seat.head,
+            open_pr,
+        };
+        if let Some(salvage) = on_failed_exit(&lane, outcome, &read_seat(), cause, bundle, announce)
+        {
+            note = format!("{note}; {salvage}");
+        }
+    }
+    Some(match leftover {
+        Some(left) => format!("{left}; {note}"),
+        None => note,
+    })
 }
 
 /// Post `text` on the spec and, when there is one, on its open PR. Best

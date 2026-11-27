@@ -207,8 +207,9 @@ mod now;
 mod wip_limit;
 // trace:STORY-2640 | ai:codex
 mod lane_fast_gate;
-mod lane_salvage; // trace:BUG-2781 | ai:claude
-                  // trace:STORY-2844 | ai:codex
+// trace:BUG-2781 | ai:claude
+mod lane_salvage;
+// trace:STORY-2844 | ai:codex
 pub(crate) mod landing_gaps;
 // trace:STORY-2897 | ai:claude
 pub(crate) mod landing_policy;

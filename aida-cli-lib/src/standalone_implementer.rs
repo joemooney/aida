@@ -1378,7 +1378,7 @@ pub(crate) fn self_published_seat_exit(
 /// empty rework because its old PR head is still blocked, keeps the reason in
 /// its durable record, not only on stderr.
 // trace:BUG-2705 | ai:claude
-fn persist_exit_notes(
+pub(crate) fn persist_exit_notes(
     attempt: &crate::lane_result::Attempt,
     leftover: Option<&str>,
     main: &Path,
@@ -1654,7 +1654,12 @@ fn run(
     // The child is spawned, not exec'd: stamp it on the lease for every
     // vendor, so `aida ps` reads the lane as live (signoff C6), and record
     // it as the lease's worker (BUG-1918).
+    // BUG-2781 AC3: when and as which pid the agent ran, to name its end.
+    // trace:BUG-2781 | ai:claude
+    let lane_started = std::time::SystemTime::now();
+    let agent_pid = std::cell::Cell::new(None);
     let on_spawn = |pid: u32| {
+        agent_pid.set(Some(pid));
         attempt.started(pid); // trace:STORY-2690 | ai:codex
         if let Some(on_started) = on_started {
             on_started();
@@ -1946,42 +1951,36 @@ fn run(
     // committed, unpushed work is salvage-pushed, unverified (AC1).
     // trace:BUG-2781 | ai:claude
     if !status.success() {
-        let cause = crate::lane_salvage::exit_cause(status);
+        let evidence = crate::lane_salvage::gather(
+            launch.project_root,
+            &main_root,
+            launch.lease_id,
+            lane_started,
+            agent_pid.get(),
+            &crate::lane_salvage::read_kernel_log,
+        );
+        let cause = crate::lane_salvage::exit_cause(status, &evidence);
         eprintln!("implementer: the lane {cause}");
-        let mut note = format!("lane {cause}");
-        if seat_clone {
-            let open_pr = match &outcome {
-                Outcome::PrOpened { pr, .. } => Some(*pr),
-                _ => launch_seat.pr.map(|(pr, _)| *pr),
-            };
-            let lane = crate::lane_salvage::Lane {
+        let announce = |text: &str, pr: Option<u64>| {
+            crate::lane_salvage::announce(&main_root, launch.spec, launch.branch, text, pr)
+        };
+        leftover_note = crate::lane_salvage::failed_exit_note(
+            &crate::lane_salvage::FailedExit {
                 main: &main_root,
                 clone: &worktree,
                 spec: launch.spec,
                 branch: launch.branch,
                 lane: launch.lease_id,
-                launch_head: launch_seat.head,
-                open_pr,
-            };
-            let seat = bg::SeatState::read(&worktree, launch.branch);
-            let announce = |text: &str, pr: Option<u64>| {
-                crate::lane_salvage::announce(&main_root, launch.spec, launch.branch, text, pr)
-            };
-            if let Some(salvage) = crate::lane_salvage::on_failed_exit(
-                &lane,
-                &outcome,
-                &seat,
-                &cause,
-                &crate::seat_clone::bundle_branch,
-                &announce,
-            ) {
-                note = format!("{note}; {salvage}");
-            }
-        }
-        leftover_note = Some(match leftover_note {
-            Some(left) => format!("{left}; {note}"),
-            None => note,
-        });
+                seat_clone,
+                launch_seat: &launch_seat,
+            },
+            &cause,
+            &outcome,
+            &|| bg::SeatState::read(&worktree, launch.branch),
+            &crate::seat_clone::bundle_branch,
+            &announce,
+            leftover_note,
+        );
     }
 
     // trace:STORY-2640 | ai:codex
