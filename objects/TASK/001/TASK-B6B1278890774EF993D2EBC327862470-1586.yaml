@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T21:50:04.229258473Z
-modified_at: 2026-11-27T22:40:05.825441410Z
+modified_at: 2026-11-27T22:40:09.968196733Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -123,6 +123,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-27T22:40:05.664373298Z
   modified_at: 2026-11-27T22:40:05.664373298Z
+- id: 01a21f2a-84f0-7560-9a34-49c8af69a4bf
+  author: joe
+  content: 'DEFERRED (#4764 CR @e53f2b99, p3; advisor 15:44; product-15): the subject kind in the SubjectMismatch evidence should be labelled from its source (kind-from-source) rather than inferred.'
+  created_at: 2026-11-27T22:40:09.968196733Z
+  modified_at: 2026-11-27T22:40:09.968196733Z
 history:
 - id: 01a21efc-ce96-7363-928e-bbc3f4ebd51b
   author: joe
