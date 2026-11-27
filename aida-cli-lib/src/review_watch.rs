@@ -3868,7 +3868,9 @@ fn watch_changes_into(
         let key = change.key();
         // An exited reviewer's pending sweep is finalized or expired before
         // admission reads the head. trace:BUG-2786 | ai:claude
-        if let Some(ledger_key) = crate::gate::ledger::ChangeKey::parse(&key) {
+        if let Some(ledger_key) = crate::gate::ledger::ChangeKey::parse(&key)
+            .filter(|_| !crate::session::process_contained())
+        {
             crate::gate::ledger::abandoned_sweep::expire_reported(&store.root, ledger_key);
         }
         match watch(change.clone()) {

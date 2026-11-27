@@ -175,10 +175,8 @@ pub(crate) fn finalize_via_writer(
 /// The review watcher's per-change step: production liveness (session
 /// registry) and finalization (the single verdict writer). Best effort: a
 /// failure is reported and the barrier waits for the next pass.
+/// The caller must be uncontained: a contained seat cannot write the ledger.
 pub(crate) fn expire_reported(start: &Path, change: ChangeKey) {
-    if crate::session::process_contained() {
-        return;
-    }
     let finalize =
         |event: &GateEvent, approval: &JsonObj| finalize_via_writer(start, event, approval);
     let ended = |record: &JsonObj| reviewer_session_ended(start, record);
