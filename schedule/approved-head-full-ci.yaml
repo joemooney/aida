@@ -1,9 +1,9 @@
 job: approved-head-full-ci
-last_run: 2026-11-27T16:35:41.687464796Z
+last_run: 2026-11-27T16:56:22.185637501Z
 last_by:
   seat: substrate
   vendor: tick
-result: failed:1
+result: ok
 failure_trips:
 - trip_id: approved-head-full-ci@2026-11-24T18:38:13.180766011Z
   at: 2026-11-24T18:38:13.180766011Z
