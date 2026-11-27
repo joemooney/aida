@@ -5,7 +5,9 @@
 use super::seat_publish_tests::{git_ok, seat_with_commit, test_bundle};
 use super::tests::{fixture, ref_exists};
 use crate::headless_background::{OriginHead, SeatState};
-use crate::lane_salvage::{failed_exit_note, on_failed_exit, FailedExit, Lane, UNVERIFIED};
+use crate::lane_salvage::{
+    failed_exit_note, on_failed_exit, Bundle, FailedExit, Host, Lane, UNVERIFIED,
+};
 use crate::standalone_implementer::LaunchSeat;
 use crate::standalone_implementer::Outcome;
 use std::cell::RefCell;
@@ -26,6 +28,19 @@ fn lane<'a>(
         lane: id,
         launch_head: None,
         open_pr: pr,
+    }
+}
+
+fn head_movable(_: &Path, _: &str) -> anyhow::Result<()> {
+    Ok(())
+}
+
+/// The host a salvage reads, with a PR head nothing protects.
+fn host<'a>(bundle: Bundle<'a>) -> Host<'a> {
+    Host {
+        bundle,
+        pr_head: &head_movable,
+        store: None,
     }
 }
 
@@ -72,7 +87,7 @@ fn bug_2781_sigterm_after_commit_salvage_pushes_to_a_salvage_ref() {
         &Outcome::NoPr,
         &committed(&tip),
         &sigterm(),
-        &test_bundle,
+        &host(&test_bundle),
         &|text, pr| said.borrow_mut().push((text.to_owned(), pr)),
     )
     .expect("salvaged");
@@ -118,7 +133,7 @@ fn bug_2781_open_pr_branch_is_fast_forwarded() {
         &Outcome::PrOpened { pr: 7, head: None },
         &committed(&tip),
         &sigterm(),
-        &test_bundle,
+        &host(&test_bundle),
         &|text, pr| said.borrow_mut().push((text.to_owned(), pr)),
     )
     .expect("salvaged");
@@ -150,7 +165,7 @@ fn bug_2781_uncommitted_only_pushes_nothing() {
         &Outcome::NoPr,
         &edits,
         &sigterm(),
-        &|_, _, _| panic!("bundled a seat with nothing committed"),
+        &host(&|_, _, _| panic!("bundled a seat with nothing committed")),
         &|_, _| panic!("announced a salvage that did not happen"),
     );
     assert_eq!(note, None);
@@ -205,7 +220,7 @@ fn bug_2781_non_fast_forward_is_refused_and_retained() {
         &Outcome::PrOpened { pr: 8, head: None },
         &committed(&tip),
         &sigterm(),
-        &test_bundle,
+        &host(&test_bundle),
         &|_, _| panic!("announced a refused salvage"),
     )
     .expect("a refusal note");
@@ -251,7 +266,7 @@ fn run_failed_exit(
         &sigterm(),
         outcome,
         &|| seat.clone(),
-        &test_bundle,
+        &host(&test_bundle),
         &|text, pr| said.borrow_mut().push((text.to_owned(), pr)),
         Some("host post-exit commit skipped".into()),
     );
@@ -448,7 +463,7 @@ fn bug_2781_run_step_outside_a_seat_clone_only_names_the_cause() {
         "exited with code 1",
         &Outcome::NoPr,
         &|| panic!("read a seat that is not a clone"),
-        &|_, _, _| panic!("bundled a seat that is not a clone"),
+        &host(&|_, _, _| panic!("bundled a seat that is not a clone")),
         &|_, _| panic!("announced"),
         None,
     );
@@ -467,7 +482,7 @@ fn bug_2781_branch_the_lease_does_not_own_is_refused() {
         &Outcome::NoPr,
         &committed(&tip),
         &sigterm(),
-        &|_, _, _| panic!("bundled a branch the lease does not own"),
+        &host(&|_, _, _| panic!("bundled a branch the lease does not own")),
         &|_, _| panic!("announced a refused salvage"),
     )
     .expect("a refusal note");
@@ -504,7 +519,7 @@ fn bug_2781_publication_veto_is_refused() {
         &Outcome::NoPr,
         &committed(&tip),
         &sigterm(),
-        &|_, _, _| panic!("bundled a vetoed seat"),
+        &host(&|_, _, _| panic!("bundled a vetoed seat")),
         &|_, _| panic!("announced a vetoed salvage"),
     )
     .expect("a refusal note");
@@ -516,4 +531,151 @@ fn bug_2781_publication_veto_is_refused() {
     assert!(!ref_exists(&fx.origin, &format!("refs/heads/salvage/{id}")));
     assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), tip, "retained");
     no_imports(&fx.main);
+}
+
+/// Protect PR heads in the fixture and record an approval of `pr` at `sha`.
+#[cfg(unix)]
+fn approve(fx: &super::tests::Fixture, pr: u64, sha: &str) {
+    let config = crate::config_path_for_project(&fx.main);
+    std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+    let mut body = std::fs::read_to_string(&config).unwrap_or_default();
+    body.push_str("\n[pr-head]\nprotect = true\n");
+    std::fs::write(&config, body).unwrap();
+    let verdicts = fx.main.join(".aida/review-verdicts");
+    std::fs::create_dir_all(&verdicts).unwrap();
+    std::fs::write(
+        verdicts.join(format!("PR-{pr}.json")),
+        format!(r#"{{"verdict":"APPROVED","reviewed_sha":"{sha}","recorded_by":"reviewer-a"}}"#),
+    )
+    .unwrap();
+}
+
+/// A salvage onto `pr`'s open branch, with the BUG-2618 guard read from the
+/// fixture's recorded evidence at the branch's live head on origin.
+#[cfg(unix)]
+fn salvage_onto_pr(
+    fx: &super::tests::Fixture,
+    clone: &Path,
+    branch: &str,
+    id: &str,
+    pr: u64,
+    tip: &str,
+) -> (Option<String>, Vec<(String, Option<u64>)>) {
+    let origin = fx.origin.clone();
+    let guard = move |main: &Path, branch: &str| {
+        let head = git_ok(&origin, &["rev-parse", &format!("refs/heads/{branch}")]);
+        crate::pr_head_guard::check(main, &format!("PR-{pr}"), pr, &head)
+    };
+    let said = RefCell::new(Vec::new());
+    let note = on_failed_exit(
+        &lane(&fx.main, clone, branch, id, Some(pr)),
+        &Outcome::PrOpened { pr, head: None },
+        &committed(tip),
+        &sigterm(),
+        &Host {
+            bundle: &test_bundle,
+            pr_head: &guard,
+            store: None,
+        },
+        &|text, pr| said.borrow_mut().push((text.to_owned(), pr)),
+    );
+    (note, said.into_inner())
+}
+
+// Review round 4, finding 1: a PR head approved at its live head is never
+// moved by a salvage; the work goes to the salvage ref and says why.
+#[cfg(unix)]
+#[test]
+fn bug_2781_approved_pr_head_is_not_moved_and_salvages_to_the_salvage_ref() {
+    let fx = fixture();
+    let id = "c0ffee278111";
+    let (clone, tip) = seat_with_commit(&fx, "approved", id, "seat-approved", "fix: p (BUG-1)");
+    pr_branch_at_main(&fx, "seat-approved");
+    let head = git_ok(&fx.origin, &["rev-parse", "refs/heads/seat-approved"]);
+    approve(&fx, 21, &head);
+    let (note, said) = salvage_onto_pr(&fx, &clone, "seat-approved", id, 21, &tip);
+    assert_eq!(
+        git_ok(&fx.origin, &["rev-parse", "refs/heads/seat-approved"]),
+        head,
+        "the approved PR head did not move"
+    );
+    let salvage = format!("salvage/{id}");
+    assert_eq!(
+        git_ok(&fx.origin, &["rev-parse", &format!("refs/heads/{salvage}")]),
+        tip
+    );
+    let note = note.expect("a note");
+    assert!(
+        note.starts_with(&format!("{UNVERIFIED}: pushed {tip} to {salvage}")),
+        "{note}"
+    );
+    assert!(
+        note.contains("PR #21 head not moved") && note.contains("recorded approval"),
+        "{note}"
+    );
+    assert_eq!(said.len(), 1);
+    assert!(
+        said[0].0.contains(&salvage) && said[0].0.contains("PR #21 head not moved"),
+        "{:?}",
+        said[0]
+    );
+    no_imports(&fx.main);
+}
+
+// The same guard with the approval at an older head lets the salvage
+// fast-forward the PR branch.
+#[cfg(unix)]
+#[test]
+fn bug_2781_unapproved_pr_head_is_fast_forwarded() {
+    let fx = fixture();
+    let id = "c0ffee278112";
+    let (clone, tip) = seat_with_commit(&fx, "unapproved", id, "seat-unapproved", "fix: o (BUG-1)");
+    pr_branch_at_main(&fx, "seat-unapproved");
+    approve(&fx, 22, "0123456789abcdef0123456789abcdef01234567");
+    let (note, said) = salvage_onto_pr(&fx, &clone, "seat-unapproved", id, 22, &tip);
+    assert_eq!(
+        git_ok(&fx.origin, &["rev-parse", "refs/heads/seat-unapproved"]),
+        tip
+    );
+    assert!(!ref_exists(&fx.origin, &format!("refs/heads/salvage/{id}")));
+    let note = note.expect("a note");
+    assert_eq!(
+        note,
+        format!("{UNVERIFIED}: pushed {tip} to seat-unapproved")
+    );
+    assert_eq!(said[0].1, Some(22));
+    no_imports(&fx.main);
+}
+
+// Review round 4, finding 2: an imported commit without a spec trailer, or
+// one naming another spec only, refuses the salvage and keeps the work.
+#[cfg(unix)]
+#[test]
+fn bug_2781_imported_commit_without_the_lane_trailer_is_refused() {
+    for (n, subject, why) in [
+        (13, "fix: no trailer", "carries no `(SPEC-ID)`"),
+        (14, "fix: elsewhere (BUG-9)", "you named BUG-1"),
+    ] {
+        let fx = fixture();
+        let id = format!("c0ffee2781{n}");
+        let name = format!("trailer{n}");
+        let branch = format!("seat-trailer{n}");
+        let (clone, tip) = seat_with_commit(&fx, &name, &id, &branch, subject);
+        let note = on_failed_exit(
+            &lane(&fx.main, &clone, &branch, &id, None),
+            &Outcome::NoPr,
+            &committed(&tip),
+            &sigterm(),
+            &host(&test_bundle),
+            &|_, _| panic!("announced a refused salvage"),
+        )
+        .expect("a refusal note");
+        assert!(
+            note.starts_with("salvage-push refused, commits retained") && note.contains(why),
+            "{note}"
+        );
+        assert!(!ref_exists(&fx.origin, &format!("refs/heads/salvage/{id}")));
+        assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), tip, "retained");
+        no_imports(&fx.main);
+    }
 }

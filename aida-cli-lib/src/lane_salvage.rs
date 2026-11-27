@@ -6,10 +6,12 @@
 //! The host, from its own trusted git and never the seat clone's config,
 //! bundles the claimed branch alone, quarantines it in a host ref, checks the
 //! push is a fast-forward, pushes and drops the host ref. The target is the
-//! claimed branch when it already has an open PR; otherwise it is
-//! `salvage/<lane>`, a branch no PR, review or train reads. Uncommitted edits,
-//! a non-fast-forward and any other branch are never pushed; the seat keeps
-//! its work. A salvaged head carries no review: the merge train needs a fresh
+//! claimed branch when it already has an open PR and the PR head guard
+//! (BUG-2618: no approval at the head, no train pin) lets it move; otherwise
+//! it is `salvage/<lane>`, a branch no PR, review or train reads. Every
+//! imported commit must carry a resolvable spec trailer, one naming the
+//! lane's spec. Uncommitted edits, a non-fast-forward and any other branch
+//! are never pushed; the seat keeps its work. A salvaged head carries no review: the merge train needs a fresh
 //! CI run and an independent review at that exact head.
 //! trace:BUG-2781 | ai:claude
 
@@ -248,35 +250,124 @@ pub(crate) fn exit_cause(status: std::process::ExitStatus, evidence: &EndEvidenc
     format!("ended by {name} ({sig}); source: {}", sources.join("; "))
 }
 
-/// Push the seat's committed `branch` to `origin/<target>` as a
-/// fast-forward, from host git only; returns the pushed tip. Refuses a seat
-/// this checkout did not record, a branch its lease does not own, a punt or
-/// hold, and a push that is not a fast-forward. The host import ref is
-/// always dropped.
-pub(crate) fn push(
-    main: &Path,
-    clone: &Path,
-    spec: &str,
-    branch: &str,
-    target: &str,
-    bundle: Bundle<'_>,
-) -> Result<String> {
-    let seat = crate::ship_from_seat::recorded_seat(main, clone)?;
+/// What a salvage reads from the host, injectable for tests.
+// trace:BUG-2781 | ai:claude
+pub(crate) struct Host<'a> {
+    /// The seat's bundler.
+    pub(crate) bundle: Bundle<'a>,
+    /// The BUG-2618 PR head guard, `(main, branch)`: an error refuses moving
+    /// that branch's PR head (an approval at the head, a train pin, or
+    /// evidence it could not read). Production is
+    /// [`crate::pr_head_guard::check_branch`].
+    pub(crate) pr_head: &'a dyn Fn(&Path, &str) -> Result<()>,
+    /// The requirement store the trailer check resolves IDs against; `None`
+    /// resolves every ID live, as `ship --from-seat` does.
+    pub(crate) store: Option<&'a aida_core::RequirementsStore>,
+}
+
+/// A salvage push that happened.
+#[derive(Debug)]
+pub(crate) struct Pushed {
+    /// The pushed tip.
+    pub(crate) tip: String,
+    /// The branch it went to.
+    pub(crate) target: String,
+    /// Why the open PR's branch was not the target, when it was refused.
+    pub(crate) pr_refused: Option<String>,
+}
+
+/// Push the seat's committed `branch` as a fast-forward, from host git only:
+/// to the open PR's branch when there is one and the PR head guard allows
+/// moving it, otherwise to `salvage/<lane>`. Refuses a seat this checkout did
+/// not record, a branch its lease does not own, a punt or hold, an imported
+/// commit without a resolvable spec trailer, and a push that is not a
+/// fast-forward. The host import ref is always dropped.
+pub(crate) fn push(lane: &Lane<'_>, host: &Host<'_>) -> Result<Pushed> {
+    let seat = crate::ship_from_seat::recorded_seat(lane.main, lane.clone)?;
     let main = seat.main.clone();
+    let branch = lane.branch;
     crate::ship_from_seat::require_publication_branch(&main, &seat.root, branch)?;
-    crate::ship_from_seat::refuse_publication_veto(&main, &seat.root, spec)?;
-    let bytes = bundle(&main, &seat.root, branch)?;
+    crate::ship_from_seat::refuse_publication_veto(&main, &seat.root, lane.spec)?;
+    let bytes = (host.bundle)(&main, &seat.root, branch)?;
     let staged = crate::ship_from_seat::stage_bundle(&main, branch, &bytes, false)?;
-    let pushed = push_fast_forward(&main, &staged.reference, &staged.tip, target);
+    let pushed = guarded_push(&main, &seat.root, lane, host, &staged);
     let dropped = crate::ship_from_seat::git_text(
         &main,
         &["update-ref", "-d", &staged.reference, &staged.tip],
     );
-    pushed?;
+    let pushed = pushed?;
     if let Err(e) = dropped {
         eprintln!("implementer: could not drop {}: {e:#}", staged.reference);
     }
-    Ok(staged.tip)
+    Ok(pushed)
+}
+
+/// [`push`]'s checks on the staged import, then the push itself.
+// trace:BUG-2781 | ai:claude
+fn guarded_push(
+    main: &Path,
+    tree: &Path,
+    lane: &Lane<'_>,
+    host: &Host<'_>,
+    staged: &crate::ship_from_seat::Staged,
+) -> Result<Pushed> {
+    imported_trailers(main, staged, lane.spec, host.store)?;
+    let mut pr_refused = None;
+    let target = match lane.open_pr {
+        Some(pr) => match (host.pr_head)(main, lane.branch) {
+            Ok(()) => lane.branch.to_owned(),
+            Err(e) => {
+                let why = format!("PR #{pr} head not moved: {e:#}");
+                eprintln!("implementer: {why}; salvaging to the salvage ref instead");
+                pr_refused = Some(why);
+                target(lane.branch, None, lane.lane)
+            }
+        },
+        None => target(lane.branch, None, lane.lane),
+    };
+    // Re-read ownership after preparation, before the remote mutation, as
+    // seat publication does. trace:BUG-2633 | ai:claude
+    crate::ship_from_seat::require_publication_branch(main, tree, lane.branch)?;
+    push_fast_forward(main, &staged.reference, &staged.tip, &target)?;
+    Ok(Pushed {
+        tip: staged.tip.clone(),
+        target,
+        pr_refused,
+    })
+}
+
+/// Every commit the salvage imports (past the default branch) names a spec in
+/// a `(SPEC-ID)` or `(Refs SPEC-ID)` trailer, every named ID resolves to a live
+/// spec, and the lane's spec is among them; otherwise the salvage is refused.
+/// Stricter than `ship --from-seat`, which needs only one trailered commit: a
+/// salvaged head skips the lane's own final checks.
+// trace:BUG-2781 | ai:claude
+fn imported_trailers(
+    main: &Path,
+    staged: &crate::ship_from_seat::Staged,
+    spec: &str,
+    store: Option<&aida_core::RequirementsStore>,
+) -> Result<()> {
+    let base = crate::detect_default_branch_ref(main).unwrap_or_else(|| "origin/main".into());
+    let base_oid = crate::ship_from_seat::git_text(
+        main,
+        &["rev-parse", "--verify", &format!("{base}^{{commit}}")],
+    )?;
+    let range = format!("{base_oid}..{}", staged.reference);
+    let commits = crate::trace::read_commits_in_range_unadjusted(&staged.repo, &range)?;
+    if let Some((sha, subject)) = commits.iter().find(|(_, subject)| {
+        crate::extract_spec_ids_from_commit(subject).is_empty()
+            && crate::pr_ship::extract_authorship_spec_ids_from_subject(subject).is_empty()
+    }) {
+        anyhow::bail!(
+            "imported commit {sha} (`{subject}`) carries no `(SPEC-ID)` or `(Refs SPEC-ID)` \
+             trailer; nothing pushed"
+        );
+    }
+    let ids = crate::ship_from_seat::seat_trailer_check(&staged.repo, &range, |id| {
+        crate::trace::resolve_spec_in_store(store, id)
+    })?;
+    crate::ship_from_seat::explicit_spec_check(store, spec, &ids)
 }
 
 fn push_fast_forward(main: &Path, import: &str, tip: &str, target: &str) -> Result<()> {
@@ -337,26 +428,29 @@ pub(crate) fn on_failed_exit(
     outcome: &Outcome,
     seat: &SeatState,
     cause: &str,
-    bundle: Bundle<'_>,
+    host: &Host<'_>,
     announce: &dyn Fn(&str, Option<u64>),
 ) -> Option<String> {
     if !wanted(outcome, false, seat, lane.launch_head) {
         return None;
     }
-    let target = target(lane.branch, lane.open_pr, lane.lane);
-    match push(
-        lane.main,
-        lane.clone,
-        lane.spec,
-        lane.branch,
-        &target,
-        bundle,
-    ) {
-        Ok(tip) => {
-            let text = announcement(&tip, &target, cause);
+    match push(lane, host) {
+        Ok(Pushed {
+            tip,
+            target,
+            pr_refused,
+        }) => {
+            let mut text = announcement(&tip, &target, cause);
+            if let Some(why) = &pr_refused {
+                text = format!("{text} {why}.");
+            }
             eprintln!("implementer: {text}");
             announce(&text, lane.open_pr);
-            Some(format!("{UNVERIFIED}: pushed {tip} to {target}"))
+            let mut note = format!("{UNVERIFIED}: pushed {tip} to {target}");
+            if let Some(why) = pr_refused {
+                note = format!("{note} ({why})");
+            }
+            Some(note)
         }
         Err(e) => {
             eprintln!("implementer: salvage-push refused: {e:#}");
@@ -390,7 +484,7 @@ pub(crate) fn failed_exit_note(
     cause: &str,
     outcome: &Outcome,
     read_seat: &dyn Fn() -> SeatState,
-    bundle: Bundle<'_>,
+    host: &Host<'_>,
     announce: &dyn Fn(&str, Option<u64>),
     leftover: Option<String>,
 ) -> Option<String> {
@@ -409,8 +503,7 @@ pub(crate) fn failed_exit_note(
             launch_head: exit.launch_seat.head,
             open_pr,
         };
-        if let Some(salvage) = on_failed_exit(&lane, outcome, &read_seat(), cause, bundle, announce)
-        {
+        if let Some(salvage) = on_failed_exit(&lane, outcome, &read_seat(), cause, host, announce) {
             note = format!("{note}; {salvage}");
         }
     }

@@ -1964,6 +1964,14 @@ fn run(
         let announce = |text: &str, pr: Option<u64>| {
             crate::lane_salvage::announce(&main_root, launch.spec, launch.branch, text, pr)
         };
+        let store = crate::load_store_for_lookup(&main_root);
+        let host = crate::lane_salvage::Host {
+            bundle: &crate::seat_clone::bundle_branch,
+            pr_head: &|main: &std::path::Path, branch: &str| {
+                crate::pr_head_guard::check_branch(main, branch)
+            },
+            store: store.as_ref(),
+        };
         leftover_note = crate::lane_salvage::failed_exit_note(
             &crate::lane_salvage::FailedExit {
                 main: &main_root,
@@ -1977,7 +1985,7 @@ fn run(
             &cause,
             &outcome,
             &|| bg::SeatState::read(&worktree, launch.branch),
-            &crate::seat_clone::bundle_branch,
+            &host,
             &announce,
             leftover_note,
         );
