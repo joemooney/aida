@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T23:26:17.322312937Z
-modified_at: 2026-11-27T03:40:40.532103680Z
+modified_at: 2026-11-27T03:41:48.737458559Z
 req_type: Story
 tags:
 - containment
@@ -103,13 +103,35 @@ comments:
   modified_at: 2026-11-27T02:27:44.140066558Z
   session_id: 01a21ab210ef
   harness_version: 2.1.319 (Claude Code)
-- id: 01a21b17-48d4-7b11-8b51-9d300f6e4320
-  author: dirtlab
-  content: 'PR #4716 (base integration) opened at 8f859ca83b. Changes since the self-review comment: vendor literals moved behind vendors/ (tag detection now uses review_vendor(), and the lane-host probe decision is host_diagnostics::agy_lane_probe); the probe reads env via Environment::capture(). Final validation at 8f859ca83b: targeted aida-cli-lib lib tests 70 passed, 0 failed; make check-ci-fast rc=0.'
-  created_at: 2026-11-27T03:40:40.532103680Z
-  modified_at: 2026-11-27T03:40:40.532103680Z
-  session_id: 01a21ab210ef
-  harness_version: 2.1.319 (Claude Code)
+- id: 01a21b18-967b-7530-9677-d910d22da6d6
+  author: joe
+  content: |-
+    INTEGRATION PRE-CHECK PR #4716 (STORY-3202, head 8f859ca83b): CHANGES REQUESTED. One MUST; the rest passes.
+    MUST-1: agy review runs are not tool-confined to the level of the other vendors.
+    - claude runs with `--tools ""`, `disableAllHooks` and `--strict-mcp-config`. codex runs with `--sandbox=read-only`.
+    - AGY's argv is only `--output-format=text --mode=plan --disable-slash-commands --print=`. agy offers `--sandbox` ("terminal restrictions"), but the PR doesn't pass it.
+    - The prompt carries untrusted diff and spec text. If plan mode still allows read tools, or shell behind a permission that print mode auto-resolves, an injected prompt could make agy read files by absolute path (~/.ssh, ~/.gemini tokens) and echo them into the finder or challenger output. That output reaches the report and the opt-in --post-comment, because the S5a fencing makes text inert but does not redact it.
+    - The empty cwd does not confine absolute-path reads.
+    - Required:
+      - (a) Add `--sandbox` to AGY's argv, and extend the S3a spawn-contract test to assert it.
+      - (b) Verify, or else state as a binding residual in the PR body, what plan mode does in print mode for read, shell and web tools when there is no TTY and no --dangerously-skip-permissions. If agy has a no-tools or allowed-tools flag (the equivalent of `--tools ""`), use it.
+      - (c) If none of this can be verified locally because agy is not signed in, fail closed. agy stays off the automatic challenger pick and is used only through explicit `--agent agy` or `--challenger-agent agy` until a signed-in run confirms confinement.
+    - Residual risk 1 in the PR (user-level ~/.gemini hooks still run) is operator-owned and acceptable once it is documented.
+    PASS:
+    - Spawn reuses RunnerCall: empty cwd, env allowlist plus GEMINI_API_KEY only, stdin prompt, setsid group kill. print_timeout is deadline minus min(deadline/4, 30s), floored at 1, so it is never 0 (0 would mean no limit).
+    - AuthRequired fires only after a failed exit and matches stderr only. It is typed, and its message goes through the existing code_span'd cause path.
+    - Challenger order is claude, codex, agy, so codex is still preferred over agy for a claude finder.
+    - [AI:antigravity] resolves through review_vendor. Effort allowlist: low through max.
+    - doctor --lane-host probe: `agy models` through RunnerCall, with no TTY or bus, and typed AgyAuth. It is required only when agy is an enabled lane vendor.
+    Process:
+    - It is based on 85b2fee16d7 and merges cleanly with the current integration e7b0082d692 (after the #4713 re-sync), with S6 and with #4710.
+    - Size is about 400 lines (200 production, 190 tests), over the 300-line cap. Advisor's call.
+    - Title is (STORY-3202), which completes the story. That is fine if AC-A, AC-B and AC-C are all met after the MUST.
+    Strict tier (spawn and credentials), so it needs the independent review.
+  created_at: 2026-11-27T03:41:48.737458559Z
+  modified_at: 2026-11-27T03:41:48.737458559Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21a33-32c4-79e2-bbf0-90030b092cf3
   author: joe
