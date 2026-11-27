@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T11:16:46.243073402Z
-modified_at: 2026-11-27T21:55:11.659014305Z
+modified_at: 2026-11-27T21:55:13.456361849Z
 req_type: Task
 tags:
 - review
@@ -364,6 +364,11 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Advisor ruling (finalizing the stalled sweep-pending review): one rework round on both findings.. No triage reason was given.'
   created_at: 2026-11-27T21:46:24.605409537Z
   modified_at: 2026-11-27T21:46:24.605409537Z
+- id: 01a21f01-5fb0-7000-a2ea-4b55454980f4
+  author: joe
+  content: 'Track moved integration -> main by product-15 15:10: STORY-3120 review prepare has landed on main (p53); AC4 lane (advisor aida-d3 14:47) targets main.'
+  created_at: 2026-11-27T21:55:13.456361849Z
+  modified_at: 2026-11-27T21:55:13.456361849Z
 history:
 - id: 01a20d45-edeb-7592-b5ab-8a8e9e69042e
   author: joe
