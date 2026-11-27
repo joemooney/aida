@@ -1,0 +1,24 @@
+id: 01a21ef6-68f7-7b63-bf37-3c4e9c35551a
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1584
+agreed_id: TASK-3931
+title: 'scan() wiring test: the scheduled landing-drought job wires every cause through scan() (STORY-3131 follow-up)'
+description: |-
+  Deferred to S3 by advisor-122 (2026-11-26 01:04, #4634 S2 ruling); filed as a child by product-15 per advisor 13:08. Each landing-drought cause (conflict, missing/held review, held train lock, ci-red) is unit-tested, but no test proves the scheduled landing-drought job reaches every cause through scan().
+
+  ## Acceptance
+  - AC1: one end-to-end test runs the scheduled job's entry point against a fixture where each cause is present, and asserts each cause appears in the output (and failing() for the failing ones).
+  - AC2: test-only; no behaviour change.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T21:43:14.935519412Z
+modified_at: 2026-11-27T21:43:14.935519412Z
+req_type: Task
+filed_at:
+  code_sha: b90f128a0821d45db1f24420e64de1516fc18698
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b90f128a082
+  vendor: claude
