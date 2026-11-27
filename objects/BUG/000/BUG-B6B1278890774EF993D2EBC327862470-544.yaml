@@ -11,12 +11,12 @@ description: |
   1. Codex review runs have NO filesystem read beyond what the prompt carries. Use codex's no-tool / no-shell execution mode if one exists, or run it inside an AIDA bubblewrap with an empty HOME and only the codex auth file bind-mounted read-only. A spawn-contract test asserts the flags or the wrapper.
   2. A red-team test: a fake codex that tries to read a planted `$HOME/.ssh/canary` gets ENOENT/EACCES, and the canary never appears in the report.
   3. Until AC1 lands, `--post-comment` refuses when the finder or challenger vendor is codex (or any vendor without verified no-read confinement), with a clear message. Local reports are still allowed.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:42:37.637024707Z
-modified_at: 2026-11-27T10:47:03.081821782Z
+modified_at: 2026-11-27T11:10:57.126480259Z
 req_type: Bug
 comments:
 - id: 01a21b1a-ee60-7891-ba06-fa2ea0739f94
@@ -170,6 +170,19 @@ comments:
   content: PR-4731 at d6c58b6487282344b050001407ab8f437a949055 conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-27T10:05:53.635805110Z
   modified_at: 2026-11-27T10:05:53.635805110Z
+- id: 01a21cb3-8666-7ff2-9833-cb1c8aae01fe
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 0520107d75 (branch bug-2783-s1-fresh2, cut from main 9688b3c820; replaces closed #4731).
+    Acceptance evidence: ReviewVendor.no_read (claude true; codex, agy false), RunnerCall::no_read (custom runner false); --post-comment refuses after the local report + SARIF are written when the finder or challenger is not no_read, under AIDA_REVIEW_RUNNER_CMD, or for --anchor-findings imports. Tests: bug2783_unconfined_runner_review_is_never_posted (canary end to end: refused, canary absent from forge + error, report written; claude posts; imported canary findings refused, import without --post-comment still works), s3a_runner_spawn_contract (no_read table), plus review_prepare/review_challenger/review_runner modules (46 passed).
+    Review findings from #4731: (1) docs/review-process.md 'Posting the report' now names the refusal (codex, AIDA_REVIEW_RUNNER_CMD, imported findings) and that the local report and SARIF are still written; (2) --anchor-findings now always counts as an unverified producer. I chose refusing over a self-declared provenance field in the findings JSON: anyone writing the file could type 'claude', so the field would be a bypass, not provenance.
+    Probes: every early error returns before the post block (fails closed); a challenger that gives up partway is still counted; agy's pre-run refusal (STORY-3202) is unchanged; no test weakened.
+    Residual risks: the local report can still hold an exfiltrated secret from codex/custom runners until the runner itself is confined (pinned by the canary test); claude's no_read relies on --tools "" staying in its argv.
+  created_at: 2026-11-27T11:10:57.126480259Z
+  modified_at: 2026-11-27T11:10:57.126480259Z
+  session_id: 01a21ca859b0
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21b19-d8a7-7963-8736-0792eea43275
   author: joe
@@ -218,6 +231,13 @@ history:
   author: joe
   timestamp: 2026-11-27T10:47:03.384809260Z
   changes: []
+- id: 01a21ca8-8db0-7f83-9f1c-8780e0dd129b
+  author: aida-session-start
+  timestamp: 2026-11-27T10:58:58.096171597Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 8e59bcd029ec5f550d1970a5c25b9093dead24b4
