@@ -5208,6 +5208,54 @@ pub fn worktree_is_dirty_shallow(worktree_path: &Path) -> bool {
         .unwrap_or(true)
 }
 
+/// Result of [`worktree_dirty_state`]: a release decision must tell "clean"
+/// from "could not tell", so a git failure carries its cause.
+// trace:BUG-2780 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WorktreeDirtyState {
+    Clean,
+    Dirty,
+    Unknown(String),
+}
+
+/// Tri-state form of [`worktree_is_dirty_shallow`] for an existing directory
+/// `worktree_path`. It is `Unknown` when git fails, when the gitlink check
+/// fails, or when the directory is not its own worktree root (git would have
+/// found a parent repository, whose status says nothing about this tree).
+// trace:BUG-2780 | ai:claude
+pub fn worktree_dirty_state(worktree_path: &Path) -> WorktreeDirtyState {
+    if let Err(error) = refuse_untrusted_gitlinks(worktree_path) {
+        return WorktreeDirtyState::Unknown(format!("its gitlinks cannot be trusted: {error}"));
+    }
+    let run = |args: &[&str]| match host_git_command(worktree_path).args(args).output() {
+        Err(error) => Err(format!("git {} did not run: {error}", args[0])),
+        Ok(out) if !out.status.success() => Err(format!(
+            "git {} failed: {}",
+            args[0],
+            String::from_utf8_lossy(&out.stderr).trim()
+        )),
+        Ok(out) => Ok(String::from_utf8_lossy(&out.stdout).into_owned()),
+    };
+    let top = match run(&["rev-parse", "--path-format=absolute", "--show-toplevel"]) {
+        Ok(top) => PathBuf::from(top.trim()),
+        Err(cause) => return WorktreeDirtyState::Unknown(cause),
+    };
+    match (top.canonicalize(), worktree_path.canonicalize()) {
+        (Ok(top), Ok(here)) if top == here => {}
+        _ => {
+            return WorktreeDirtyState::Unknown(format!(
+                "it is not a git worktree root (git found {})",
+                top.display()
+            ))
+        }
+    }
+    match run(&["status", "--porcelain", "--ignore-submodules=dirty"]) {
+        Ok(out) if out.trim().is_empty() => WorktreeDirtyState::Clean,
+        Ok(_) => WorktreeDirtyState::Dirty,
+        Err(cause) => WorktreeDirtyState::Unknown(cause),
+    }
+}
+
 /// True when the worktree's current HEAD is already an ancestor of `base_ref`
 /// — its commits have landed, so the tree is safe to reset or destroy.
 // trace:STORY-714 | ai:claude

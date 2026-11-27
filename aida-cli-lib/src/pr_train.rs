@@ -422,7 +422,7 @@ fn add_car(repo: &Path, base: &str, tip: &str, m: &Member) -> std::result::Resul
         .map_err(|e| format!("its car has no patch-id: {}", e.reason()))?;
     if got != want {
         return Err(format!(
-            "its diff changes when stacked on main and the earlier members (patch-id {} \
+            "{STACKED_DRIFT} on main and the earlier members (patch-id {} \
              approved, {} in the train), so the approval does not cover what would land; \
              merge main into the PR and re-train",
             short(&want),
@@ -434,6 +434,203 @@ fn add_car(repo: &Path, base: &str, tip: &str, m: &Member) -> std::result::Resul
         commit,
         patch_id: got,
     })
+}
+
+/// Reason prefix of a stacked-diff-drift ejection. trace:BUG-2777 | ai:claude
+pub(crate) const STACKED_DRIFT: &str = "its diff changes when stacked";
+
+/// BUG-2777: route a member ejected for stacked-diff drift in the same pass,
+/// so the next train does not retry the same head. `update` asks the forge to
+/// merge main into the branch, pinned to the ejected head; on success
+/// `requeue` queues a review of the new head (the review-carryover gate
+/// decides whether the old approval carries). On refusal `escalate` files the
+/// conflict-repair request. Returns the route, recorded on the hold and printed.
+// trace:BUG-2777 | ai:claude
+pub(crate) fn route_drift(
+    pr: u64,
+    head: &str,
+    update: impl FnOnce() -> Result<()>,
+    requeue: impl FnOnce() -> String,
+    escalate: impl FnOnce(&str, &str) -> Result<()>,
+) -> String {
+    match update() {
+        Ok(()) => format!(
+            "branch update from {} requested; {}; a re-review is needed if the patch \
+             changed; a patch-id-identical approval carries",
+            short(head),
+            requeue(),
+        ),
+        Err(e) => {
+            let why = format!("{e:#}");
+            let route = format!(
+                "the branch does not update cleanly ({why}); conflict repair: merge main into \
+                 PR #{pr} resolving by hand, or cut a fresh slice, then review the new head"
+            );
+            let body = format!(
+                "PR #{pr} at {head} was ejected by the merge train: {STACKED_DRIFT} on main, so \
+                 its approval does not cover what would land. The train will not retry this head. \
+                 Route: {route}."
+            );
+            match escalate(
+                &format!("PR #{pr}: stacked-diff drift needs conflict repair"),
+                &body,
+            ) {
+                Ok(()) => format!("{route}; the advisor was asked"),
+                Err(e) => format!("{route}; asking the advisor failed ({e:#})"),
+            }
+        }
+    }
+}
+
+/// Member-induced drift: `head` already contains `main`, so a branch update is
+/// a no-op and the drift came from an earlier member of the train. Returns the
+/// head's patch-id vs `main`, which is its own (approved) diff, unchanged.
+// trace:BUG-2777 | ai:claude
+pub(crate) fn member_induced_drift(repo: &Path, main: &str, head: &str) -> Option<String> {
+    let contains = git_raw(repo, &["merge-base", "--is-ancestor", main, head]).ok()?;
+    if !contains.status.success() {
+        return None;
+    }
+    crate::gate::review_carryover::patch_id(repo, main, head).ok()
+}
+
+/// What routing a drift ejection touches: the train's dispatch authority, the
+/// forge branch update, the review queue and the advisor. trace:BUG-2777 | ai:claude
+pub(crate) trait DriftRouter {
+    /// `Some(patch-id)` when the drift is member-induced ([`member_induced_drift`]).
+    fn member_induced(&mut self, head: &str) -> Option<String>;
+    /// `Err(why)` once the train no longer holds its dispatch authority.
+    fn authority(&mut self) -> std::result::Result<(), String>;
+    fn update_branch(&mut self, pr: u64, head: &str) -> Result<()>;
+    fn requeue_review(&mut self, pr: u64) -> String;
+    fn escalate(&mut self, pr: u64, head: &str, subject: &str, body: &str) -> Result<()>;
+}
+
+/// Route and record every stacked-diff-drift ejection, each PR once however
+/// many sub-trains ejected it. The forge is touched only under dispatch
+/// authority; the hold is a local record and is written either way, so the
+/// next train never re-admits the same head. trace:BUG-2777 | ai:claude
+pub(crate) fn route_drift_ejections(
+    root: &Path,
+    ejected: &[Ejected],
+    heads: &[(u64, String)],
+    router: &mut impl DriftRouter,
+    warnings: &mut Vec<String>,
+) {
+    let mut routed = std::collections::BTreeSet::new();
+    for e in ejected
+        .iter()
+        .filter(|e| e.reason.starts_with(STACKED_DRIFT))
+    {
+        let Some((_, head)) = heads.iter().find(|(pr, _)| *pr == e.pr) else {
+            continue;
+        };
+        if !routed.insert(e.pr) {
+            continue;
+        }
+        // Not a conflict: no branch update, no re-review, no escalation and
+        // no hold, so the next train re-admits the head. trace:BUG-2777 | ai:claude
+        if let Some(patch) = router.member_induced(head) {
+            println!(
+                "  routed #{}: member-induced drift: the branch already contains main and its \
+                 own diff (patch-id {}) is unchanged, so its approval carries; re-queued for \
+                 the next train, alone or behind the earlier member",
+                e.pr,
+                short(&patch)
+            );
+            continue;
+        }
+        let route = match router.authority() {
+            Err(why) => {
+                warnings.push(format!("#{} not routed: {why}", e.pr));
+                format!(
+                    "not routed: {why}; merge main into PR #{} and review the new head",
+                    e.pr
+                )
+            }
+            Ok(()) => {
+                let cell = std::cell::RefCell::new(&mut *router);
+                route_drift(
+                    e.pr,
+                    head,
+                    || cell.borrow_mut().update_branch(e.pr, head),
+                    || cell.borrow_mut().requeue_review(e.pr),
+                    |subject, body| cell.borrow_mut().escalate(e.pr, head, subject, body),
+                )
+            }
+        };
+        println!("  routed #{}: {route}", e.pr);
+        if let Err(err) = culprit::record_drift(root, e.pr, head, None, &route) {
+            warnings.push(format!(
+                "could not record #{}'s stacked-diff drift: {err:#}",
+                e.pr
+            ));
+        }
+    }
+}
+
+/// The live train's [`DriftRouter`]. trace:BUG-2777 | ai:claude
+struct LiveDriftRouter<'p, 'a> {
+    ports: &'p mut LiveTrainForge<'a>,
+    abort: &'p mut Option<String>,
+    /// The main tip the train was built on.
+    main: &'p str,
+}
+
+impl DriftRouter for LiveDriftRouter<'_, '_> {
+    fn member_induced(&mut self, head: &str) -> Option<String> {
+        member_induced_drift(&self.ports.main_worktree, self.main, head)
+    }
+
+    fn authority(&mut self) -> std::result::Result<(), String> {
+        if let Some(why) = self.abort.as_ref() {
+            return Err(why.clone());
+        }
+        self.ports.dispatch_check().map_err(|e| {
+            let why = self
+                .ports
+                .dispatch_abort
+                .take()
+                .unwrap_or_else(|| format!("{e:#}"));
+            *self.abort = Some(why.clone());
+            why
+        })
+    }
+
+    fn update_branch(&mut self, pr: u64, head: &str) -> Result<()> {
+        self.ports.forge.update_change_branch(pr, head)
+    }
+
+    fn requeue_review(&mut self, pr: u64) -> String {
+        match self
+            .ports
+            .forge
+            .change_metadata(pr, &mut crate::network_retry::NoopSink)
+        {
+            Ok(meta) => {
+                crate::try_auto_queue_pr_review(
+                    &self.ports.main_worktree,
+                    &meta.head_ref,
+                    "(train)",
+                    crate::AutoQueueOrigin::PrSkill,
+                )
+                .summary
+            }
+            Err(e) => {
+                format!("review not queued ({e:#}); the review watcher picks the new head up")
+            }
+        }
+    }
+
+    fn escalate(&mut self, pr: u64, head: &str, subject: &str, body: &str) -> Result<()> {
+        let thread = format!("train-drift-{pr}-{}", short(head));
+        crate::ship_from_seat::advisor_request_on_thread(
+            &self.ports.main_worktree,
+            subject,
+            body,
+            Some(&thread),
+        )
+    }
 }
 
 /// A train's CI result.
@@ -5647,12 +5844,26 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
                 .into_iter()
                 .map(|(pr, reason)| Ejected { pr, reason }),
         );
+        let heads: Vec<(u64, String)> = members.iter().map(|m| (m.pr, m.head.clone())).collect();
         let mut rails = ForgeRails::new(&mut ports, uuid::Uuid::new_v4().to_string())
             .with_journal(&journal_dir);
         let outcome = drive(&mut rails, members)?;
         drop(car_claims);
         warnings = std::mem::take(&mut rails.warnings);
         dispatch_abort = ports.dispatch_abort.take();
+        // Routed after the rails release the forge ports. trace:BUG-2777 | ai:claude
+        let mut router = LiveDriftRouter {
+            ports: &mut ports,
+            abort: &mut dispatch_abort,
+            main: &main,
+        };
+        route_drift_ejections(
+            &main_worktree,
+            &outcome.ejected,
+            &heads,
+            &mut router,
+            &mut warnings,
+        );
         outcome
     };
     // trace:BUG-2767 | ai:claude
@@ -5755,6 +5966,10 @@ pub(crate) fn complete_landed_specs(main_worktree: &Path, landed: &[(u64, String
 /// PR on the command line is the operator's recorded clearance.
 // trace:BUG-2767 | ai:claude
 fn culprit_admission(root: &Path, opts: &TrainOptions, m: &Member) -> Result<Option<String>> {
+    // Naming a drifted head does not clear it: print the route. trace:BUG-2777 | ai:claude
+    if let Some(why) = culprit::drift_hold(root, m.pr, &m.head) {
+        return Ok(Some(why));
+    }
     if !prs_named_on_command_line(opts) {
         return Ok(culprit::hold(root, m.pr, &m.head));
     }

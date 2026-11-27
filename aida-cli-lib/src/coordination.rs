@@ -742,13 +742,34 @@ pub(crate) fn unbound_claim_blocker(holder: &Claim, now: DateTime<Utc>) -> Optio
     ) {
         return Some("its creator process may still be running".into());
     }
-    let clone = Path::new(&holder.clone_path);
-    match std::fs::symlink_metadata(clone) {
+    // A relative or `..`-bearing path would resolve against the healer's cwd,
+    // so it is never probed. Every probe below reads the canonical path.
+    // trace:BUG-2780 | ai:claude
+    let named = Path::new(&holder.clone_path);
+    if !named.is_absolute()
+        || named.components().any(|c| {
+            matches!(
+                c,
+                std::path::Component::ParentDir | std::path::Component::CurDir
+            )
+        })
+    {
+        return Some(format!(
+            "its clone path {} is not an absolute, normalized path",
+            holder.clone_path
+        ));
+    }
+    match std::fs::symlink_metadata(named) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return None,
         Err(error) => return Some(format!("its clone cannot be inspected: {error}")),
         Ok(meta) if !meta.is_dir() => return Some("its clone path is not a directory".into()),
         Ok(_) => {}
     }
+    let canonical = match named.canonicalize() {
+        Ok(path) => path,
+        Err(error) => return Some(format!("its clone path cannot be resolved: {error}")),
+    };
+    let clone = canonical.as_path();
     match crate::leases::list_leases_strict_all(clone) {
         Err(error) => {
             return Some(format!(
@@ -764,7 +785,12 @@ pub(crate) fn unbound_claim_blocker(holder: &Claim, now: DateTime<Utc>) -> Optio
             }
         }
     }
-    match crate::lane_liveness::lane_record_names_claim(clone, holder.claim_id.as_deref()) {
+    // trace:BUG-2780 | ai:claude
+    let claim_id = holder
+        .claim_id
+        .as_deref()
+        .filter(|id| !id.trim().is_empty());
+    match crate::lane_liveness::lane_record_names_claim(clone, claim_id, &holder.scope) {
         Err(error) => return Some(format!("its clone's lane records cannot be read: {error}")),
         Ok(true) => return Some("a lane record in its clone names this claim".into()),
         Ok(false) => {}
@@ -784,10 +810,16 @@ pub(crate) fn unbound_claim_blocker(holder: &Claim, now: DateTime<Utc>) -> Optio
             agent.id, holder.scope
         ));
     }
-    if aida_core::git_ops::worktree_is_dirty_shallow(clone) {
-        return Some("its clone has uncommitted work".into());
+    // trace:BUG-2780 | ai:claude
+    match aida_core::git_ops::worktree_dirty_state(clone) {
+        aida_core::git_ops::WorktreeDirtyState::Clean => None,
+        aida_core::git_ops::WorktreeDirtyState::Dirty => {
+            Some("its clone has uncommitted work".into())
+        }
+        aida_core::git_ops::WorktreeDirtyState::Unknown(cause) => Some(format!(
+            "its clone's worktree state cannot be read ({cause}); salvage it by hand"
+        )),
     }
-    None
 }
 
 // TTL is only a backstop when BOTH exact local processes are dead. A missing
@@ -2969,6 +3001,87 @@ mod tests {
         assert!(unbound_claim_blocker(&holder, Utc::now()).is_none());
         assert!(heal_exited_claim(&store, &holder).unwrap());
         assert!(!claim_path(&store, &holder.scope).exists());
+    }
+
+    // An unbound claim whose clone state cannot be read is retained with the
+    // cause; a relative or non-root clone path is never probed; a legacy claim
+    // with no claim id is retained by a lane record on its scope, and its
+    // absent-clone release stays safe because lane records live in the clone.
+    // trace:BUG-2780 | ai:claude
+    #[test]
+    fn bug2780_unbound_release_fails_closed_on_unreadable_state_and_legacy_claims() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_store, mut holder) = bug2697_never_spawned_fixture(dir.path());
+        holder.claim_id = Some("5b0c1d2e-0000-4000-8000-000000002780".into());
+        holder.lease_id = None;
+        holder.heartbeat_at = "2026-11-15T14:47:00Z".into();
+        holder.started_at = holder.heartbeat_at.clone();
+        let clone = PathBuf::from(&holder.clone_path);
+        let blocker = |claim: &Claim| unbound_claim_blocker(claim, Utc::now());
+        assert_eq!(blocker(&holder), None, "the positive baseline releases");
+
+        // A git failure (corrupt index) reads as unknown, never clean.
+        let index = clone.join(".git/index");
+        let saved = std::fs::read(&index).unwrap();
+        std::fs::write(&index, b"not an index").unwrap();
+        let reason = blocker(&holder).expect("a corrupt index retains the claim");
+        assert!(reason.contains("worktree state cannot be read"), "{reason}");
+        assert!(reason.contains("git "), "the cause is named: {reason}");
+        std::fs::write(&index, saved).unwrap();
+        assert_eq!(blocker(&holder), None);
+
+        // A directory inside another repository is not its own worktree.
+        let nested = clone.join("nested");
+        std::fs::create_dir_all(&nested).unwrap();
+        let mut inner = holder.clone();
+        inner.clone_path = nested.display().to_string();
+        let reason = blocker(&inner).expect("a non-root clone retains the claim");
+        assert!(reason.contains("not a git worktree root"), "{reason}");
+
+        // Relative and `..`-bearing paths are refused before any probe.
+        for path in ["code", &format!("{}/../code", clone.display())] {
+            let mut relative = holder.clone();
+            relative.clone_path = path.to_string();
+            let reason = blocker(&relative).expect(path);
+            assert!(
+                reason.contains("not an absolute, normalized path"),
+                "{reason}"
+            );
+        }
+
+        // A legacy claim (no claim id) is still retained by a lane record on
+        // its scope, whether captured by spec or by the recorded claim.
+        let mut legacy = holder.clone();
+        legacy.claim_id = None;
+        assert_eq!(blocker(&legacy), None);
+        let record = clone.join(".aida/lanes/headless-c0ffee002780.json");
+        std::fs::write(
+            &record,
+            serde_json::json!({
+                "lease_id": "c0ffee002780", "spec": legacy.scope.to_ascii_lowercase(),
+                "vendor": "claude", "pid": u32::MAX, "log_path": "unused",
+                "started_at": "2026-11-15T14:47:01Z"
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let reason = blocker(&legacy).expect("a legacy claim's lane record retains it");
+        assert!(
+            reason.contains("a lane record in its clone names this claim"),
+            "{reason}"
+        );
+        let mut empty_id = legacy.clone();
+        empty_id.claim_id = Some("  ".into());
+        assert!(
+            blocker(&empty_id).is_some(),
+            "a blank claim id is legacy too"
+        );
+        // A generation-bound claim needs a record that captured its generation.
+        assert_eq!(blocker(&holder), None);
+
+        // With the clone gone there are no registries left to name it.
+        std::fs::remove_dir_all(&clone).unwrap();
+        assert_eq!(blocker(&legacy), None);
     }
 
     // A holder recorded on another host names that host in the refusal and

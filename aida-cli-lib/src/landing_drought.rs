@@ -78,6 +78,32 @@ pub(crate) struct Ready {
     pub full_tier_gap: Option<&'static str>,
     pub supervised: bool,
     pub on_train: bool,
+    /// A train ejected this head for stacked-diff drift: when, and the route.
+    // trace:BUG-2777 | ai:claude
+    pub drift: Option<(DateTime<Utc>, String)>,
+}
+
+/// A stacked-diff-drift ejection older than this is its own cause.
+// trace:BUG-2777 | ai:claude
+const DRIFT_MINUTES: i64 = 30;
+
+fn drift_cause(ready: &Ready, now: DateTime<Utc>) -> Option<(String, String)> {
+    let (at, route) = ready.drift.as_ref()?;
+    let age = now.signed_duration_since(*at);
+    (age > TimeDelta::minutes(DRIFT_MINUTES)).then(|| {
+        let fix = if route.is_empty() {
+            format!("update PR {}'s branch from main and review the new head", ready.number)
+        } else {
+            route.clone()
+        };
+        (
+            format!(
+                "ejected for stacked-diff drift {}m ago (the approval does not cover what would land)",
+                age.num_minutes()
+            ),
+            fix,
+        )
+    })
 }
 
 fn cause(ready: &Ready) -> Option<(String, String)> {
@@ -123,9 +149,13 @@ pub(crate) fn evaluate(
     let dwell = TimeDelta::minutes(policy.ready_dwell_minutes);
     let mut findings: Vec<DoctorFinding> = prs
         .iter()
-        .filter(|r| !r.on_train && now.signed_duration_since(r.since) > dwell)
+        .filter(|r| !r.on_train)
         .filter_map(|r| {
-            let (why, action) = cause(r)?;
+            let drifted = drift_cause(r, now);
+            if drifted.is_none() && now.signed_duration_since(r.since) <= dwell {
+                return None;
+            }
+            let (why, action) = drifted.or_else(|| cause(r))?;
             Some(DoctorFinding {
                 category: CATEGORY.into(),
                 id: format!("PR-{}", r.number),
@@ -145,7 +175,7 @@ pub(crate) fn evaluate(
     let landable = prs
         .iter()
         .filter(|r| !r.on_train && now.signed_duration_since(r.since) > dwell)
-        .filter(|r| r.ci == Ci::Green && r.full_tier_gap.is_none())
+        .filter(|r| r.ci == Ci::Green && r.full_tier_gap.is_none() && r.drift.is_none())
         .count();
     if dry && landable > 0 {
         let since = last_landing.map_or("ever".into(), |at| {
@@ -240,6 +270,20 @@ fn needs_supervision(
     !any
 }
 
+/// Whether a train pins `head`, and its drift row, read from the main
+/// worktree's `.aida` where the train writes them (`train_root`, resolved by
+/// the caller with [`crate::main_worktree_root_from`]). trace:BUG-2777 | ai:claude
+pub(crate) fn train_state(
+    train_root: &std::path::Path,
+    number: u64,
+    head: &str,
+) -> Result<(bool, Option<(DateTime<Utc>, String)>)> {
+    Ok((
+        !crate::pr_train::pr_head_pins(train_root, number)?.is_empty(),
+        crate::pr_train::culprit::drift(train_root, number, head),
+    ))
+}
+
 pub(crate) fn scan(
     exec: &aida_core::exec_context::ExecContext,
 ) -> Result<(Policy, Vec<DoctorFinding>)> {
@@ -253,6 +297,8 @@ pub(crate) fn scan(
     let store = storage.load_for_read()?;
     let tiered = crate::full_tier::repo_is_tiered(root)?;
     let mut ready = Vec::new();
+    // trace:BUG-2777 | ai:claude
+    let train_root = crate::main_worktree_root_from(root);
     for pr in crate::stalled_reviews::open_prs(root)? {
         let number = pr["number"].as_u64().context("PR number missing")?;
         let head = pr["headRefOid"].as_str().context("invalid PR head")?;
@@ -271,13 +317,15 @@ pub(crate) fn scan(
                 .get_requirement_by_spec_id(s)
                 .map(|r| r.execution_mode)
         }));
+        let (on_train, drift) = train_state(&train_root, number, head)?;
         ready.push(Ready {
             number,
             since: green_at.map_or(at, |ci| at.max(ci)),
             ci: crate::land::ci_of_rollup(rollup),
             full_tier_gap: tiered.then(|| full_tier_gap(rollup)).flatten(),
             supervised,
-            on_train: !crate::pr_train::pr_head_pins(root, number)?.is_empty(),
+            on_train,
+            drift,
         });
     }
     let now = DateTime::<Utc>::from(exec.clock().wall_now());
