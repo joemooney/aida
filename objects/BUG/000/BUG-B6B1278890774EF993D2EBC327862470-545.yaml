@@ -8,12 +8,12 @@ description: |
   ## Acceptance criteria
   1. scripts/ratchet-set.json (and any other append-only list files named in a small allowlist) never produces a merge conflict for disjoint additions. Use a custom git merge driver registered via .gitattributes (`merge=aida-json-union`) that unions the lists, keeps sorted order and emits valid JSON. Rework prep / sync configures the driver for lanes. A test merges two branches that each add different entries.
   2. If a union still conflicts (the same key edited differently), it stays a real conflict and the existing gating applies.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T04:27:12.923122169Z
-modified_at: 2026-11-27T08:48:25.086125560Z
+modified_at: 2026-11-27T11:30:30.253811703Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -333,6 +333,23 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a21cc5-6c60-7ea3-9cf5-6377b8b9ea72
+  author: aida-auto-bump
+  timestamp: 2026-11-27T11:30:30.112553355Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21cc5-6ced-7691-9f8b-b95839a9e9b3
+  timestamp: 2026-11-27T11:30:30.253805385Z
+  agent: aida
+  commit_sha: 9688b3c820a2f14ba0f228a827c984eb3d967939
+  summary: 'BUG-2784 passes at 47d94833, reviewed as the landed tree eb99738d on main 5e565715. AC1 [behavioral-test]: scripts/json-union-merge.py does a three-way merge of objects key by key. It unions lists, matching ratchet groups by package/target/filter, and keeps a list sorted when both sides were sorted. Its output round-trips scripts/ratchet-set.json byte for byte (checked locally: json.dumps(indent=2) of the file equals the file). Evidence: tests/test_json_union_merge.py::test_disjoint_additions_to_one_group_merge_cleanly, seat_clone::rework_merge_tests::bug_2784_rework_git_unions_disjoint_json_list_additions, and the bwrap e2e rework and publication tests. AC2 [behavioral-test]: a same-key edit, a removal against an edit, duplicates and invalid JSON all write standard markers into %A and exit 3, which the wrapper maps to 1. A missing script or a quoted path falls back to git merge-file. A failed driver therefore never leaves a clean OURS file, and the existing marker gating still applies. Sandbox and authority (ADR-76): SANDBOX_GIT_CONFIG is the single source of the forced keys, and sandbox_git_config_env restates them when GIT_CONFIG_COUNT rises to 3. bug_2784_lane_merge_env_keeps_sandbox_forced_git_config pins this through commit_sandbox_args. The e2e test plants a seat post-merge hook and asserts that it does not run. The driver path is MAIN''s trusted copy, bound read-only with --ro-bind-try and run with python3 -I. GIT_CONFIG_* env config takes precedence over the seat''s repo config, so a seat cannot redirect the driver. No fail-open path found. The round-3 test renames clear the structural-guard markers, and no bug_2784 test name contains ratchet or inventor. CI at this head: run 45967650925 is green (fast compile, fast gates). merge-hold-gate is pending on authorized clearance; this approval does not release it.'
+  punted:
+  - 'punted: BUG-2784 at 9afeaa25 (5 commits behind main; store-writers.toml also changed on base, landed tree applies cleanly). AC1 acc6fc44 is verified for the driver: tests/test_json_union_merge.py::test_disjoint_additions_to_one_group_merge_cleanly covers the union, sorted order and valid JSON, and the round-trip keeps ratchet-set.json formatting byte-identical. .gitattributes is registered. The rework-prep wiring at seat_clone.rs:3484 is present but untested through the real execute path (finding 2). AC2 ac5d1d65 is unmet: the conflict exit is tested, but a failed driver leaves no conflict markers, which defeats the existing marker gating (finding 1). Protocol ''PR touches at least one test file'': met. CI pending at review time.'
+  - 'punted: BUG-2784 at 5ba01320 (1 commit behind main; the base commit touches only .aida/config.toml, so no finding depends on it). The round-1 findings are fixed. AC1 passes: tests/test_json_union_merge.py::test_disjoint_additions_to_one_group_merge_cleanly, the host merge-tree test, and the bwrap e2e rework and publication tests. The driver output round-trips scripts/ratchet-set.json byte-identically. AC2 passes: same-key, removal-vs-edit, duplicate, invalid-JSON and clean-text-merge failures all leave standard markers with both sides (exit 3 maps to 1). A missing script or a quoted path falls back to git merge-file, so a failed driver never leaves a clean OURS file. Sandbox wiring is sound. SANDBOX_GIT_CONFIG and sandbox_git_config_env keep core.hooksPath=/dev/null and core.fsmonitor=false when the driver key raises GIT_CONFIG_COUNT to 3. An over-long list panics rather than dropping keys. bug_2784_lane_merge_env_keeps_sandbox_forced_git_config pins this through commit_sandbox_args. The bwrap e2e test plants a seat post-merge hook and checks that it does not run. The read-only --ro-bind-try exposes one trusted file from main. python3 -I keeps the seat''s cwd and the script dir off sys.path, and the seat cannot influence the driver string. No fail-open path was found. One blocker remains: CI is red at this head (Ratchet set, fast gates, and the Require-every-lane rollup). Static analysis attributes the red to this PR (finding 1).'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 8e59bcd029ec5f550d1970a5c25b9093dead24b4
@@ -343,3 +360,7 @@ filed_at:
   vendor: claude
   session: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-27T11:30:30.112546595Z
+  completion_sha: 9688b3c820a2f14ba0f228a827c984eb3d967939
