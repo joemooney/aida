@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:23:40.514113789Z
-modified_at: 2026-11-27T04:37:57.268888754Z
+modified_at: 2026-11-27T04:52:35.122492156Z
 req_type: Task
 tags:
 - admission
@@ -31,6 +31,25 @@ comments:
   modified_at: 2026-11-27T04:29:18.194798843Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21b59-1eb2-7ce1-86eb-e53ebd83314a
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 [behavioral, unit]:** `admission_owner::tests::task3924_waiter_released_when_its_retrier_exits` — a waiter whose owner process has exited (captured child, reaped) is not live; the auto-train does not yield to it. Owner = the process that launched the manual train (the operator's retry loop / shell): the `aida pr train` process itself exits on give-up by design, so recording its own pid would release every waiter at once. Release command `aida advisor loops release-waiter <ID>`; train-status line names the id, the waiter file and its expiry (asserted in AC3 test).
+    - **AC2 [behavioral, unit]:** `task3924_two_waiters_kept_and_admitted_in_order` — two give-ups are both queued; the later one is refused (and kept) while the earlier is live; admission removes only the admitted waiter; yield_reason reports the head while any live waiter is queued.
+    - **AC3 [behavioral, unit]:** `advisor_loop_service` test asserting the waiter line through status_value/status_lines; `pr_train_check` test asserting the text and JSON rendering of check_report's waiter appendix.
+
+    ### Expected files
+    - aida-cli-lib/src/admission_owner.rs, advisor_loop_service.rs, advisor_cmd_root.rs, advisor_cmd_root_args.rs, pr_train_check.rs, scripts/store-writers.toml, tests/golden/cli_help_snapshot.txt
+
+    ### Ambiguities / conflicts as questions
+    - "its manual train PROCESS": resolved as the launching (parent) process, see AC1; a one-shot invocation from a transient shell therefore releases at once (TTL fallback unchanged otherwise).
+  created_at: 2026-11-27T04:52:35.122492156Z
+  modified_at: 2026-11-27T04:52:35.122492156Z
+  session_id: 01a21b4b58e3
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21b41-dd2f-7263-af2a-f110d621552d
   author: joe

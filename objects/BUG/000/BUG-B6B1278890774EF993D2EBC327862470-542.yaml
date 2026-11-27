@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T02:26:44.337877Z
-modified_at: 2026-11-27T04:43:42.597965197Z
+modified_at: 2026-11-27T04:52:47.771545683Z
 req_type: Bug
 tags:
 - lanes
@@ -114,6 +114,17 @@ comments:
   content: Commit 74d946754d references this requirement
   created_at: 2026-11-27T04:43:42.597965197Z
   modified_at: 2026-11-27T04:43:42.597965197Z
+  session_id: 01a21b3a5cd9
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21b59-501b-7221-9f05-4d1c89995386
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 74d946754d (round 2 on #4718).
+    Findings addressed: (1) store-writers inventory regenerated (new row lane_salvage::push -> ship_from_seat::stage_bundle; the script flagged no other new site); formatting fixed; External-prose classifier --check and check-store-writers pass locally. (2) AC3 [evidence: behavioral-test]: exit_cause now takes EndEvidence gathered from the lease's jobs.log (lane-job 'timed out' since lane start), lease interrupted_at / drain stop request (operator stop), and journalctl -k --since @<lane start> (OOM 'Killed process <pid>' matched to the agent pid; other OOM kills named; unreadable -> 'OOM unknown (kernel log unreadable)'). Tests: bug_2781_exit_cause_names_the_oom_killer_when_the_kernel_log_matches, ..._names_a_job_timeout_and_an_operator_stop, bug_2781_gather_reads_the_lane_records_and_the_injected_kernel_log. (3) run()'s block extracted to lane_salvage::failed_exit_note; tests: run_step_targets_the_launch_pr_and_records_unverified (launch PR target, ff-only, persist_exit_notes writes 'salvaged, unverified'), run_step_prefers_the_pr_the_lane_opened, run_step_without_a_pr_targets_the_salvage_ref, run_step_passes_the_launch_head, run_step_outside_a_seat_clone_only_names_the_cause; refusals: branch_the_lease_does_not_own_is_refused, publication_veto_is_refused. 18/18 bug_2781 tests pass via lane job. (4) seat_with_commit back to pub(super). (5) lib.rs trace comments on their own lines.
+    Probes: job-log timestamp filter excludes earlier rounds of the same lease; a pre-lane drain stop is ignored; OOM pid match is exact u32 parse. Residual risks: OOM of a tool-call child (not the agent pid) is reported as 'not the agent's pid' because descendants are unknown after exit; journalctl may be unreadable without systemd-journal group, which is reported as unknown, never as clear; the post-result linger reap is not yet named as a source.
+  created_at: 2026-11-27T04:52:47.771545683Z
+  modified_at: 2026-11-27T04:52:47.771545683Z
   session_id: 01a21b3a5cd9
   harness_version: 2.1.319 (Claude Code)
 history:
