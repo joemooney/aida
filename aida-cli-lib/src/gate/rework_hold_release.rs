@@ -154,7 +154,7 @@ impl RetainedHistory {
         // trace:STORY-2698 | ai:codex — delivery state is not a refusal round.
         history
             .archived
-            .retain(|round| !rv::delivery_pending(round));
+            .retain(|round| !rv::delivery_pending(round) && !rv::sweep_abandoned(round));
         Ok(history)
     }
 }
@@ -316,7 +316,8 @@ fn eligible_with_coverage(
     let rounds = retained_rounds(body)?.iter().chain(&history.archived);
     let mut armed = false;
     for round in rounds {
-        if rv::delivery_pending(round) {
+        // trace:BUG-2786 | ai:claude — an expired barrier is no verdict either.
+        if rv::delivery_pending(round) || rv::sweep_abandoned(round) {
             continue;
         }
         let kind = round

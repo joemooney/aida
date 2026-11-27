@@ -1785,6 +1785,7 @@ mod standalone_review_verdict_parent_tests {
             change,
             later,
             sweep::SWEEP_ABANDON_AFTER,
+            &crate::gate::kernel_deps::review_blocking::from_config_text(""),
             &|r| sweep::reviewer_session_ended(&f.root, r),
             &finalize,
         )

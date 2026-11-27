@@ -11,6 +11,7 @@
 
 use super::{store, store_root, ChangeKey, GateEvent, GateSpec};
 use crate::gate::review_verdict::{self as rv, JsonObj};
+use crate::gate::kernel_deps::review_blocking::{self as blocking, Effective};
 use std::path::Path;
 
 /// How long a barrier may stand after its reviewer session ended.
@@ -72,10 +73,13 @@ pub(crate) fn reviewer_session_ended(root: &Path, record: &JsonObj) -> bool {
 /// reviewed head and findings that are all deferred (the recorder already
 /// normalizes such a record to an approval). Any other barrier is
 /// incomplete: its fail-closed verdict hides what the reviewer decided.
-fn complete_approval(barrier: &JsonObj) -> Option<JsonObj> {
+/// The stored findings are re-decided under the `policy` held now, so a
+/// policy that changed since the barrier was written cannot be bypassed.
+fn complete_approval(barrier: &JsonObj, policy: &Effective) -> Option<JsonObj> {
     let mut restored = barrier.clone();
     restored.remove("sweep_pending");
     restored.insert("verdict".into(), "approved".into());
+    let restored = rv::redecide_replay_record(restored, policy, rv::VerdictKind::Approved).ok()?;
     let head = restored.get("reviewed_sha").and_then(|v| v.as_str());
     let findings = restored.get("findings").and_then(|v| v.as_array());
     (head.is_some_and(|h| !h.trim().is_empty())
@@ -98,12 +102,14 @@ fn abandoned(barrier: &JsonObj, now: chrono::DateTime<chrono::Utc>) -> JsonObj {
 
 /// Expire `change`'s barriers older than `bound` whose reviewer `ended`.
 /// `finalize` records a complete approval through the normal writer; when
-/// it fails the barrier is abandoned instead, so it never stands forever.
+/// it fails, or `policy` no longer approves it, the barrier is abandoned
+/// instead, so it never stands forever.
 pub(crate) fn expire_with(
     start: &Path,
     change: ChangeKey,
     now: chrono::DateTime<chrono::Utc>,
     bound: chrono::Duration,
+    policy: &Effective,
     ended: &dyn Fn(&JsonObj) -> bool,
     finalize: &dyn Fn(&GateEvent, &JsonObj) -> std::io::Result<()>,
 ) -> std::io::Result<SweepExpiry> {
@@ -133,7 +139,7 @@ pub(crate) fn expire_with(
         {
             continue;
         }
-        if let Some(approval) = complete_approval(barrier) {
+        if let Some(approval) = complete_approval(barrier, policy) {
             match finalize(event, &approval) {
                 Ok(()) => {
                     done.finalized += 1;
@@ -185,6 +191,7 @@ pub(crate) fn expire_reported(start: &Path, change: ChangeKey) {
         change,
         chrono::Utc::now(),
         SWEEP_ABANDON_AFTER,
+        &blocking::effective_warned(start),
         &ended,
         &finalize,
     ) {

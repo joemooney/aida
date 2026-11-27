@@ -48,6 +48,18 @@ fn deferred() -> Value {
 }
 
 fn run(root: &Path, pr: u64, aged: bool, ended: bool, finalize: Fin) -> SweepExpiry {
+    run_under(root, pr, aged, ended, finalize, "")
+}
+
+/// [`run`] under the blocking policy `config` holds now ("" = unset).
+fn run_under(
+    root: &Path,
+    pr: u64,
+    aged: bool,
+    ended: bool,
+    finalize: Fin,
+    config: &str,
+) -> SweepExpiry {
     let late = SWEEP_ABANDON_AFTER + chrono::Duration::minutes(1);
     let now = chrono::Utc::now() + if aged { late } else { chrono::Duration::zero() };
     expire_with(
@@ -55,6 +67,7 @@ fn run(root: &Path, pr: u64, aged: bool, ended: bool, finalize: Fin) -> SweepExp
         ChangeKey::pr(pr),
         now,
         SWEEP_ABANDON_AFTER,
+        &blocking::from_config_text(config),
         &|_| ended,
         finalize,
     )
@@ -157,4 +170,106 @@ fn session_registry_decides_whether_the_reviewer_ended() {
     assert!(!reviewer_session_ended(&root, &named), "unreadable lease");
     named.insert("recorded_by".into(), "joe".into());
     assert!(!reviewer_session_ended(&root, &named), "no session named");
+}
+
+/// A complete barrier whose deferral the policy held now would block is not
+/// finalized from the barrier: it is abandoned for a fresh review.
+#[test]
+fn a_policy_that_now_blocks_the_deferral_abandons_instead_of_finalizing() {
+    let (_tmp, root, _env) = setup(76, deferred());
+    let invalid = "[review]\nblocking_tiers = 5\n";
+    let done = run_under(&root, 76, true, true, NO_FINALIZE, invalid);
+    assert_eq!(
+        done,
+        SweepExpiry {
+            finalized: 0,
+            abandoned: 1
+        }
+    );
+}
+
+/// A worktree-less review lease whose liveness is its creator process:
+/// `live` names this test process, otherwise no process (stale).
+fn register(root: &Path, id: &str, live: bool) {
+    let lease: crate::leases::SessionLease = serde_json::from_value(json!({
+        "id": id, "scope": "PR-75", "slug": "pr-75", "owner": "test",
+        "worktree_path": "", "branch": "main", "review_verb": true,
+        "started_at": chrono::Utc::now().to_rfc3339(),
+        "hostname": crate::coordination::hostname(),
+        "pid_namespace": aida_core::pid_observer::current_pid_namespace(),
+        "creator_pid": live.then(std::process::id),
+    }))
+    .unwrap();
+    let path = crate::lease_path(root, id);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(path, toml::to_string_pretty(&lease).unwrap()).unwrap();
+}
+
+#[test]
+fn registered_leases_decide_liveness_for_every_named_session() {
+    let (_tmp, root, _env) = setup(77, json!({}));
+    let mut named = project::newest_verdict(&root, "PR-77").unwrap();
+    register(&root, "gone-review-session", true);
+    assert!(!reviewer_session_ended(&root, &named), "live lease");
+    register(&root, "gone-review-session", false);
+    assert!(reviewer_session_ended(&root, &named), "stale lease");
+    // Two named sessions: one stale, one live; the reviewer has not ended.
+    register(&root, "live-attest-session", true);
+    named.insert(
+        rv::ATTESTATION_KEY.into(),
+        json!({"identity": ["session:live-attest-session"]}),
+    );
+    assert!(!reviewer_session_ended(&root, &named), "one live session");
+    register(&root, "live-attest-session", false);
+    assert!(reviewer_session_ended(&root, &named), "both stale");
+}
+
+/// The merge gate over the change's ledger history at `head`.
+fn gate(root: &Path, pr: u64, head: &str) -> crate::gate::merge_hold_core::CorpusMergeGate {
+    let event = project::newest_verdict_event(root, &format!("PR-{pr}")).unwrap();
+    let bodies = rv::bodies_with_ledger_history(&store_root(root).unwrap(), &event).unwrap();
+    let keyed: Vec<_> = bodies.into_iter().map(|b| (format!("PR-{pr}"), b)).collect();
+    crate::gate::merge_hold_core::corpus_merge_gate(pr, &keyed, Some(head))
+}
+
+fn approve(root: &Path, pr: u64, head: &str) {
+    let record = json!({"verdict": "approved", "reviewed_sha": head, "findings": [],
+        "recorded_by": "reviewer:fresh-review-session",
+        "recorded_at": chrono::Utc::now().to_rfc3339()});
+    let change = ChangeKey::pr(pr);
+    let record = record.as_object().unwrap().clone();
+    let mut event = GateEvent::new(change, EventBody::Verdict { record });
+    event.head = Some(head.to_string());
+    store::append(&store_root(root).unwrap(), change, vec![event]).unwrap();
+}
+
+/// BUG-2786 AC1: an abandoned barrier reads as "needs review" in every
+/// reconciliation, and a fresh approval at that head or a later one clears.
+#[test]
+fn an_abandoned_sweep_never_wedges_the_merge_gate() {
+    use crate::gate::merge_hold_core::CorpusMergeGate;
+    const LATER: &str = "2222222222222222222222222222222222222222";
+    for (pr, head) in [(78, HEAD), (79, LATER)] {
+        let (_tmp, root, _env) = setup(pr, json!({}));
+        run(&root, pr, true, true, NO_FINALIZE);
+        match gate(&root, pr, HEAD) {
+            CorpusMergeGate::Refuse { message, .. } => {
+                assert!(!message.contains("cannot be reconciled"), "{message}");
+                assert!(message.contains("do not approve"), "{message}");
+            }
+            other => panic!("abandoned alone must need review: {other:?}"),
+        }
+        approve(&root, pr, head);
+        let event = project::newest_verdict_event(&root, &format!("PR-{pr}")).unwrap();
+        let bodies = rv::bodies_with_ledger_history(&store_root(&root).unwrap(), &event).unwrap();
+        assert_eq!(
+            rv::reconcile_artifacts_for_sha(bodies.iter().map(String::as_str), head),
+            Ok(Some(rv::VerdictKind::Approved))
+        );
+        assert!(
+            matches!(gate(&root, pr, head), CorpusMergeGate::Clear),
+            "{:?}",
+            gate(&root, pr, head)
+        );
+    }
 }

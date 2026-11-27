@@ -1284,7 +1284,10 @@ pub(crate) fn effective_recordings_for_sha<'a>(
                 .filter(|v| !v.is_empty())
                 .ok_or_else(|| "review recording has no verdict".to_string())?;
             let kind = disposition_verdict(recording);
-            if kind == VerdictKind::Unknown {
+            // trace:BUG-2786 | ai:claude — an expired barrier is a recognised
+            // act that displaces the barrier and votes nothing ("needs review").
+            let abandoned = sweep_abandoned(&serde_json::Value::Object(recording.clone()));
+            if kind == VerdictKind::Unknown && !abandoned {
                 return Err(format!("review recording has unrecognised verdict `{raw}`"));
             }
             let reviewer = recording
@@ -1381,6 +1384,8 @@ pub(crate) fn effective_recordings_for_sha<'a>(
     if effective.is_empty() && !at_head.is_empty() {
         return Err("conflicting review append histories have no effective recording".to_string());
     }
+    // trace:BUG-2786 | ai:claude — an abandoned sweep is no verdict.
+    effective.retain(|r| !sweep_abandoned(&serde_json::Value::Object(r.clone())));
     Ok(effective)
 }
 
