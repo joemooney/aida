@@ -354,6 +354,31 @@ comments:
   modified_at: 2026-11-27T07:49:38.130751301Z
   session_id: 01a21bbb7626
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21bfc-c71f-74b0-964f-9a62eef7f68e
+  author: joe
+  content: |-
+    INTEGRATION RE-PRE-CHECK PR #4716 r3 (head 1783608c2a): PASS. The advisor's 22:19 ruling is met. Strict tier, so the independent review is still needed.
+    - (1) review_prepare.rs:331 calls run_review_agent(args.agent, trusted, env), so &project_root is gone.
+      - run_review_agent (:826) resolves through review_tuning::trusted_default_vendor (:138).
+      - That reads only the merge-base revision's .aida/config.toml and .aida/agents.toml blobs (via with_base_seat_files) plus ~/.aida/agents.toml, through the new aida_core::agents_config::resolve_default_vendor_from.
+      - The checkout under review is never read, and committing either file already refuses the review (trusted_review_base).
+    - (2) agy is never a default.
+      - aida-core's resolver knows only claude and codex.
+      - A second fence, .filter(|v| v.confinement_verified), drops any resolved unverified vendor.
+      - When agy is named, stderr says so, prints only the validated program name, and falls back to claude.
+      - Only --agent agy or --challenger-agent agy runs it.
+    - (3) Tests:
+      - story3202_pr_checkout_vendor_never_picks_the_finder (:2263): a checkout with vendor=agy and then vendor=codex in both files leaves the finder on claude, and committing the file refuses the review.
+      - story3202_unverified_vendor_is_refused_as_a_default (:2303): agy in base config, base agents and global each falls back to claude with a note, and --agent agy still runs agy.
+      - bug2775_… now honours a trusted codex default.
+      - Both new tests are in ratchet-set.json.
+    - It merges cleanly with integration 3d05dfcc1ff (post-p53).
+    - Behaviour change, documented in the PR body: a gitignored per-clone .aida/agents.toml in the reviewing checkout no longer sets the finder. Use ~/.aida/agents.toml or --agent.
+    - With this, S5e's line 'the [agents] seat is read from the merge base, never from the change' is accurate. p55 = S5e + this, after p54 (TASK-3869).
+  created_at: 2026-11-27T07:51:03.273756525Z
+  modified_at: 2026-11-27T07:51:03.273756525Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21a33-32c4-79e2-bbf0-90030b092cf3
   author: joe
