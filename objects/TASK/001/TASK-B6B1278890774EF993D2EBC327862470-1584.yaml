@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T21:43:14.935519412Z
-modified_at: 2026-11-27T22:20:43.689884654Z
+modified_at: 2026-11-27T22:28:07.743501705Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -75,6 +75,12 @@ comments:
   modified_at: 2026-11-27T22:20:14.287316020Z
   session_id: 01a21efa0ee3
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21f1f-7fbf-7293-bfc4-851e619eec78
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3931-drought-scan-wiring` at head `f340ccd2443588f82c99a002349df25de7a683bc`.'
+  created_at: 2026-11-27T22:28:07.743498210Z
+  modified_at: 2026-11-27T22:28:07.743498210Z
+  session_id: 01a21efa0ee3
 history:
 - id: 01a21ef6-91ff-7770-8578-01efb02e2b5f
   author: joe
