@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-27T00:58:22.783079336Z
+modified_at: 2026-11-27T01:25:48.048865423Z
 req_type: Story
 tags:
 - integration
@@ -1625,6 +1625,25 @@ comments:
   modified_at: 2026-11-27T00:58:22.783079336Z
   session_id: 01a21a78b676
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21a9c-0fb4-7d13-ada3-a055c79ec2d8
+  author: joe
+  content: |-
+    INTEGRATION RE-PRE-CHECK PR #4699 r1 (S5d, head d5cd87c7ea): PASS. MUST-1 and MUST-2 are met. FAST is pending.
+    MUST-1 reconcile:
+    - d5cd87c7ea is a merge of origin/main ed4507ea9e1, which includes BUG-2775, p51 and TASK-3921. It merges cleanly with the current main 7461b694e01 (one disjoint commit, TASK-3919).
+    - Resolutions, reviewed with `git show --remerge-diff`, separately from the S5d changes:
+      - handle_review_prepare: main's run_review_agent() plus S5c's `forced` are both kept.
+      - review_batches: the challenger path now uses main's fail()/runner_failure, with "runner output rejected" for apply_verdicts. S5d's Err arm still records the cause as unchallenged (2000-char cap and code_span unchanged), and no ? discards the rows.
+      - runner_failure appends the --challenger-agent hint only when pass == "challenger" and call.vendor() is Some, so never under RUNNER_CMD. A test covers both the challenger and finder lines.
+      - ratchet-set.json lists are unioned: s5c and s5d plus both bug2775 entries.
+      - n1: the "needs --agent" arm and its test are dropped, correctly. With main's default vendor, finder.agent is None only under RUNNER_CMD, so the remaining arm's message is accurate.
+    MUST-2: PARTIAL_REVIEW_EXIT_CODE is 4, with its own EXIT_CODES row, and code 3's label is restored. The test asserts 4 is distinct from 3 and from 1, and that fail-on still wins. I checked that 4 was unused.
+    Note (advisor ask): the S5d changes and the resolutions share the one merge commit rather than a separate first commit. remerge-diff separates them cleanly, so I accept it.
+    p52 = S5c + S5d after the merge, built as a single tree-equal commit on main.
+  created_at: 2026-11-27T01:25:48.048865423Z
+  modified_at: 2026-11-27T01:25:48.048865423Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
