@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T16:38:20.706287492Z
-modified_at: 2026-11-27T15:21:19.148460202Z
+modified_at: 2026-11-27T16:39:47.069534336Z
 req_type: Story
 tags:
 - agents
@@ -199,6 +199,13 @@ comments:
   content: 'DEFERRED FOLLOW-UP from #4680 S1a r1 review (approved @9e1ce186; p3), for S1b: standalone_implementer.rs note_failed_run records the outage (~1839), but the retained-merge early return (~1854-1877) builds its StandaloneImplementerExit from `detail` alone. A usage-limit stop on that path refuses later launches, yet the lane''s failure message never says `agent usage limit: ...`. Prefix outage_note there too, or move the prefixing into S1b''s vendor_unavailable_exit.'
   created_at: 2026-11-27T15:21:19.148460202Z
   modified_at: 2026-11-27T15:21:19.148460202Z
+- id: 01a21de0-947d-7aa0-b980-17fd3cabf4c3
+  author: aida-auto-bump
+  content: |-
+    [aida:refs-landing] e9bce7139545
+    A reference merge (commit e9bce7139545, `(Refs STORY-3134)`) landed while this spec was In Progress, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
+  created_at: 2026-11-27T16:39:47.069526697Z
+  modified_at: 2026-11-27T16:39:47.069526697Z
 history:
 - id: 01a21393-1ee3-7441-ae2a-65732125161c
   author: joe
