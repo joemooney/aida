@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T23:17:10.601015886Z
-modified_at: 2026-11-27T23:26:43.673309305Z
+modified_at: 2026-11-27T23:27:04.871182793Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -36,6 +36,12 @@ comments:
   modified_at: 2026-11-27T23:26:40.627348956Z
   session_id: 01a21f53d483
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21f55-78a7-7292-9fdf-f4e57abad1ac
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3935-admission-retry-followups` at head `82c120dd1cf960e4272004b5cae7243b8d45aa67`.'
+  created_at: 2026-11-27T23:27:04.871179853Z
+  modified_at: 2026-11-27T23:27:04.871179853Z
+  session_id: 01a21f53d483
 history:
 - id: 01a21f4c-d3f4-7142-ba60-76a568e39c90
   author: joe
