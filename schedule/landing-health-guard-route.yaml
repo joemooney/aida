@@ -8,6 +8,6 @@ note: 'Reran landing-health. Its three-PR shared signature is the aggregate and 
 due_since: 2026-11-21T07:03:33.426507094Z
 due_reason: on CronJobFailed:landing-health-guard
 due_failure:
-  trip_id: landing-health-guard@2026-11-27T20:19:13.679344458Z
+  trip_id: landing-health-guard@2026-11-27T20:36:49.940684827Z
   job: landing-health-guard
-  error: 'exit 1: landing-health: main tip age 148 minutes; 10 open PRs; #4755: awaiting review; #4754: awaiting review; #4753: awaiting review; #4752: awaiting review; #4751: CI red: Build (ubuntu-latest); #4750: awaiting review; #4741: awaiting review; #4729: awaiting review; #4652: awaiting review; #4606: awaiting review'
+  error: 'exit 124: timed out: doctor check landing-health --fail-on-findings did not complete within 120s (killed)'
