@@ -10,6 +10,8 @@
 # listener to the host broker -> wait for broker readiness -> run the seat
 # preflight under the filter -> exec the vendor. No model work before ready.
 
+import re
+
 O_NONBLOCK_FLAG = 0o4000
 NETLINK_ROUTE = 0
 PR_SET_DUMPABLE = 4
@@ -224,14 +226,44 @@ def relay(listener, proxy, connector, port):
         threading.Thread(target=relay_client, args=(conn, proxy), daemon=True).start()
 
 
+# Diagnostics only: the refusal names what the probe said, never a secret.
+# trace:TASK-3927 | ai:claude
+SECRET_ASSIGNMENT = re.compile(
+    r'(?i)([\w.-]*(?:key|token|secret|passw(?:or)?d|pwd|credential|auth)[\w.-]*'
+    r'["\']?\s*[=:]\s*)\S+')
+SECRET_BEARER = re.compile(r'(?i)\b(bearer|basic)\s+\S+')
+SECRET_RUN = re.compile(r'[A-Za-z0-9+/_=-]{32,}')
+
+
+def redact_secrets(line):
+    # Keep the code span intact and terminal escapes off the operator's tty.
+    line = ''.join("'" if ch == '`' else ch if ch.isprintable() else '?' for ch in line)
+    line = SECRET_BEARER.sub(r'\1 [REDACTED]', line)
+    line = SECRET_ASSIGNMENT.sub(r'\1[REDACTED]', line)
+    return SECRET_RUN.sub('[REDACTED]', line)
+
+
+def preflight_refusal(returncode, lines, limit=20):
+    """Bounded (<= 4 KiB) refusal naming the exit code and redacted tail."""
+    tail = [ln.rstrip() for ln in lines if ln.strip()][-limit:]
+    text = 'contained requested-seat preflight refused (exit %s)' % returncode
+    if tail:
+        text += '; last %d probe output lines:\n' % len(tail) + '\n'.join(
+            '  `%s`' % redact_secrets(ln) for ln in tail)
+    else:
+        text += '; probe printed no output'
+    return text[:LIMIT]
+
+
 def seat_preflight(argv):
     """Run the requested-seat probe inside the boundary, under the filter."""
     process = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT, timeout=60)
     lines = process.stdout[-4096:].decode(errors='replace').splitlines()
-    require(process.returncode == 0 and
-            'seat_grant_valid=true expected_seat=true' in lines,
-            'contained requested-seat preflight refused')
+    ok = process.returncode == 0 and 'seat_grant_valid=true expected_seat=true' in lines
+    # A line cut by the 4 KiB bound could hide a secret's prefix; drop it.
+    shown = lines[1:] if len(process.stdout) > 4096 else lines
+    require(ok, '' if ok else preflight_refusal(process.returncode, shown))
 
 
 # A passing outer bwrap does not prove Claude can start its own sandbox.
