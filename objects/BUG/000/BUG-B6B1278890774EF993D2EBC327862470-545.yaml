@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T04:27:12.923122169Z
-modified_at: 2026-11-27T08:33:05.496781320Z
+modified_at: 2026-11-27T08:41:42.250883625Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -225,6 +225,15 @@ comments:
   content: Commit 47d9483372 references this requirement
   created_at: 2026-11-27T08:33:05.496781320Z
   modified_at: 2026-11-27T08:33:05.496781320Z
+  session_id: 01a21c1f3c2d
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21c2a-e26a-76a1-b0e0-355c875d7485
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 47d9483372. Round-3 CR (ratchet marker in test names): renamed bug_2784_rework_unions_ratchet_additions_in_sandbox_without_seat_hooks -> bug_2784_rework_unions_json_list_additions_in_sandbox_without_seat_hooks, bug_2784_publication_merge_unions_ratchet_additions -> bug_2784_publication_merge_unions_json_list_additions, helper bug_2784_ratchet_fixture -> bug_2784_json_list_fixture. Rename only, no behavior change. Evidence: python3 -m unittest tests.test_ci_structural_guards tests.test_ratchet_set OK (14); cargo test -p aida-cli-lib --lib bug_2784_ 4 passed; make check-ci-fast 47 gates passed. Residual: the compile-tier Ratchet set step runs only in CI; the structural-guard unittest it wraps is green locally.
+  created_at: 2026-11-27T08:41:42.250883625Z
+  modified_at: 2026-11-27T08:41:42.250883625Z
   session_id: 01a21c1f3c2d
   harness_version: 2.1.319 (Claude Code)
 history:
