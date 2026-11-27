@@ -1537,6 +1537,35 @@ comments:
   modified_at: 2026-11-27T00:01:58.984252191Z
   session_id: 01a21a317486
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21a59-4311-73e2-a2c2-5b090504264c
+  author: joe
+  content: |-
+    INTEGRATION PRE-CHECK PR #4699 (S5d, head 6fb95e670a): BLOCKED, one MUST. The content itself passes.
+    MUST-1, reconcile missing:
+    - Per the 16:30/16:52 rulings, S5d's first commit is `git merge origin/main` (≥8bdf384adf4), with the S5c/BUG-2775 resolutions and a "Reconcile with main" section in the body. The branch has a single commit on 24f1c9e7353 and origin/main is NOT an ancestor. merge-tree(head, origin/main) still conflicts in aida-cli-lib/src/review_prepare.rs and scripts/ratchet-set.json.
+    - Merging #4699 as it stands would leave integration unpromotable. p52 needs integration ⊇ main.
+    - Rework: merge origin/main into the branch and resolve:
+      - keep main's run_review_agent() and add `forced`;
+      - take main's fail()/runner_failure() for both the review and challenge passes, and put the --challenger-agent hint in the challenger pass only (never under RUNNER_CMD);
+      - S5d's new Err(err) arm, which records the cause as unchallenged, wraps main's runner_failure text instead of the old with_context;
+      - S5c/S5d tests move to main's wording;
+      - ratchet-set.json lists are unioned;
+      - n1 check: with main's default vendor, finder.agent is Some unless RUNNER_CMD is set, so keep the "needs --agent" arm only if it is still reachable, otherwise drop it and its test.
+    - Then rerun the targeted review_prepare/review_challenger/exit_code tests plus check-ci-fast.
+    Content, security lens: PASS.
+    - AC1:
+      - A failed challenger run, or unparsable verdicts, keeps the rows unchallenged and records the cause, capped at 2000 chars. There are no further challenge calls after the first failure.
+      - The cause renders through code_span in the report and comment.
+      - SARIF: results are reported (findings + unchallenged) then suppressed, so skip(findings.len()).take(unchallenged.len()) marks exactly the unchallenged. The builder sets no properties, so the overwrite is harmless.
+      - --fail-on gates findings + unchallenged + refuted.
+      - PartialReviewExit is returned after write, SARIF, post, fail-on and coverage, so rc=1 wins. exit_code_for_error maps it to 3.
+    - AC3: the n1 arm and test are present (see the MUST note on whether it is still reachable). n2 is the euid guard.
+    - Nit (not blocking): code 3 is shared with `--auto-complete` hard fail via the combined EXIT_CODES label, which the PR acknowledges and the distinct-codes test forces.
+    - AC2 docs are deferred to S5e, which is acceptable: about 255 lines, under the 300-line cap.
+  created_at: 2026-11-27T00:12:49.977603956Z
+  modified_at: 2026-11-27T00:12:49.977603956Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
