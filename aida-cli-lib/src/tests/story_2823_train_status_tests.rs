@@ -570,3 +570,46 @@ fn bug2622_stale_controller_identity_does_not_name_a_lock_holder() {
     let status = status_with(dir.path(), || None, &no_ci);
     assert_eq!(status.driver.unwrap().pid, None);
 }
+
+/// Landing-drought ages an orphaned lock from the record's `since`, and reads
+/// progress from the step clock and recorded run history.
+// trace:STORY-3131 | ai:claude
+#[test]
+fn story_3131_lock_evidence_ages_an_orphaned_lock_and_records_runs() {
+    let dir = tempfile::tempdir().unwrap();
+    assert!(journal::run_history(dir.path()).is_empty());
+    drop(journal::lock(dir.path()).unwrap());
+    assert_eq!(
+        journal::run_history(dir.path()).len(),
+        1,
+        "a run is recorded"
+    );
+
+    journal_train(dir.path(), journal::Step::Ci);
+    let _lock = journal::lock(dir.path()).unwrap();
+    let later = chrono::Utc::now() + chrono::TimeDelta::minutes(30);
+    let probes = |verdict: fn() -> Option<Verdict>| -> Option<LockEvidence> {
+        lock_evidence(
+            dir.path(),
+            &Probes {
+                now: later,
+                observe: &|_| verdict(),
+                ci: &no_ci,
+            },
+        )
+        .unwrap()
+    };
+    let orphan = probes(dead).unwrap();
+    assert_eq!(orphan.pid, None);
+    let held = orphan.held_secs.unwrap();
+    assert!((1790..=1810).contains(&held), "{held}");
+    let idle = orphan.idle_secs.unwrap();
+    assert!((1790..=1810).contains(&idle), "{idle}");
+    assert_eq!(orphan.train_prs, [900]);
+    assert_eq!(orphan.history_secs.len(), 1);
+    assert_eq!(probes(alive).unwrap().pid, Some(std::process::id()));
+
+    drop(_lock);
+    assert!(probes(alive).is_none(), "a free lock has no driver");
+    assert_eq!(journal::run_history(dir.path()).len(), 2);
+}
