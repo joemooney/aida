@@ -61,8 +61,8 @@ pub(crate) fn reviewer_session_ended(root: &Path, record: &JsonObj) -> bool {
             .all(|id| match crate::leases::read_exact_lease(root, id) {
                 Ok(None) => true,
                 Ok(Some(lease)) => {
-                    crate::leases::lease_state_for(&lease, &[], chrono::Utc::now())
-                        == aida_core::liveness::LeaseState::Stale
+                    crate::ownership::reader::current_lease_state(&lease)
+                        == crate::LeaseState::Stale
                 }
                 Err(_) => false,
             })
