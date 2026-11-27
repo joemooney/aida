@@ -1,0 +1,29 @@
+id: 01a21ba4-4a5b-7a43-8d0a-cd653b280714
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-546
+agreed_id: BUG-2785
+title: A queued rework round launches even when its PR is already FINAL-approved at the current head (stale filler), and its push voids the approval
+description: |
+  advisor-122 2026-11-26 23:19 (filed by product-15). Incident: a BUG-2781 r2 rework, queued at 22:08 by a product filler, waited ~1h for a dell1 slot and LAUNCHED at 23:09, although #4718 had reached a FINAL approval at its current head a32d61ac at 22:28 (r1 had already delivered the fix). A push from that lane would have voided an approval the advisor's watcher was routing to a train. Product-15 added a filler-side guard; this makes it a tool rule for every seat.
+
+  ## Acceptance
+  - AC1: `aida queue rework SPEC` and the lane launch (queue work --force-claim on a PR branch) REFUSE a rework round when the spec's open PR has a FINAL (not sweep-pending) approval recorded at the PR's CURRENT head, naming the approval (PR, sha, reviewer, recorded_at) and the override (e.g. `--despite-approval` with a reason, recorded on the spec).
+  - AC2: the check runs at LAUNCH time (not only at queue time), so a queued round that became stale while waiting for a slot is refused when it would start.
+  - AC3: tests: an approved-at-head PR → refused, with the approval named; approved at an OLDER head → allowed; a sweep-pending CR → allowed; the override → allowed and recorded.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T06:14:41.499443358Z
+modified_at: 2026-11-27T06:14:41.499443358Z
+req_type: Bug
+tags:
+- lanes
+- queue
+- review
+filed_at:
+  code_sha: 1914f9fdd1504307eec22ea247f5ac4c2ec562a9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1914f9fdd15
+  vendor: claude
