@@ -25,12 +25,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 4683` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T19:53:25.566601905Z
-modified_at: 2026-11-26T19:54:01.980138344Z
+modified_at: 2026-11-27T00:51:46.067426491Z
 req_type: Story
 relationships:
 - rel_type:
@@ -53,6 +53,12 @@ relationships:
   target_id: 01a21102-e2f1-7e62-9354-693f46b82d22
   created_at: 2026-11-26T19:54:01.980098056Z
   created_by: dirtlab
+comments:
+- id: 01a21a7c-a513-7ae0-ac42-83b0f2f08fb8
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #4683 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-11-27T00:51:46.067586115Z
+  modified_at: 2026-11-27T00:51:46.067586115Z
 history:
 - id: 01a2196b-9ab7-7541-ba20-8ea22bf6c887
   author: dirtlab
@@ -84,6 +90,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21a7c-a513-7ae0-ac42-83c1334e324e
+  author: aida-auto-bump
+  timestamp: 2026-11-27T00:51:46.067590410Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: 0f7f446ae70fbae45f220a8d9a7e6477cae3c25d
   branch: task-3919-deputy-reexec
@@ -93,3 +106,6 @@ filed_at:
   vendor: claude
   session: 01a218eed076
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-27T00:51:46.067584598Z
