@@ -68,6 +68,12 @@ impl RunnerCall<'_> {
         self.agent.filter(|_| self.var(RUNNER_CMD).is_none())
     }
 
+    /// Whether this pass is verified unable to read local files: a custom
+    /// runner never is. trace:BUG-2783 | ai:claude
+    pub(crate) fn no_read(&self) -> bool {
+        self.vendor().is_some_and(|agent| agent.no_read)
+    }
+
     /// `agent`'s binary on the operator's PATH, as `run` would resolve it.
     pub(crate) fn on_path(&self, agent: &ReviewVendor) -> Option<PathBuf> {
         std::env::split_paths(self.var("PATH").unwrap_or_default())
