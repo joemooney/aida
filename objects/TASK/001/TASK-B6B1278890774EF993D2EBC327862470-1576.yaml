@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T20:03:47.207632415Z
-modified_at: 2026-11-27T20:18:19.410217682Z
+modified_at: 2026-11-27T20:26:39.273753374Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -36,6 +36,18 @@ comments:
     - None (brief's "first alert" hypothesis does not match the code; addressed above).
   created_at: 2026-11-27T20:18:19.410217682Z
   modified_at: 2026-11-27T20:18:19.410217682Z
+  session_id: 01a21ea2ef37
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21eb0-4929-79a1-8f5a-0fe4169570e6
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: c8d3152d2b9a45eb0e34051e0021fb39462f5c08 (origin/main...HEAD: 1 file, +12/-4, test-only).
+    AC1: [evidence: behavioral-test] review_watch_train_service.rs:25-38 records only refusals carrying the holder line (bounded 10 attempts, lazy map/find, no sleep) and asserts the alert body built from them. Lane job j20261127T201833027-6-0 ran the test body 20x in one invocation (temporary outer loop, reverted before commit) alongside the other 5 bug2746 tests: 6 passed, 20/20 iterations.
+    AC2: [evidence: manual-inspection] failures.json holds a single alert built from the 3rd failure's reason (advisor_loop_service.rs record_outcome_with_push), so there is no alert ordering to fix. The miss comes from review_watch.rs:692-725 reporting unknown unless /proc/locks shows exactly this pid on the inode, which flock_holders documents as best effort. Not a product bug; test-only.
+    Probes: a regression that drops the activity from member selection still fails (find exhausts -> expect panics); one that drops it from the alert path fails the final split_once. Unconfirmed: whether CI missed the holder because the /proc/locks read raced or for another reason; the bounded retry covers any transient cause and fails when the miss persists. Residual: the failure path costs ~10s per failed failure.
+  created_at: 2026-11-27T20:26:39.273753374Z
+  modified_at: 2026-11-27T20:26:39.273753374Z
   session_id: 01a21ea2ef37
   harness_version: 2.1.319 (Claude Code)
 history:
