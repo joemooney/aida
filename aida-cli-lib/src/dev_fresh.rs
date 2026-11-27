@@ -149,6 +149,107 @@ pub(crate) fn check(
     assess(behind, times.last().copied(), now_secs, limits)
 }
 
+/// The autobuild cron's log: `AIDA_AUTOBUILD_LOG`, else the script's default
+/// `~/.aida/autobuild.log`.
+// trace:BUG-2787 | ai:claude
+pub(crate) fn autobuild_log_path() -> Option<PathBuf> {
+    aida_core::exec_context::Environment::capture()
+        .get("AIDA_AUTOBUILD_LOG")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| crate::home_dir().map(|h| h.join(".aida/autobuild.log")))
+}
+
+/// The trailing run of `skip:` lines in an autobuild log: (first skip time,
+/// last skip time, last reason). A promotion or a failure ends a run; other
+/// lines (CI notes, fetch output) are neutral. None when the log does not end
+/// in skips.
+fn skip_streak(log: &str) -> Option<(String, String, String)> {
+    let mut streak: Option<(String, String, String)> = None;
+    for line in log.lines() {
+        let Some(stamp) = line
+            .get(..19)
+            .filter(|s| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S").is_ok())
+        else {
+            continue;
+        };
+        let msg = line[19..].trim_start();
+        if let Some(reason) = msg.strip_prefix("skip:") {
+            let since = streak.take().map_or_else(|| stamp.to_string(), |s| s.0);
+            streak = Some((since, stamp.to_string(), reason.trim().to_string()));
+        } else if msg.starts_with("promoted and verified") || msg.starts_with("FAILED:") {
+            streak = None;
+        }
+    }
+    streak
+}
+
+/// The last 256 KiB of the log, starting at a whole line.
+fn read_log_tail(path: &Path) -> std::io::Result<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = std::fs::File::open(path)?;
+    let start = file.metadata()?.len().saturating_sub(256 * 1024);
+    file.seek(SeekFrom::Start(start))?;
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)?;
+    let text = String::from_utf8_lossy(&bytes).into_owned();
+    Ok(match (start, text.find('\n')) {
+        (0, _) | (_, None) => text,
+        (_, Some(nl)) => text[nl + 1..].to_string(),
+    })
+}
+
+/// Why the autobuild is not promoting, and the one hint that clears it:
+/// (note, hint). None when the log does not end in skips. A missing or
+/// unreadable log is reported, never an error. Report only: the primary
+/// checkout is never touched.
+// trace:BUG-2787 | ai:claude
+pub(crate) fn autobuild_note(log: Option<&Path>, primary: &Path) -> Option<(String, String)> {
+    let rerun = "then rerun the autobuild (scripts/aida-autobuild.sh)";
+    let Some(path) = log else {
+        return Some((
+            "autobuild log location unknown (no home directory)".into(),
+            format!("set AIDA_AUTOBUILD_LOG, {rerun}"),
+        ));
+    };
+    let text = match read_log_tail(path) {
+        Ok(text) => text,
+        Err(e) => {
+            let note = if e.kind() == std::io::ErrorKind::NotFound {
+                format!("no autobuild log at {}", path.display())
+            } else {
+                format!("cannot read autobuild log {}: {e}", path.display())
+            };
+            return Some((
+                note,
+                format!(
+                    "install the autobuild cron or run `aida dev build` from clean main in {}",
+                    primary.display()
+                ),
+            ));
+        }
+    };
+    let (since, last, reason) = skip_streak(&text)?;
+    let hint = if reason.contains("primary checkout must be on main") {
+        format!(
+            "inspect `git -C {} status`; stash or commit stray changes, {rerun}",
+            primary.display()
+        )
+    } else {
+        format!("fix the skip reason above, {rerun}")
+    };
+    Some((
+        format!("autobuild skipping since {since} (last {last}): {reason}"),
+        hint,
+    ))
+}
+
+/// "live binary Nh / M change(s) behind main", with the autobuild note.
+pub(crate) fn behind_line(behind: u32, hours: u32, note: Option<&str>) -> String {
+    let head = format!("live binary {hours}h / {behind} change(s) behind main");
+    note.map_or(head.clone(), |n| format!("{head}; {n}"))
+}
+
 fn resolve_repo(repo: Option<&str>) -> Result<PathBuf> {
     match repo {
         Some(p) => Ok(PathBuf::from(p)),
@@ -238,6 +339,11 @@ fn run_check_fresh(
                 limits.max_hours,
                 repo.display()
             );
+            // trace:BUG-2787 | ai:claude
+            if let Some((note, hint)) = autobuild_note(autobuild_log_path().as_deref(), repo) {
+                eprintln!("  {}", behind_line(*behind, *hours, Some(&note)));
+                eprintln!("  Clear it: {hint}");
+            }
             EXIT_STALE
         }
         Freshness::Unknown(why) => {
@@ -429,6 +535,63 @@ mod tests {
                 hours: 6
             }
         );
+    }
+
+    // trace:BUG-2787 | ai:claude
+    #[test]
+    fn stale_binary_names_the_autobuild_skip_streak_and_its_clearing_hint() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        run(repo, &["init", "-q", "-b", "main"]);
+        let t0 = 1_700_000_000;
+        let built = commit_at(repo, t0);
+        let now = t0 + 12 * 3600;
+        for age in [11, 6, 1] {
+            commit_at(repo, now - age * 3600);
+        }
+        run(repo, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+        let Freshness::Stale { behind, hours } = check(repo, &built, now, LIMITS) else {
+            panic!("the built sha is stale");
+        };
+        let dirty = "skip: primary checkout must be on main with no visible tracked changes or other hidden entries";
+        let log = dir.path().join("autobuild.log");
+        std::fs::write(
+            &log,
+            format!(
+                "2026-11-26 23:30:01 promoted and verified: abc\n\
+                 2026-11-27 00:00:01 {dirty}\n\
+                 From github.com:x/y\n\
+                 2026-11-27 00:30:01 newer commits passed over: abc pending\n\
+                 2026-11-27 00:30:02 {dirty}\n\
+                 2026-11-27 11:30:01 {dirty}\n"
+            ),
+        )
+        .unwrap();
+        let (note, hint) = autobuild_note(Some(&log), repo).expect("skipping");
+        assert_eq!(
+            note,
+            "autobuild skipping since 2026-11-27 00:00:01 (last 2026-11-27 11:30:01): \
+             primary checkout must be on main with no visible tracked changes or other hidden entries"
+        );
+        assert!(
+            hint.contains(&format!("git -C {} status", repo.display())),
+            "{hint}"
+        );
+        assert_eq!(
+            behind_line(behind, hours, Some(&note)),
+            format!("live binary 11h / 3 change(s) behind main; {note}")
+        );
+        // A skip streak broken by a failure, then a success: no skip line.
+        std::fs::write(
+            &log,
+            format!("2026-11-27 00:00:01 {dirty}\n2026-11-27 00:30:01 FAILED: x\n2026-11-27 01:00:01 promoted and verified: abc\n"),
+        )
+        .unwrap();
+        assert_eq!(autobuild_note(Some(&log), repo), None);
+        // A missing log is reported, not an error.
+        let missing = dir.path().join("absent.log");
+        let (note, _) = autobuild_note(Some(&missing), repo).expect("reported");
+        assert!(note.contains("no autobuild log at"), "{note}");
     }
 
     /// Parse `aida dev check-fresh <args>` through the real CLI.

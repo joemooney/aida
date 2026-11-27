@@ -117,6 +117,35 @@ fn binary_check(
     }
 }
 
+/// Advisory row: how far the live binary is behind origin/main and why the
+/// autobuild is skipping. None when it is not behind or that is unknown.
+// trace:BUG-2787 | ai:claude
+fn autobuild_check(root: &Path, built: &str, now: i64) -> Option<Check> {
+    use crate::dev_fresh::{check as fresh, FreshLimits, Freshness};
+    let any = FreshLimits {
+        max_behind: u32::MAX,
+        max_hours: u32::MAX,
+    };
+    let (Freshness::Fresh { behind, hours } | Freshness::Stale { behind, hours }) =
+        fresh(root, built, now, any)
+    else {
+        return None;
+    };
+    if behind == 0 {
+        return None;
+    }
+    let log = crate::dev_fresh::autobuild_log_path();
+    let note = crate::dev_fresh::autobuild_note(log.as_deref(), root);
+    let detail = crate::dev_fresh::behind_line(behind, hours, note.as_ref().map(|n| n.0.as_str()));
+    Some(advisory(check(
+        "autobuild",
+        note.is_none(),
+        false,
+        detail,
+        note.as_ref().map_or("", |n| n.1.as_str()),
+    )))
+}
+
 fn wrap_check(explicit: Option<bool>) -> Check {
     check(
         "os-wrap",
@@ -431,6 +460,11 @@ fn inspect(root: &Path, live_store: bool) -> Vec<Check> {
         crate::upgrade_release::build_git_dirty(),
         main.as_deref(),
     );
+    // A behind dev binary also says why the autobuild is not promoting.
+    // trace:BUG-2787 | ai:claude
+    let behind = (dev_build && same_project && !binary.pass)
+        .then(|| autobuild_check(root, built, chrono::Utc::now().timestamp()))
+        .flatten();
     checks.push(if dev_build || !live_store {
         binary
     } else {
@@ -440,6 +474,7 @@ fn inspect(root: &Path, live_store: bool) -> Vec<Check> {
             crate::upgrade_release::build_git_dirty(),
         )
     });
+    checks.extend(behind);
     let store = root.join(".aida-store");
     let head = git(&store, &["rev-parse", "HEAD"]);
     let remote = live_store
