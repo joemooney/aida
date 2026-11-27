@@ -1098,21 +1098,22 @@ pub(crate) fn refuse_failed_gate(main: &Path, branch: &str) -> Result<()> {
     Ok(())
 }
 
-/// The branch's receipt, relative to `main`, when it reads `fail` or cannot
-/// be read: for a caller that routes around a red gate instead of refusing.
+/// Why the branch's receipt vetoes moving its PR branch: it reads `fail`, or
+/// it cannot be read (fail closed). The path is relative to `main`. For a
+/// caller that routes around a red gate instead of refusing.
 // trace:TASK-3928 | ai:claude
-pub(crate) fn failed_receipt(main: &Path, branch: &str) -> Option<PathBuf> {
+pub(crate) fn failed_receipt(main: &Path, branch: &str) -> Option<String> {
+    let full = path(main, branch);
+    let shown = full.strip_prefix(main).unwrap_or(&full).display();
     match read(main, branch) {
         Ok(None) => None,
         Ok(Some(r)) if r.marker != "fail" => None,
-        _ => {
-            let full = path(main, branch);
-            Some(
-                full.strip_prefix(main)
-                    .map(Path::to_path_buf)
-                    .unwrap_or(full),
-            )
-        }
+        Ok(Some(_)) => Some(format!(
+            "red fast-gate receipt {shown} for {branch} reads fail"
+        )),
+        Err(e) => Some(format!(
+            "unreadable fast-gate receipt {shown} for {branch} ({e:#})"
+        )),
     }
 }
 

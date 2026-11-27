@@ -313,15 +313,9 @@ fn guarded_push(
 ) -> Result<Pushed> {
     imported_trailers(main, staged, lane.spec, host.store)?;
     let mut pr_refused = None;
-    // A red fast-gate receipt vetoes the PR branch as ship --from-seat does
+    // A red or unreadable fast-gate receipt vetoes the PR branch as ship --from-seat does
     // (BUG-2596), so the work goes to the salvage ref. trace:TASK-3928 | ai:claude
-    let red = crate::lane_fast_gate::failed_receipt(main, lane.branch).map(|receipt| {
-        anyhow::anyhow!(
-            "red fast-gate receipt {} for {} reads fail",
-            receipt.display(),
-            lane.branch
-        )
-    });
+    let red = crate::lane_fast_gate::failed_receipt(main, lane.branch).map(anyhow::Error::msg);
     let target = match lane.open_pr {
         Some(pr) => match red.map_or_else(|| (host.pr_head)(main, lane.branch), Err) {
             Ok(()) => lane.branch.to_owned(),
