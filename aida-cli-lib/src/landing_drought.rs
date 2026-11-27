@@ -559,6 +559,13 @@ fn ready_of(pr: &serde_json::Value, l: &Lookups<'_>) -> Result<Option<Ready>> {
     }))
 }
 
+/// The train-lock evidence from the MAIN worktree's `.aida/train`, where the
+/// train holds its lock: a seat or lane worktree's own `.aida` never has it.
+// trace:STORY-3131 | ai:claude
+fn train_lock(root: &Path, now: DateTime<Utc>) -> Result<Option<crate::pr_train::LockEvidence>> {
+    crate::pr_train::lock_driver(&crate::main_worktree_root_from(root), now)
+}
+
 pub(crate) fn scan(
     exec: &aida_core::exec_context::ExecContext,
 ) -> Result<(Policy, Vec<DoctorFinding>)> {
@@ -604,7 +611,7 @@ pub(crate) fn scan(
     for pr in crate::stalled_reviews::open_prs(root)? {
         ready.extend(ready_of(&pr, &lookups)?);
     }
-    let lock = crate::pr_train::lock_driver(root, now)?.map(|e| {
+    let lock = train_lock(&train_root, now)?.map(|e| {
         let minutes = |s: u64| i64::try_from(s / 60).unwrap_or(i64::MAX);
         let mut holder = LockHolder {
             pid: e.pid,
@@ -619,7 +626,7 @@ pub(crate) fn scan(
             let live: Vec<_> = e
                 .train_prs
                 .iter()
-                .map(|pr| crate::pr_train::train_ci_live(root, *pr))
+                .map(|pr| crate::pr_train::train_ci_live(&train_root, *pr))
                 .collect();
             holder.ci_live = if live.contains(&Some(true)) {
                 Some(true)

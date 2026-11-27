@@ -32,13 +32,18 @@ pub(crate) mod culprit;
 #[path = "pr_train_journal.rs"]
 mod journal;
 pub(crate) use journal::TrainJournalBusy;
+/// Holds the train run lock in `dir` until dropped (tests only).
+#[cfg(test)]
+pub(crate) fn hold_run_lock_for_test(dir: &std::path::Path) -> Result<impl Drop> {
+    journal::lock(dir)
+}
 #[path = "pr_train_overlap.rs"]
 mod overlap;
 // trace:STORY-2823 | ai:claude
 #[path = "pr_train_status.rs"]
 mod status;
 pub(crate) use status::{
-    lock_driver, train_ci_live, train_status, TrainStatusExit, NO_TRAIN_EXIT_CODE,
+    lock_driver, train_ci_live, train_status, LockEvidence, TrainStatusExit, NO_TRAIN_EXIT_CODE,
     ORPHANED_EXIT_CODE,
 };
 // trace:BUG-2750 | ai:codex

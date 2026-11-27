@@ -91,6 +91,39 @@ fn bug2777_scan_reads_train_state_from_the_main_worktree() {
     assert_eq!(local, None, "the seat's own .aida has no train state");
 }
 
+/// From a seat worktree, the train lock is read from the main worktree, so
+/// a running train is seen (not misreported as an unknown cause).
+// trace:STORY-3131 | ai:claude
+#[test]
+fn story_3131_s2_scan_reads_the_train_lock_from_the_main_worktree() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (main, seat) = (tmp.path().join("main"), tmp.path().join("seat"));
+    std::fs::create_dir_all(&main).unwrap();
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .arg("-C")
+            .arg(&main)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    git(&["init", "-q", "-b", "main"]);
+    git(&["commit", "-q", "--allow-empty", "-m", "init"]);
+    git(&["worktree", "add", "-q", "--detach", seat.to_str().unwrap()]);
+    let dir = main.join(".aida/train");
+    std::fs::create_dir_all(&dir).unwrap();
+    let _held = crate::pr_train::hold_run_lock_for_test(&dir).unwrap();
+    let lock = train_lock(&seat, Utc::now()).unwrap();
+    assert_eq!(lock.and_then(|e| e.pid), Some(std::process::id()));
+    let local = crate::pr_train::lock_driver(&seat, Utc::now()).unwrap();
+    assert!(local.is_none(), "the seat's own .aida holds no train lock");
+}
+
 #[test]
 fn story_3131_defaults_when_section_absent() {
     let policy = Policy::read(None).unwrap();
