@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T23:26:17.322312937Z
-modified_at: 2026-11-27T04:20:22.951786428Z
+modified_at: 2026-11-27T04:23:55.652171474Z
 req_type: Story
 tags:
 - containment
@@ -30,6 +30,12 @@ tags:
 - lanes
 - strict
 - vendors
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a21b3e-9781-7721-b2f4-15eaa59b4760
+  created_at: 2026-11-27T04:23:55.652141140Z
+  created_by: dirtlab
 comments:
 - id: 01a21a33-1026-7a40-bd74-aa93d57650d4
   author: joe
@@ -224,6 +230,10 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Done
+- id: 01a21b3e-f228-7071-bc77-8eb6d004e3c9
+  author: dirtlab
+  timestamp: 2026-11-27T04:23:59.784130606Z
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 52825e81d1c3fbab8e5bf382ef81641956f0e559
