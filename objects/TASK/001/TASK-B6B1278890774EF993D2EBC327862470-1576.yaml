@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   - AC1: the test selects the specific member-selection alert (by kind/subject), or waits boundedly for the holder line, instead of taking the first alert; no sleep-based timing.
   - AC2: the fix is test-only unless the alert ordering is a real product bug (then say so in the PR).
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T20:03:47.207632415Z
-modified_at: 2026-11-27T20:26:39.273753374Z
+modified_at: 2026-11-27T20:39:08.181906652Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -50,6 +50,12 @@ comments:
   modified_at: 2026-11-27T20:26:39.273753374Z
   session_id: 01a21ea2ef37
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21ebb-b695-7a31-8565-9898cb98c03f
+  author: aida-publication-done
+  content: Implementer push c8d3152d2b9a declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-27T20:39:08.181906139Z
+  modified_at: 2026-11-27T20:39:08.181906139Z
+  session_id: 01a21ea2ef37
 history:
 - id: 01a21e9b-8e40-74c2-8dbf-64637ee9b6aa
   author: joe
@@ -62,6 +68,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21ebb-b695-7a31-8565-98897101bd8e
+  author: aida-publication-done
+  timestamp: 2026-11-27T20:39:08.181904646Z
+  session_id: 01a21ea2ef37
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 8e06142ac48de544984d38cafbfdb2b0a965fec5
   branch: main
