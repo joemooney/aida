@@ -1,0 +1,33 @@
+id: 01a21b8f-c125-7490-a270-00f7e8c353a1
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-391
+title: 'Review PR-4725: [AI:claude] fix(review): --post-comment refuses review runners without verified no-read confinement (Refs BUG-2783)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a21b24`) for branch `bug-2783-review-no-read`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4725>
+  - Branch: `bug-2783-review-no-read` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2783
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4725` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-27T05:52:15.653830724Z
+modified_at: 2026-11-27T05:52:15.653830724Z
+req_type: Story
+filed_at:
+  code_sha: ab00cac8615f5a15066d816b9df95773e07f40e7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ab00cac861
