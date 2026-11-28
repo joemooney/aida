@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 70b9880abb40efc7fabb59c352a2fe98a31fbffb
 
   Wording: when the retries are spent on writers that run a deleted binary, the final error still says they 'should exit on their own' (retire.rs WriterAdmissionUnknown Display). Its only next step is the dry run. A long-lived old-binary MCP or server process does not exit by itself, so the final refusal should say how to stop or restart the named pid.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T22:06:15.107437949Z
-modified_at: 2026-11-28T01:14:16.591305675Z
+modified_at: 2026-11-28T01:14:18.487540257Z
 req_type: Task
 tags:
 - carried-from:BUG-2778
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21fb7-a3f7-72e0-b095-4939beea5ff2
+  author: joe
+  timestamp: 2026-11-28T01:14:18.487538015Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 70b9880abb40efc7fabb59c352a2fe98a31fbffb
   branch: pr-4693
