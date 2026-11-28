@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T20:41:39.669506636Z
-modified_at: 2026-11-26T05:10:57.512180748Z
+modified_at: 2026-11-28T00:58:22.284125647Z
 req_type: Bug
 tags:
 - admission
@@ -165,6 +165,11 @@ comments:
   created_at: 2026-11-26T00:05:05.984784561Z
   modified_at: 2026-11-26T00:05:05.984784561Z
   session_id: 01a214f7261f
+- id: 01a21fa9-0ccc-7870-8d9f-3a250b785fb3
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3440): PassClaim::decide''s staleness recheck (aida-cli-lib/src/review_watch.rs, decide) compares only current.head and current.base, and forge::Change.base is the base branch name, not a SHA. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T00:58:22.284125647Z
+  modified_at: 2026-11-28T00:58:22.284125647Z
 history:
 - id: 01a21471-e81f-7ab0-955e-3d5904886e04
   author: joe
