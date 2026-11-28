@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T22:51:37.391070Z
-modified_at: 2026-11-27T01:49:34.206531311Z
+modified_at: 2026-11-28T01:15:34.636886105Z
 req_type: Bug
 tags:
 - STORY-3120
@@ -95,6 +95,11 @@ comments:
   created_at: 2026-11-27T00:17:37.019949166Z
   modified_at: 2026-11-27T00:17:37.019949166Z
   session_id: 01a21a180dfa
+- id: 01a21fb8-cd6c-7483-9086-2e6420c9e497
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3528): find_verdicts retries a full JSON parse from every ''{'' in the challenger output. Adversarial output with many ''{'' that each start a long, deep or unterminated value costs O(n^2) parse work. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:15:34.636886105Z
+  modified_at: 2026-11-28T01:15:34.636886105Z
 history:
 - id: 01a21a12-632b-7fd1-8ace-6d3a575c7e9f
   author: joe
