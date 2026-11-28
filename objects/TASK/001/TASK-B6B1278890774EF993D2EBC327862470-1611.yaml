@@ -9,12 +9,12 @@ description: |-
   - AC3: tests for --from with no changes and for a workspace with no changes.
 
   Source: docs/plans/2026-11-27-fresh-user-walkthrough.md (on branch task-3951-fresh-user-walkthrough / PR #4782), section F11. Advisor aida-d3 2026-11-27 20:30 priority order; filed by product-15 for laning now (one spec per lane).
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:28:33.534011321Z
-modified_at: 2026-11-28T05:26:46.773426371Z
+modified_at: 2026-11-28T07:04:14.674172435Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -107,6 +107,22 @@ history:
   author: joe
   timestamp: 2026-11-28T05:26:46.873777648Z
   changes: []
+- id: 01a220f8-0402-7a60-8a0d-6abe4809421f
+  author: aida-auto-bump
+  timestamp: 2026-11-28T07:04:14.594364209Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a220f8-0452-79d2-ad62-3033dee7c365
+  timestamp: 2026-11-28T07:04:14.674167976Z
+  agent: aida
+  commit_sha: f188bd9ed3501bb6c8097cff1a6badd988a89a4b
+  summary: 'TASK-3953 (completing): all three acceptance criteria met at e2d62a346b3c; CI pending at review time. AC1 verified by task3953_empty_range_says_nothing_to_review_never_a_pass: on an empty --from HEAD range with --run-review, review_prepare.rs builds the nothing_to_review message (resolved base ref, merge base and head SHAs, plus a hint when there are uncommitted changes), skips run_review_agent (the runner marker file is never created), and returns NothingToReviewExit. exit_code_for_error maps that to 5, registered in the EXIT_CODES distinctness table in orchestrator_leases.rs. No other entry uses 5 (the others are 0, 1, 2, 3, 4, 7, 17, 18, 20+ and 30). Exit 5 is documented in the `review prepare` --help text (golden snapshot updated), docs/review-process.md and the showcase page. AC2 verified by both new tests: SARIF sets invocations[0].executionSuccessful=false, adds a ''No files were reviewed.'' warning notification and properties.filesReviewed=0; the Markdown report adds a ''## Nothing to review'' section saying this is not a pass and shows coverage ''Passed'' as not applicable; JSON carries nothing_to_review. AC3 verified by task3953_empty_range_says_nothing_to_review_never_a_pass (--from with no changes) and task3953_clean_workspace_says_nothing_to_review (no workspace changes); both are added to ratchet-set.json. The existing all-excluded test now expects exit 5 with the excluded-count message. The s5-era fixture gained a second commit so its range is no longer empty, which is correct. The report, SARIF and comment are still written before the exit-5 return. Hostile refs and paths go through code_span. Stale base: main moved one commit (BUG-2783 slice 2, no-read runner confinement, which also touches review_prepare.rs, docs/review-process.md and ratchet-set.json). The landed tree merges cleanly, and the empty-scope path never reaches the runner the base changed, so no finding depends on base drift. Observation, not a defect: on an empty scope, exit 5 takes precedence over --fail-on and coverage checks. Both are non-zero, so a gate still fails closed.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
@@ -119,3 +135,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-28T04:12:52.698369338Z
   implemented_by: dirtlab
+  completed_at: 2026-11-28T07:04:14.594356803Z
+  completion_sha: f188bd9ed3501bb6c8097cff1a6badd988a89a4b
