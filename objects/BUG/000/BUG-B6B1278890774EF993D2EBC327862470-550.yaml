@@ -19,8 +19,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-28T11:40:49.552942712Z
-modified_at: 2026-11-28T11:40:49.552942712Z
+modified_at: 2026-11-28T11:43:57.376316325Z
 req_type: Bug
+comments:
+- id: 01a221f8-19c0-7913-8efc-e1ba689ef6f3
+  author: joe
+  content: 'RULE (advisor aida-d3 2026-11-28 04:55): seats must never wrap aida pr train in an outer timeout; a call can sit in the admission queue for over an hour, so timeout 5400 can fire mid-CI. The driver must catch SIGTERM and checkpoint (AC2). Second case: #4806''s train #4814 also died at Open, with no timeout wrapper known, and Joe''s loop logs stopped at 21:18; cause unknown, so AC1/AC2 must hold for any kill.'
+  created_at: 2026-11-28T11:43:57.376316325Z
+  modified_at: 2026-11-28T11:43:57.376316325Z
 filed_at:
   code_sha: 6f4bd7e2493be2ecd3d53b1b5baf26803d64abc3
   branch: main
