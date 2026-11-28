@@ -11,6 +11,7 @@ import os
 import shutil
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -20,6 +21,8 @@ from urllib.parse import urlsplit
 ROOT = Path(__file__).resolve().parents[1]
 BINARY = str(Path(os.environ.get("AIDA_TEST_BIN", str(ROOT / "target/debug/aida"))).resolve())
 HOOK = ROOT / "scripts/ci-relay/pre-receive.py"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fixture_teardown import wait_for_fixture_processes  # noqa: E402  trace:TASK-3962 | ai:claude
 
 
 class Api(http.server.BaseHTTPRequestHandler):
@@ -101,7 +104,12 @@ class Fixture:
         self.server.shutdown()
         self.server.server_close()
         self.thread.join(timeout=5)
-        self.temp.cleanup()
+        # A CLI read may detach a cache-refresh worker into a temp project;
+        # removing the tree under it races ENOTEMPTY. trace:TASK-3962 | ai:claude
+        try:
+            wait_for_fixture_processes(self.temp.name)
+        finally:
+            self.temp.cleanup()
 
     def git(self, cwd, *args, ok=True, principal=None):
         env = dict(self.env)
