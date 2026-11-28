@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3960",
+  "publishes": [
+    {
+      "at": "2026-11-28T11:25:41.377058162Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-28T05:52:03.018523981Z",
+      "spec": "TASK-3960",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4798,
+        "verdict": "APPROVED",
+        "reviewed_sha": "0e08e12c1ac7f2d131d347326bb797453944daff"
+      }
+    },
+    {
+      "ts": "2026-11-28T07:04:16.744111720Z",
+      "spec": "TASK-3960",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4798,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "0e08e12c1ac7f2d131d347326bb797453944daff"
+      }
+    },
+    {
+      "ts": "2026-11-28T07:05:02.903795128Z",
+      "spec": "TASK-3960",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Advisor FIX-FIRST: conflicts with main after the first-run batch landed; a merge round is needed.",
+        "recovery_hint": "address the review findings, move TASK-3960 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-28T07:06:11.300092645Z",
+      "spec": "TASK-3960",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-28T08:02:58.044599757Z",
+      "spec": "TASK-3960",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4798,
+        "verdict": "APPROVED",
+        "reviewed_sha": "d27e23fa707754ff014d117cfbbb418e4e8ed09e"
+      }
+    },
+    {
+      "ts": "2026-11-28T11:21:30.340074282Z",
+      "spec": "TASK-3960",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4798
+      }
+    },
+    {
+      "ts": "2026-11-28T11:25:41.135115995Z",
+      "spec": "TASK-3960",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "6f4bd7e2493be2ecd3d53b1b5baf26803d64abc3",
+        "pr": 4798,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
