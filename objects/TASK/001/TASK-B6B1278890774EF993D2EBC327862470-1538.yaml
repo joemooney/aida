@@ -14,11 +14,16 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T22:14:32.609326838Z
-modified_at: 2026-11-28T01:15:50.327751281Z
+modified_at: 2026-11-28T01:16:00.952632714Z
 req_type: Task
 tags:
 - lanes
 - mailbox
+relationships:
+- rel_type: Supersedes
+  target_id: 01a21a8e-48d0-7941-8879-09a47bf255b2
+  created_at: 2026-11-28T01:16:00.952579319Z
+  created_by: joe
 comments:
 - id: 01a21a59-798e-7761-93cc-a156d5673f6d
   author: joe
@@ -197,6 +202,10 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a21fb9-3b14-71b0-8321-9f09dffc3dd3
+  author: joe
+  timestamp: 2026-11-28T01:16:02.708966183Z
+  changes: []
 processing_record:
 - id: 01a21b23-5eb7-78f2-bc87-18c6c3dde63f
   timestamp: 2026-11-27T03:53:52.567139068Z
