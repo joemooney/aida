@@ -1,0 +1,25 @@
+id: 01a2207e-20c9-7573-8754-0c139d8e13f6
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1628
+agreed_id: TASK-3959
+title: 'First-run: aida --help and review prepare --help are written for new users (F3, F9)'
+description: |-
+  ## Acceptance
+  - AC1 (F3): bare aida --help shows a short, grouped overview of the commands a new user needs (init, add, list, show, review prepare) with a pointer to the full list; the full list stays available (e.g. aida help --all).
+  - AC2 (F9): aida review prepare --help leads with the 3 common invocations (review a PR, a range, local work) and plain-English flag descriptions; developer-only flags are grouped under an advanced heading.
+  - AC3: golden help snapshots updated; no internal SPEC IDs in help text.
+
+  Source: docs/plans/2026-11-27-fresh-user-walkthrough.md, sections F3, F9 (on main after #4782). Advisor aida-d3 2026-11-27 20:30 priority (g); grouped by area by product-15 for laning now.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T04:51:06.569070472Z
+modified_at: 2026-11-28T04:51:06.569070472Z
+req_type: Task
+filed_at:
+  code_sha: 4b06a37b464472f759637aecf25042f98a4e33c2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c6
+  vendor: claude
