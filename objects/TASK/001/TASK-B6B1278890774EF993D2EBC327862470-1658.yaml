@@ -1,0 +1,33 @@
+id: 01a221a2-f6d5-7ef0-bf0a-a6cd13f8f124
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1658
+agreed_id: TASK-3965
+title: Bound every agent-CLI --version probe with a timeout and stdin=/dev/null (they hang CI gates)
+description: |-
+  Product-15 2026-11-28 03:20 at advisor aida-d3's 03:15 request. Root cause of two train failures: STORY-2838 S1 (p56 #4790) trains #4795 and #4809 both had CI (gates) killed at exactly 45:00 (its job timeout), because init's agent detection calls an agent CLI's --version with no bound and it blocks in CI.
+
+  Unbounded --version spawns on origin/main (grep; a nearby timeout/run_bounded counts as bounded):
+  - aida-cli-lib/src/init_cmd.rs:646  Command::new(program).arg("--version")  (agent detection, the p56 path)
+  - aida-cli-lib/src/init_cmd.rs:1981 Command::new("codex") --version
+  - aida-cli-lib/src/scaffold_cmd.rs:2279 Command::new("codex") --version
+  - aida-cli-lib/src/compete_cmd.rs:1423 Command::new(name) --version
+  - also unbounded but non-agent: remote_create.rs:371 (forge bin), dev_cmd.rs:1427, cast_recording.rs:53 (asciinema), show_negative.rs:614 (git)
+  Already bounded: implementer_preflight.rs:559 (run_bounded 10s), mail_wake.rs:127.
+
+  ## Acceptance
+  - AC1: every agent-CLI --version probe above (and the forge-bin one) goes through ONE shared bounded helper (reuse run_bounded / command_output_with_timeout_io): a short timeout (e.g. 5s), stdin=/dev/null, kill on timeout, reported as 'did not answer --version within Ns' (not a hang, not 'not installed').
+  - AC2: a test with a fake agent binary that sleeps forever asserts the probe returns within the bound for init detection and for the codex probes.
+  - AC3: a ratchet or test fails if a new Command::...arg("--version") spawn of an agent CLI bypasses the helper.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T10:10:57.877165375Z
+modified_at: 2026-11-28T10:10:57.877165375Z
+req_type: Task
+filed_at:
+  code_sha: eb18c450c68d9170041ea975e6283dcb02975138
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eb18c450c68
+  vendor: claude
