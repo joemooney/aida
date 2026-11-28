@@ -179,6 +179,66 @@ class RatchetSet(unittest.TestCase):
         self.assertRegex(makefile, r'(?m)^check-ci-compile: check-ratchets ')
         self.assertRegex(makefile, r'(?m)^check-ratchets:.*\n\t@python3 scripts/check-ratchets.py --manual auto$')
 
+    # trace:TASK-3937 | ai:claude
+    def test_only_set_names_an_unregistered_removed_or_colliding_test_without_building(self):
+        runner_spec = importlib.util.spec_from_file_location('ratchet_runner', ROOT / 'scripts/check-ratchets.py')
+        runner = importlib.util.module_from_spec(runner_spec)
+        runner_spec.loader.exec_module(runner)
+        module = ('#[cfg(test)]\nmod tests {\n    #[test]\n    fn guard_one() {}\n'
+                  '    #[tokio::test(flavor = "current_thread")]\n    async fn guard_two() {}\n'
+                  '    #[test]\n    #[ignore]\n    fn guard_slow() {}\n'
+                  '    #[cfg(windows)]\n    #[test]\n    fn guard_windows() {}\n    // #[test] fn guard_comment() {}\n}\n')
+        manifest = {'shared_modules': {'pkg/src/shared.rs': ['shared_guard']},
+                    'groups': [{'package': 'pkg', 'target': ['--lib'], 'filter': 'ratchet::tests::',
+                                'source': 'pkg/src/ratchet.rs', 'tests': ['guard_one', 'guard_two']}]}
+        unlisted = 'runs under cargo but is not listed in scripts/ratchet-set.json'
+        group = 'group ratchet::tests:: (pkg --lib): '
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+
+            def drift(**files):
+                for path, text in files.items():
+                    (root / path).parent.mkdir(parents=True, exist_ok=True)
+                    (root / path).write_text(text)
+                return runner.set_drift(manifest, root)
+
+            self.assertEqual(drift(**{'aida-ci-guards/Cargo.toml': '[lib]\npath = "lib.rs"\n',
+                                      'aida-ci-guards/lib.rs': '#[path = "../pkg/src/shared.rs"]\npub mod shared;\n',
+                                      'pkg/Cargo.toml': '[package]\nname = "pkg"\n',
+                                      'pkg/src/lib.rs': 'pub mod ratchet;\nmod other;\n',
+                                      'pkg/src/shared.rs': '#[test]\nfn shared_guard() {}\n',
+                                      'pkg/src/ratchet.rs': module,
+                                      'pkg/src/other.rs': 'mod inner {\n    #[test]\n    fn unrelated() {}\n}\n'}), [])
+            ratchet = 'pkg/src/ratchet.rs'
+            # A fixture module gains an unregistered test: named by module and test.
+            self.assertEqual(drift(**{ratchet: module.replace('{}\n', '{}\n    #[test]\n    fn guard_new() {}\n', 1)}),
+                             [f'{group}pkg/src/ratchet.rs: test ratchet::tests::guard_new {unlisted}'])
+            # Renamed: the listed name is gone and the new one is unlisted.
+            self.assertEqual(drift(**{ratchet: module.replace('guard_two', 'guard_2')}), [
+                f'{group}pkg/src/ratchet.rs: test ratchet::tests::guard_2 {unlisted}',
+                f'{group}pkg/src/ratchet.rs: listed test guard_two is not a test cargo runs (removed, renamed or ignored?)'])
+            # A test elsewhere whose path contains the filter is still run by cargo.
+            self.assertEqual(drift(**{ratchet: module, 'pkg/src/other.rs': 'mod ratchet { mod tests {\n#[test]\n'
+                                                                          'fn guard_one() {}\n} }\n'}),
+                             [f'{group}pkg/src/other.rs: test other::ratchet::tests::guard_one {unlisted}'])
+            # A macro-generated test cannot be counted from source, so it is refused.
+            self.assertEqual(drift(**{'pkg/src/other.rs': '', ratchet: module + 'macro_rules! case {\n'
+                                      '    ($n:ident) => { #[test] fn $n() {} };\n}\n'}),
+                             ['pkg/src/ratchet.rs: a macro-generated test (line 15) cannot be checked from source; '
+                              'write ratchet tests as plain #[test] fns'])
+            self.assertEqual(drift(**{ratchet: module, 'pkg/src/shared.rs': '#[test]\nfn shared_guard() {}\n'
+                                      '#[test]\nfn shared_new() {}\n'}),
+                             [f'shared_modules (aida-ci-guards --lib): pkg/src/shared.rs: test shared::shared_new {unlisted}'])
+        # The real manifest matches main, and the pre-push gate (fast tier, no cargo) runs the check.
+        self.assertEqual(runner.set_drift(json.loads((ROOT / 'scripts/ratchet-set.json').read_text())), [])
+        import yaml
+        import tomllib
+        steps = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())['jobs']['build']['steps']
+        self.assertIn({'name': 'Ratchet-set manifest source check', 'if': "matrix.shard == 'gates'", 'timeout-minutes': 2,
+                       'run': 'python3 scripts/check-ratchets.py --only-set'}, steps)
+        tiers = tomllib.loads((ROOT / 'scripts/ci-gate-tiers.toml').read_text())['tiers']
+        self.assertEqual(tiers['Ratchet-set manifest source check'], 'fast')
+
     def test_fast_compile_and_preflight_run_the_same_set(self):
         import yaml
         workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
