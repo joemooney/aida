@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-28T02:44:56.005528171Z
+modified_at: 2026-11-28T02:55:34.661490947Z
 req_type: Story
 tags:
 - integration
@@ -2456,6 +2456,11 @@ history:
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a22014-b7e2-70c3-8f12-ace06337a549
+  author: joe
+  timestamp: 2026-11-28T02:55:58.434087688Z
+  session_id: 01a2200ea937
+  changes: []
 filed_at:
   code_sha: 45206d90a1df483c1caff91dee5abf345df4a8d2
   branch: main
@@ -2463,3 +2468,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 45206d90a1d
   vendor: antigravity
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'REQUEST CHANGES at 743cd5cc38f, the completing slice for STORY-3120 (S7–S10). The head is 4 commits behind main; none of the findings depend on the files those commits changed (train and lanes code). Acceptance criteria: ace96c3a (pure, unit-tested functions in aida_core::review_engine) is partial, see ac57ff97. ac48c16d findings_to_sarif_json is verified by s1_runner_findings_sarif_and_threshold (review_engine.rs:1606 and :2877). ac57ff97 format_forge_review_markdown is UNMET: the function is absent from aida_core, and rendering lives in cli-lib render_bundle_markdown. ace2229a parse_runner_findings_json is verified by s1_runner_findings_sarif_and_threshold and s7_s8_telemetry_f_beta_codegraph_and_consolidation. ac8468ea (--sarif, --post-comment needing --pr, and --run-review) is verified by s5_post_comment_is_opt_in_and_requires_pr, bug2775_runner_errors_name_runner_pass_batch_and_cause and ReviewPrepareArgs. ac035c0a (unit tests) is verified for SARIF and parsing in aida-core; markdown rendering is tested in cli-lib (s5_posted_comment_renders_agent_text_inert), not aida-core. All six criteria are untraced. Blocking: (1) the opencode runner has no tool or permission denial, so a prompt-injected diff can run shell commands as the operator (security-authority-bypass); (2) CI fast gates and the fast-compile Ratchet set are red at this head; (3) the unmet completing criterion. Also requested: fail-open author detection, a trusted-base reversal for local workspace and scan modes, fabricated doc anchors, consolidation hiding distinct findings as challenger dismissals, a jsonl read-modify-write race and an un-ignored SARIF archive, legal compliance claims in the showcase docs, A/B arm substring matching, Addressed Rate and F_beta proxies, missing ambiguous-repair tests for the JSON sanitizer, and slice size. Verified OK: the CodeGraph database comes only from the primary worktree or ~/.aida (absolute regular file outside the checkout, opened read-only), with a test for a planted database; body slices and manifests are screened by is_credential_path and classify_path_exclusion and read at the target revision; D1 holds (suppressed and folded rows still gate); pi runs with --no-tools; opencode and pi are never auto-picked and are refused for --post-comment; the effort step-up is capped at xhigh against the allowlist; JSON repair output is always re-parsed by serde.'
+  recovery_hint: address the review findings, move STORY-3120 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-28T02:55:34.661490947Z
