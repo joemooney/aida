@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T01:24:58.703993536Z
-modified_at: 2026-11-28T04:20:43.547762456Z
+modified_at: 2026-11-28T04:44:55.796826293Z
 req_type: Task
 tags:
 - leases
@@ -119,6 +119,24 @@ comments:
   content: 'AC1 AMENDED (advisor aida-d3 2026-11-27 20:57; product-15): the salvage destination is the existing <main>/.aida/salvage/<tree>/ (reuse beats a new ~/salvage path). No code change for the destination.'
   created_at: 2026-11-28T03:54:17.973292696Z
   modified_at: 2026-11-28T03:54:17.973292696Z
+- id: 01a22078-7874-7201-83b4-f4eaf3e8cdeb
+  author: dirtlab
+  content: |-
+    ## Implementer self-review (round 2)
+    Reviewed HEAD: 4e6343e0f2 (#4784)
+
+    Findings addressed:
+    1. CLI gate: aida-cli/tests/support/repair_attestation.py test_bare_sweep_refuses_without_operator_authority runs bare `aida doctor heal repair-reservations` with no TTY, AIDA_AGENT_NAME, AIDA_AUTO_COMPLETE, AIDA_DEPUTY_JOB, --json, --yes; asserts nonzero exit, refusal text, byte-identical journal. Hand mutations, each FAILED the test: removing operator_only() in the bare branch (exit 0, 'kept ...'); removing the --yes ensure; removing the --json ensure.
+    2. Forge mapping: ForgeProbe now calls pure settled_pr_state(Observed<Result<ChangeStatus,String>>), exhaustive match. Tests task_3891_settled_pr_state_maps_only_known_status (Known(Ok) Open/Closed/Merged; Known(Err)/Pending/Transient -> None) and task_3891_unsettled_forge_reads_keep_the_reservation (end-to-end via release_dead_reservations: unsettled reads kept, Started, no release record). Hand mutation Transient -> Some(Closed): both tests FAILED.
+    3. Salvage destination: no code change per advisor; <main>/.aida/salvage/<tree>/ stands, AC1 text to be amended by product.
+    4. Doctor finding: repair_findings sets action to the bare sweep and names 'releases it if PR #N is CLOSED or MERGED, otherwise --id/--attest' when the lane is locally dead (reservation_lease Ok); live/unverified lanes keep the attested action. Test task_3891_finding_advertises_bare_sweep_for_dead_lanes. Docs updated.
+
+    Validation: cargo test -p aida-cli-lib --lib task_3891 (5 passed); cargo test -p aida-cli --test bug_2722_repair_attestation (passed). make check-ci-fast: see PR.
+    Residual risk: the bare-sweep refusal message still reads 'attested release refuses --yes/--json' (shared ensure); with a mutated gate the CLI test would reach the real forge (observed it read PR state), harmless since it keeps. Invariant unchanged: unique commits are salvaged before release, Unknown forge state always keeps.
+  created_at: 2026-11-28T04:44:55.796826293Z
+  modified_at: 2026-11-28T04:44:55.796826293Z
+  session_id: 01a220620bac
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a2104e-a7aa-72b2-9133-1db6dc6cea6c
   author: joe

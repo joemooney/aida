@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:30:54.837993440Z
-modified_at: 2026-11-28T04:26:51.645653136Z
+modified_at: 2026-11-28T04:42:35.089644774Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -41,6 +41,28 @@ comments:
     - None
   created_at: 2026-11-28T04:26:51.645653136Z
   modified_at: 2026-11-28T04:26:51.645653136Z
+  session_id: 01a22065b268
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a22076-52d1-7112-aefb-81c3545ead25
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: c4a52a471c
+
+    **Acceptance evidence**
+    - AC1 [behavioral-test]: `launch::review_runner::tests::task3955_signed_out_codex_fails_fast_with_the_sign_in_hint` - a signed-out fake codex fails with exactly `codex is not signed in: run `codex login`, then retry the review`, in under 10s. Wired in review_prepare.rs before review_batches (only when batches exist). Lanes: contained codex lanes already get a `run codex login` hint at launch admission (codex_auth_hints); the review runner path had none and is what this change fixes.
+    - AC2 [behavioral-test]: the same test uses a fake whose `exec` sleeps 600s (waiting on sign-in); a fake whose `login status` itself hangs ends at the 2s bound with `did not answer its sign-in check within 2s`. Never silent.
+    - Targeted run: 46 passed (launch::review_runner::tests:: + review_prepare), lane job j20261128T043715729-59-0.
+
+    **Probe findings**
+    - P1: matching is lowercase on both sides (`not logged in`), and codex prints `Not logged in` on stderr (checked live, codex 0.167.0).
+    - P4: `codex login status` reports `Not logged in` for an OPENAI_API_KEY-only setup, which exec does accept: the check is skipped when the key is passed. An older codex without `login status` (or any other inconclusive result) warns and continues, so the check never blocks a working setup.
+    - P3: the challenger pass is not checked: followup TASK-73022632D35647CCA3858B18AC0723E3-069.
+    - The `--agent` "using" line is suppressed under AIDA_REVIEW_RUNNER_CMD, so it never names a vendor that does not run (BUG-2775 class).
+
+    **Residual risks**: per-batch progress lines not added (in the followup).
+  created_at: 2026-11-28T04:42:35.089644774Z
+  modified_at: 2026-11-28T04:42:35.089644774Z
   session_id: 01a22065b268
   harness_version: 2.1.319 (Claude Code)
 history:
