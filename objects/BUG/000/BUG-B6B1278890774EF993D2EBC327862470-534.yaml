@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T14:32:42.135724878Z
-modified_at: 2026-11-28T01:12:09.861126169Z
+modified_at: 2026-11-28T01:12:13.761639906Z
 req_type: Bug
 tags:
 - admission
@@ -182,6 +182,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3507): aida-cli-lib/src/coordination.rs:879-882: the new other-host branch of implementer_refusal (''on host X, heal the holder only if `aida doctor check leases` lists it'') has no test; only the same-host ineligible and eligible branches are asserted. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T01:11:57.603392105Z
   modified_at: 2026-11-28T01:11:57.603392105Z
+- id: 01a21fb5-bcc1-7c42-bf31-4bcf9ba7c92c
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3509): p3 follow-up (BUG-2773): aida-cli-lib/src/coordination.rs unbound_claim_blocker condition 3 reads agent rows through agent_registry::load_active_entries, which silently skips unreadable or unparseable rows (agent_registry.rs:2143-2148). [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:12:13.761639906Z
+  modified_at: 2026-11-28T01:12:13.761639906Z
 history:
 - id: 01a21849-dc65-74d3-8d90-d80ee73b5834
   author: joe
