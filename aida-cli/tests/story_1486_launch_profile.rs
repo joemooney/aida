@@ -197,6 +197,8 @@ fn noexec_verbose_prints_stakeholder_and_explicit_git_downgrades() {
         &path,
         &[
             "init",
+            // The fixture relies on committed scaffolding. trace:TASK-3952 | ai:claude
+            "--commit",
             "--no-skills",
             "--no-hooks",
             "--no-agent-config",

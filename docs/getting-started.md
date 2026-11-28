@@ -15,7 +15,7 @@ AIDA is alpha software and supports **Linux (`x86_64` and `arm64`)**. Choose whi
 
 If you are already inside Claude Code, Codex CLI, or Antigravity, paste this prompt so your agent follows the [installation instructions](../README.md#install) and [operator setup guide](operator-setup.md) for you:
 
-> Install AIDA on this Linux machine by following https://github.com/joemooney/aida#install (`README.md#install` and `docs/operator-setup.md`). Inspect `scripts/install.sh` first, install the latest release binary into `~/.local/bin` (or build from source if we have a local checkout), verify `aida --version` is on `PATH`, and then run `aida init --help` and `aida init` in this repository. Ask me before changing shell profile files or enabling optional `--with-mcp` registration.
+> Install AIDA on this Linux machine by following https://github.com/joemooney/aida#install (`README.md#install` and `docs/operator-setup.md`). Inspect `scripts/install.sh` first, install the latest release binary into `~/.local/bin` (or build from source if we have a local checkout), verify `aida --version` is on `PATH`, and then run `aida init --help` and `aida init` in this repository. `aida init` leaves the files it writes uncommitted: show me the list it prints, then commit them after I agree (or rerun with `aida init --commit` if I ask you to). Ask me before changing shell profile files or enabling optional `--with-mcp` registration.
 
 ### Option B: Install the prebuilt binary from a release location
 
@@ -75,6 +75,8 @@ Once `aida` is on your `PATH`, initialize AIDA inside your Git repository:
 aida init --help
 aida init
 ```
+
+`aida init` lists the files it wrote, with line counts, and leaves them uncommitted. At a terminal it asks whether to commit them (the default is no). Review the changes, then commit them yourself with the `git add` command it prints, or pass `--commit` to commit them without asking. Scripts, CI jobs and agents get no prompt, so they must pass `--commit` or commit the files themselves.
 
 The full footprint scaffolds project guidance and agent skills for selected profiles; `--agent` chooses profiles explicitly. The CLI is the default tool surface for agents with shell access. MCP registration is opt-in with `--with-mcp`; `aida mcp-serve` provides the stdio server for MCP clients. Check the [client setup matrix](agents/aida-mcp-install-matrix.md) for your harness. Agent permissions, project policy and review authority still need deliberate configuration.
 

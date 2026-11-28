@@ -158,6 +158,8 @@ impl Fixture {
         git(&f.repo, &["commit", "-q", "--allow-empty", "-m", "fixture"]);
         f.ok(&[
             "init",
+            // The fixture relies on committed scaffolding. trace:TASK-3952 | ai:claude
+            "--commit",
             "--no-skills",
             "--no-hooks",
             "--no-agent-config",

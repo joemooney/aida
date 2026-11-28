@@ -110,7 +110,7 @@ fn memory_lane_footprint_scaffolds_only_reflex_lane_files() {
         "test store",
         false, // verbose
         crate::cli::InitFootprint::MemoryLane,
-        true, // suppress scaffold commit
+        ScaffoldCommit::Suppress,
     )
     .unwrap();
 
@@ -192,7 +192,7 @@ fn memory_lane_no_skills_skips_reflex_skill_files() {
         "test store",
         false, // verbose
         crate::cli::InitFootprint::MemoryLane,
-        true, // suppress scaffold commit
+        ScaffoldCommit::Suppress,
     )
     .unwrap();
 
@@ -402,7 +402,7 @@ fn codex_agent_init_writes_discoverable_aida_capture_skill() {
         "test store",
         false, // verbose
         crate::cli::InitFootprint::Full,
-        true, // suppress bootstrap commit
+        ScaffoldCommit::Suppress,
     )
     .unwrap();
 
@@ -555,7 +555,7 @@ fn fresh_init_scaffolds_antigravity_hooks_only_when_selected_and_hooks_enabled()
             "test store",
             false, // verbose
             crate::cli::InitFootprint::Full,
-            true, // suppress scaffold commit
+            ScaffoldCommit::Suppress,
         )
         .unwrap();
         assert!(
@@ -587,7 +587,7 @@ fn fresh_init_scaffolds_antigravity_hooks_only_when_selected_and_hooks_enabled()
             "test store",
             false, // verbose
             crate::cli::InitFootprint::Full,
-            true, // suppress scaffold commit
+            ScaffoldCommit::Suppress,
         )
         .unwrap();
         assert!(
@@ -698,40 +698,37 @@ fn the_branch_name_is_never_assumed_to_be_main() {
 
 #[test]
 fn auto_vs_prompt_decision() {
-    // Non-interactive (no TTY) → auto-commit.
-    assert_eq!(should_auto_commit_scaffold(false, None), Some(true));
-    // Interactive (TTY) → prompt (None).
-    assert_eq!(should_auto_commit_scaffold(true, None), None);
-
-    // Env override forces auto even on a TTY.
-    assert_eq!(
-        should_auto_commit_scaffold(true, Some("1")),
-        Some(true),
-        "env=1 should force auto"
-    );
-    assert_eq!(should_auto_commit_scaffold(true, Some("true")), Some(true));
-    assert_eq!(should_auto_commit_scaffold(true, Some("YES")), Some(true));
-    assert_eq!(should_auto_commit_scaffold(true, Some(" on ")), Some(true));
-
-    // Env override forces never even when non-interactive.
-    assert_eq!(
-        should_auto_commit_scaffold(false, Some("0")),
-        Some(false),
-        "env=0 should force never"
-    );
-    assert_eq!(
-        should_auto_commit_scaffold(false, Some("false")),
-        Some(false)
-    );
-    assert_eq!(should_auto_commit_scaffold(false, Some("no")), Some(false));
-    assert_eq!(should_auto_commit_scaffold(false, Some("off")), Some(false));
-
-    // Unrecognized env value falls through to the TTY heuristic.
-    assert_eq!(
-        should_auto_commit_scaffold(false, Some("maybe")),
-        Some(true)
-    );
-    assert_eq!(should_auto_commit_scaffold(true, Some("maybe")), None);
+    // (--commit, TTY, AIDA_INIT_COMMIT_SCAFFOLD) → commit / never / ask.
+    // trace:TASK-3952 | ai:claude
+    let cases: &[(bool, bool, Option<&str>, Option<bool>)] = &[
+        // No flag, no env: never commit without a TTY; ask at a TTY.
+        (false, false, None, Some(false)),
+        (false, true, None, None),
+        // `--commit` always commits, over any env value.
+        (true, false, None, Some(true)),
+        (true, true, None, Some(true)),
+        (true, false, Some("0"), Some(true)),
+        // Env override forces a commit, even on a TTY.
+        (false, true, Some("1"), Some(true)),
+        (false, false, Some("true"), Some(true)),
+        (false, true, Some("YES"), Some(true)),
+        (false, true, Some(" on "), Some(true)),
+        // Env override forces never, even on a TTY.
+        (false, true, Some("0"), Some(false)),
+        (false, true, Some("false"), Some(false)),
+        (false, false, Some("no"), Some(false)),
+        (false, true, Some("off"), Some(false)),
+        // Unrecognized env value falls through to the TTY heuristic.
+        (false, false, Some("maybe"), Some(false)),
+        (false, true, Some("maybe"), None),
+    ];
+    for &(commit, tty, env, want) in cases {
+        assert_eq!(
+            should_auto_commit_scaffold(commit, tty, env),
+            want,
+            "commit={commit} tty={tty} env={env:?}"
+        );
+    }
 }
 
 fn git_in(root: &std::path::Path, args: &[&str]) {
@@ -805,7 +802,7 @@ fn commit_scaffolding_commits_remainder_when_one_path_is_gitignored() {
     // The guard holds the shared env lock and restores the prior value.
     // trace:BUG-1666 | ai:claude
     let env = crate::test_env::EnvVarGuard::set("AIDA_INIT_COMMIT_SCAFFOLD", "1");
-    let committed = commit_init_scaffolding(root, crate::cli::InitFootprint::Full).unwrap();
+    let committed = commit_init_scaffolding(root, crate::cli::InitFootprint::Full, false).unwrap();
     drop(env);
 
     // The remainder was committed → onboarding task is de-stranded.
@@ -869,7 +866,7 @@ fn git_head(root: &std::path::Path) -> String {
 
 /// Write the scaffold files a bootstrap-clone would land locally, then drive
 /// `complete_init_scaffolding`. Returns the HEAD sha afterward.
-fn run_complete_scaffolding(root: &std::path::Path, suppress: bool) -> String {
+fn run_complete_scaffolding(root: &std::path::Path, mode: ScaffoldCommit) -> String {
     // The Claude profile keeps the scaffold set small + deterministic.
     let store = aida_core::models::RequirementsStore::new();
     let db_path = root.join(".aida-store");
@@ -885,7 +882,7 @@ fn run_complete_scaffolding(root: &std::path::Path, suppress: bool) -> String {
         "test store",
         false, // verbose
         crate::cli::InitFootprint::Full,
-        suppress,
+        mode,
     )
     .unwrap();
     git_head(root)
@@ -900,7 +897,7 @@ fn bootstrap_clone_init_leaves_head_unchanged() {
     let tmp = TempDir::new().unwrap();
     let (root, head_before) = setup_clone_like_repo(&tmp);
 
-    let head_after = run_complete_scaffolding(&root, /* suppress */ true);
+    let head_after = run_complete_scaffolding(&root, ScaffoldCommit::Suppress);
 
     assert_eq!(
         head_before, head_after,
@@ -946,7 +943,7 @@ fn init_appends_aida_block_to_existing_agents_md() {
         "test store",
         false, // verbose
         crate::cli::InitFootprint::Full,
-        true, // suppress bootstrap commit
+        ScaffoldCommit::Suppress,
     )
     .unwrap();
 
@@ -976,7 +973,7 @@ fn bootstrap_clone_init_no_tty_does_not_autocommit() {
     let tmp = TempDir::new().unwrap();
     let (root, head_before) = setup_clone_like_repo(&tmp);
 
-    let head_after = run_complete_scaffolding(&root, /* suppress */ true);
+    let head_after = run_complete_scaffolding(&root, ScaffoldCommit::Suppress);
 
     assert_eq!(
         head_before, head_after,
@@ -984,26 +981,138 @@ fn bootstrap_clone_init_no_tty_does_not_autocommit() {
     );
 }
 
-/// BUG-570 criterion 3: a genuinely-new first-init (suppress=false) STILL
-/// commits its scaffolding — no regression. In the no-TTY test harness the
-/// auto-commit branch fires, so HEAD must advance past the root commit.
-// trace:BUG-570 | ai:claude
-#[test]
-fn genuinely_new_init_still_commits_scaffolding() {
-    // trace:BUG-1666 | ai:claude
-    let _env = crate::test_env::EnvVarGuard::unset("AIDA_INIT_COMMIT_SCAFFOLD");
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
+fn fresh_repo_with_root_commit(root: &std::path::Path) -> String {
     git_in(root, &["init", "-q", "-b", "main"]);
     git_in(root, &["config", "user.email", "t@t"]);
     git_in(root, &["config", "user.name", "t"]);
     git_in(root, &["commit", "--allow-empty", "-q", "-m", "root"]);
-    let head_before = git_head(root);
+    git_head(root)
+}
 
-    let head_after = run_complete_scaffolding(root, /* suppress */ false);
+/// TASK-3952 AC2: a default first init in a fresh repo creates no commit on
+/// the user's branch. The files are on disk and untracked, and no onboarding
+/// spec is seeded in place of the commit.
+// trace:TASK-3952 | ai:claude
+#[test]
+fn default_first_init_leaves_head_unchanged_and_files_uncommitted() {
+    let _env = crate::test_env::EnvVarGuard::unset("AIDA_INIT_COMMIT_SCAFFOLD");
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let head_before = fresh_repo_with_root_commit(root);
+
+    let head_after = run_complete_scaffolding(root, ScaffoldCommit::Ask);
+
+    assert_eq!(
+        head_before, head_after,
+        "a default init must not commit to the user's branch"
+    );
+    assert!(
+        root.join("CLAUDE.md").exists(),
+        "init still writes its files"
+    );
+    let status = crate::test_git::git_command()
+        .current_dir(root)
+        .args(["status", "--porcelain", "--", "CLAUDE.md"])
+        .output()
+        .unwrap();
+    assert!(
+        String::from_utf8_lossy(&status.stdout).starts_with("??"),
+        "CLAUDE.md must be left untracked for the user to review"
+    );
+}
+
+/// TASK-3952 AC1/AC3: `--commit` (and the older `--commit-scaffold`) still
+/// commits the scaffolding, so scripts that relied on it keep working.
+// trace:BUG-570 trace:TASK-3952 | ai:claude
+#[test]
+fn first_init_with_commit_flag_commits_scaffolding() {
+    // trace:BUG-1666 | ai:claude
+    let _env = crate::test_env::EnvVarGuard::unset("AIDA_INIT_COMMIT_SCAFFOLD");
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let head_before = fresh_repo_with_root_commit(root);
+
+    let head_after = run_complete_scaffolding(root, ScaffoldCommit::Commit);
 
     assert_ne!(
         head_before, head_after,
-        "genuinely-new first-init must still commit its scaffolding (no BUG-570 regression)"
+        "`aida init --commit` must commit its scaffolding"
     );
+    assert!(ScaffoldCommit::from_flag(true) == ScaffoldCommit::Commit);
+    assert!(ScaffoldCommit::from_flag(false) == ScaffoldCommit::Ask);
+}
+
+/// TASK-3952 AC1: the listing init prints names each path with its size.
+// trace:TASK-3952 | ai:claude
+#[test]
+fn scaffold_summary_rows_show_paths_with_line_counts() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    std::fs::write(root.join("CLAUDE.md"), "a\nb\nc").unwrap();
+    std::fs::create_dir_all(root.join(".claude/skills/x")).unwrap();
+    std::fs::write(root.join(".claude/one.md"), "1\n").unwrap();
+    std::fs::write(root.join(".claude/skills/x/SKILL.md"), "1\n2\n").unwrap();
+    for skill in ["aida-a", "aida-b"] {
+        std::fs::create_dir_all(root.join(".agents/skills").join(skill)).unwrap();
+        std::fs::write(
+            root.join(".agents/skills").join(skill).join("SKILL.md"),
+            "x\n",
+        )
+        .unwrap();
+    }
+    let paths: Vec<String> = [
+        "CLAUDE.md",
+        ".claude",
+        ".agents/skills/aida-a",
+        ".agents/skills/aida-b",
+    ]
+    .map(String::from)
+    .to_vec();
+
+    let rows = scaffold_summary_rows(root, &paths);
+
+    assert_eq!(
+        rows,
+        [
+            "CLAUDE.md  (3 lines)",
+            ".claude  (2 files, 3 lines)",
+            ".agents/skills  (2 files, 2 lines)",
+            "in all: 5 files, 8 lines",
+        ]
+    );
+}
+
+/// The hint folds AIDA's skill directories into one quoted pathspec.
+// trace:TASK-3952 | ai:claude
+#[test]
+fn git_add_hint_folds_aida_skills_into_one_pathspec() {
+    let paths: Vec<String> = [
+        "CLAUDE.md",
+        ".agents/skills/.aida-delivered",
+        ".agents/skills/aida-a",
+        ".agents/skills/aida-b",
+    ]
+    .map(String::from)
+    .to_vec();
+    assert_eq!(
+        git_add_hint_paths(&paths),
+        [
+            "CLAUDE.md",
+            ".agents/skills/.aida-delivered",
+            "'.agents/skills/aida-*'"
+        ]
+    );
+    assert_eq!(git_add_hint_paths(&paths[..1]), ["CLAUDE.md"]);
+}
+
+/// The `--commit` flag parses, and the older spelling still works.
+// trace:TASK-3952 | ai:claude
+#[test]
+fn commit_flag_and_old_alias_parse() {
+    use clap::Parser;
+    for flag in ["--commit", "--commit-scaffold"] {
+        let args = InitArgs::try_parse_from(["init", flag]).unwrap();
+        assert!(args.commit_scaffold, "{flag} should request the commit");
+    }
+    assert!(!InitArgs::try_parse_from(["init"]).unwrap().commit_scaffold);
 }

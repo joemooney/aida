@@ -23745,12 +23745,11 @@ Options:
           instead of bailing. At a TTY this is offered interactively; in scripts pass this flag to
           opt into creating the repo (otherwise non-interactive init keeps the safe bail)
 
-      --commit-scaffold
-          When bootstrapping a clone of an already-initialized AIDA project, commit the
-          locally-written scaffold files to the code branch. The safe default leaves them
-          uncommitted so a clone never pushes a scaffold dump to the shared default branch; pass
-          this to opt into a deliberate scaffold commit. No effect on a genuinely-new first init,
-          which always commits its own scaffolding
+      --commit
+          Commit the files init writes to your current branch, as "chore: scaffold AIDA". By default
+          init lists what it wrote and leaves it uncommitted for you to review; at a terminal it
+          asks first (default no). Scripts and CI that rely on init's commit must pass --commit.
+          `--commit-scaffold` is the older spelling
 
       --node-name <NAME>
           Friendly name for this node, recorded alongside the node id in the shared roster (`aida
@@ -57278,9 +57277,9 @@ Working on aida itself
         "help": "Initialize in legacy centralized mode (SQLite-canonical, single requirements.db). Deprecated — git-canonical is now the default"
       },
       {
-        "name": "commit-scaffold",
+        "name": "commit",
         "takes_value": false,
-        "help": "When bootstrapping a clone of an already-initialized AIDA project, commit the locally-written scaffold files to the code branch. The safe default leaves them uncommitted so a clone never pushes a scaffold dump to the shared default branch; pass this to opt into a deliberate scaffold commit. No effect on a genuinely-new first init, which always commits its own scaffolding"
+        "help": "Commit the files init writes to your current branch, as \"chore: scaffold AIDA\". By default init lists what it wrote and leaves it uncommitted for you to review; at a terminal it asks first (default no). Scripts and CI that rely on init's commit must pass --commit. `--commit-scaffold` is the older spelling"
       },
       {
         "name": "distributed",

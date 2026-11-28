@@ -174,6 +174,8 @@ fn fixture_with(reviewer_config: bool) -> Fixture {
     let init = aida(&fx)
         .args([
             "init",
+            // The fixture relies on committed scaffolding. trace:TASK-3952 | ai:claude
+            "--commit",
             "--no-skills",
             "--no-hooks",
             "--no-agent-config",
