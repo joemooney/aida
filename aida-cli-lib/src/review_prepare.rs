@@ -1604,7 +1604,7 @@ fn report_pieces(bundle: &ReviewPreparationBundle) -> Vec<ReportPiece> {
                     code_span(&spec.title),
                     code_span(&spec.status),
                     // Spec text is fenced, as agent text is. trace:STORY-3120 | ai:claude
-                    fenced(&spec.acceptance_markdown)
+                    acceptance_block(&spec.acceptance_markdown)
                 ),
                 0,
             );
@@ -1805,7 +1805,24 @@ fn code_span(text: &str) -> String {
         .map(|c| if c.is_control() { ' ' } else { c })
         .collect();
     let ticks = "`".repeat(longest_run(&flat, '`') + 1);
-    format!("{ticks} {flat} {ticks}")
+    // Pad only where CommonMark needs it, so ordinary spans read `x`, not
+    // ` x `. trace:TASK-3961 | ai:claude
+    let pad = flat.trim().is_empty()
+        || flat.starts_with('`')
+        || flat.ends_with('`')
+        || (flat.starts_with(' ') && flat.ends_with(' '));
+    let sp = if pad { " " } else { "" };
+    format!("{ticks}{sp}{flat}{sp}{ticks}")
+}
+
+/// A linked spec's acceptance, fenced; a visible note when it has none.
+// trace:TASK-3961 | ai:claude
+fn acceptance_block(acceptance: &str) -> String {
+    if acceptance.trim().is_empty() {
+        "_No acceptance criteria; the review checks only general quality._\n".into()
+    } else {
+        fenced(acceptance)
+    }
 }
 
 /// `text` as an indented fenced code block whose fence outruns any backtick
@@ -1821,6 +1838,28 @@ fn fenced(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Ordinary spans are unpadded; padding stays where CommonMark needs it.
+    // trace:TASK-3961 | ai:claude
+    #[test]
+    fn task3961_code_spans_are_unpadded_unless_needed() {
+        assert_eq!(code_span("greet.py"), "`greet.py`");
+        assert_eq!(code_span("48f3c91"), "`48f3c91`");
+        assert_eq!(code_span("a`b"), "``a`b``");
+        assert_eq!(code_span("`tick"), "`` `tick ``");
+        assert_eq!(code_span(" both "), "`  both  `");
+        assert_eq!(code_span(""), "`  `");
+    }
+
+    /// A linked spec without acceptance says so instead of an empty fence.
+    // trace:TASK-3961 | ai:claude
+    #[test]
+    fn task3961_missing_acceptance_is_a_visible_note() {
+        let note = acceptance_block("  \n");
+        assert!(note.contains("No acceptance criteria"), "{note}");
+        assert!(!note.contains("```"), "{note}");
+        assert!(acceptance_block("- works").contains("```text"));
+    }
 
     /// A top-level failure keeps its cause even under a plain `Display`.
     // trace:BUG-2779 | ai:claude
@@ -3553,7 +3592,7 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             "summary and findings first"
         );
         assert!(!body.contains("file_01499.rs"), "inventory trimmed first");
-        let note = "findings omitted; full report at ` report.md `";
+        let note = "findings omitted; full report at `report.md`";
         assert!(
             body.trim_end().ends_with(note),
             "{}",

@@ -95,7 +95,8 @@ def exercise(root, aida):
     # A valid inline table that the editor declines must not abort role setup.
     config.write_text("contained = {}\n" + re.sub(r"(?ms)^\[contained(?:\.vendors)?\].*?(?=^\[|\Z)", "", config.read_text()))
     git("commit", "-qm", "inline policy", "--", path)
-    result = terminal(*init)
+    # Role setup reports only under --verbose (short default output). trace:TASK-3961 | ai:claude
+    result = terminal(*init, "--verbose")
     assert "Native sandbox opt-in skipped" in result and "global roles installed" in result, result
 
 

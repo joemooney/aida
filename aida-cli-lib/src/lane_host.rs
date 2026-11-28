@@ -559,8 +559,24 @@ fn fix_cargo_cache(home: &Path) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn report(root: &Path) {
-    render(&inspect(root, false));
+/// `aida init`'s one-line readiness summary. A first run never asked for
+/// unattended agent runs, so their unmet checks are not failures here; the
+/// full list stays behind `aida doctor --lane-host`.
+// trace:TASK-3961 | ai:claude
+pub(crate) fn first_run_summary(checks: &[Check]) -> String {
+    let unmet = checks.iter().filter(|c| c.required && !c.pass).count();
+    if unmet == 0 {
+        "Unattended agent runs: ready (details: `aida doctor --lane-host`)".into()
+    } else {
+        format!(
+            "Optional: unattended agent runs need setup ({unmet} item{}); see `aida doctor --lane-host` when you want them",
+            if unmet == 1 { "" } else { "s" }
+        )
+    }
+}
+
+pub(crate) fn report_summary(root: &Path) {
+    println!("  {}", first_run_summary(&inspect(root, false)));
 }
 
 pub(crate) fn run(root: &Path, fix: bool, json: bool) -> Result<()> {
@@ -600,6 +616,31 @@ pub(crate) fn run(root: &Path, fix: bool, json: bool) -> Result<()> {
 mod tests {
     use super::*;
     use crate::vendors::host_diagnostics::{auth_check, codex_config_check};
+
+    // trace:TASK-3961 | ai:claude
+    #[test]
+    fn task3961_first_run_summary_is_one_line_without_fail() {
+        let unmet = [
+            check("claude:bubblewrap", false, true, "blocked", "fix"),
+            check("build-cache", false, false, "no sccache", "fix"),
+            advisory(check("binary", false, false, "unverified", "fix")),
+            check("claude:os-wrap", true, true, "ok", "fix"),
+        ];
+        let line = first_run_summary(&unmet);
+        assert_eq!(line.lines().count(), 1);
+        assert!(!line.contains("FAIL"), "{line}");
+        assert!(line.starts_with("Optional:"), "{line}");
+        assert!(
+            line.contains("(2 items)"),
+            "advisory checks are not counted: {line}"
+        );
+        assert!(line.contains("aida doctor --lane-host"), "{line}");
+        let one = first_run_summary(&unmet[..1]);
+        assert!(one.contains("(1 item)"), "{one}");
+        let ready = first_run_summary(&unmet[2..]);
+        assert!(ready.starts_with("Unattended agent runs: ready"), "{ready}");
+    }
+
     #[test]
     // The host applies this reviewed FAQ-151 text from the PR body to the store.
     // trace:STORY-b6b1278890774ef993d2ebc327862470-565.acbeedc3 | ai:codex
