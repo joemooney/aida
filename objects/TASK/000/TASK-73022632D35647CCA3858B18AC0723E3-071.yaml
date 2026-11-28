@@ -1,5 +1,6 @@
 id: 01a2209c-234f-7ff0-b89a-11917bee94cf
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-071
+agreed_id: TASK-3592
 title: 'review prepare: up-front CLI check for --challenger-agent, and plain wording for the ''using claude from the built-in default'' line'
 description: |
   TASK-3958 added an up-front PATH check for the finder's agent CLI (review_prepare.rs ensure_agent_installed). Two related gaps remain:
@@ -19,6 +20,13 @@ tags:
 - from-implementer:TASK-3958
 - kind:followup-suggestion
 - severity:minor
+history:
+- id: 01a220fb-6f12-7973-85f5-658522c95d6b
+  author: joe
+  timestamp: 2026-11-28T07:07:58.610913678Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 657cb6ce4fd5ba03ba98bf30ccc299d54d46b85e
   branch: task-3958-review-error-next-steps

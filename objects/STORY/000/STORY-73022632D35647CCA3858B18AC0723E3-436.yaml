@@ -1,5 +1,6 @@
 id: 01a220af-ee49-7ba1-b7a6-7012f2c56579
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-436
+agreed_id: STORY-3261
 title: 'Review PR-4798: [AI:claude] docs(getting-started): walk through a first spec and a first review (TASK-3960)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a2208e`) for branch `task-3960-getting-started-first-review`.
@@ -33,6 +34,12 @@ history:
 - id: 01a220b0-17ff-7ad2-8c67-9393e57ef95b
   author: dirtlab
   timestamp: 2026-11-28T05:45:41.119037976Z
+  changes: []
+- id: 01a220ff-d820-7271-866c-a2585ea694be
+  author: joe
+  timestamp: 2026-11-28T07:12:47.648143511Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
   changes: []
 filed_at:
   code_sha: 4b06a37b464472f759637aecf25042f98a4e33c2

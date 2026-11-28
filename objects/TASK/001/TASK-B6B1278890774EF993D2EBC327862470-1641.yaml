@@ -1,5 +1,6 @@
 id: 01a220b9-e7da-7c43-a0ce-ca31e96979ad
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1641
+agreed_id: TASK-3602
 title: 'Review follow-up: aida-cli-lib/src/tests/help_grouping_tests.rs review_prepare_help_leads_with_common_uses: '
 description: |-
   From TASK-3959
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a2207e-20c9-7573-8754-0c139d8e13f6
   created_at: 2026-11-28T05:56:41.957069353Z
+history:
+- id: 01a220fe-6ee4-7671-b2f8-780084591ff7
+  author: joe
+  timestamp: 2026-11-28T07:11:15.172495749Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 264c5f7dc54e62d52d3b995a86f1e0675c3b63f4
   branch: pr-4797

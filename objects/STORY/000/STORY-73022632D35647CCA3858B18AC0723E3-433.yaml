@@ -1,5 +1,6 @@
 id: 01a2208c-0484-7b90-aad2-a7039cb4ef08
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-433
+agreed_id: STORY-3262
 title: 'Review PR-4794: [AI:claude] fix(hooks): an ordinary commit in a new repo shows no red hook failure (TASK-3957)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a22073`) for branch `task-3957-hook-no-red`.
@@ -33,6 +34,12 @@ history:
 - id: 01a2208c-272d-7252-b6f0-7911428cb539
   author: dirtlab
   timestamp: 2026-11-28T05:06:25.709714690Z
+  changes: []
+- id: 01a22100-208d-7761-bc6a-be01ffbb3e07
+  author: joe
+  timestamp: 2026-11-28T07:13:06.189293444Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
   changes: []
 filed_at:
   code_sha: 4b06a37b464472f759637aecf25042f98a4e33c2

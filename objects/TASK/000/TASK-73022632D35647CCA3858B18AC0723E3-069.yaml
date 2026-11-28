@@ -1,5 +1,6 @@
 id: 01a22076-1303-77c0-8eb6-8e5d9dab0792
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-069
+agreed_id: TASK-3591
 title: 'review prepare: a signed-out codex challenger still waits out the 15-minute batch deadline before falling back to unchallenged'
 description: |
   TASK-3955 adds a codex sign-in check before the finder's first batch only (aida-cli-lib/src/review_prepare.rs, before review_batches). When the adversarial challenger is codex (--challenger-agent codex, or auto-picked), a signed-out challenger still runs `codex exec`, retries silently until RUN_DEADLINE (15 min), and only then is recorded as unavailable. Suggest running RunnerCall::sign_in_check on the challenger pass too and, on failure, recording it as the challenger_unavailable cause up front.
@@ -18,6 +19,13 @@ tags:
 - from-implementer:TASK-3955
 - kind:followup-suggestion
 - severity:minor
+history:
+- id: 01a220fb-1c52-7eb1-a4bc-d9079a663e63
+  author: joe
+  timestamp: 2026-11-28T07:07:37.426689490Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes: []
 filed_at:
   code_sha: c4a52a471c729ceea007a17fc56a3c26ebf178be
   branch: task-3955-codex-signed-out-fast-fail

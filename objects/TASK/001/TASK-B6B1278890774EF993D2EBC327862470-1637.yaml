@@ -1,5 +1,6 @@
 id: 01a22093-fb85-7de0-8e8e-a84fe6a89b70
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1637
+agreed_id: TASK-3597
 title: 'Review follow-up: docs/first-project.md:112 says `aida init` prints the exact ID your first task will get, b'
 description: |-
   From TASK-3956
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a22035-1d54-7a50-9f94-e4cceb1fc836
   created_at: 2026-11-28T05:15:20.454203031Z
+history:
+- id: 01a220fc-f87d-7dd0-8bbc-df77ecf9b2cb
+  author: joe
+  timestamp: 2026-11-28T07:09:39.325432555Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 47cad2ff17262896f5ad25dc03bb5e1abd88b05c
   branch: pr-4793

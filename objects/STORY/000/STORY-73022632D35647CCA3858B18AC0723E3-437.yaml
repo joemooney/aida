@@ -1,5 +1,6 @@
 id: 01a220c6-1df2-75e1-9d5f-dfb5ee605f1b
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-437
+agreed_id: STORY-3263
 title: 'Review PR-4799: [AI:claude] fix(init): aida init output is short and jargon-free (TASK-3961)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a220a9`) for branch `task-3961-init-output-short`.
@@ -33,6 +34,12 @@ history:
 - id: 01a220c6-40e6-76c1-9ad7-9b6c3b3991f2
   author: dirtlab
   timestamp: 2026-11-28T06:09:53.382056930Z
+  changes: []
+- id: 01a22100-68f2-7e81-965d-e6e3d0360630
+  author: joe
+  timestamp: 2026-11-28T07:13:24.722998397Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
   changes: []
 filed_at:
   code_sha: 4b06a37b464472f759637aecf25042f98a4e33c2

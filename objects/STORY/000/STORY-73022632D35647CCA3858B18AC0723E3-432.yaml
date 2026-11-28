@@ -1,5 +1,6 @@
 id: 01a22084-ef58-7681-b4f5-b761ec183274
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-432
+agreed_id: STORY-3259
 title: 'Review PR-4793: [AI:claude] fix(init): the first-run guide shows the real spec ID format (TASK-3956)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a22066`) for branch `task-3956-init-id-format`.
@@ -59,6 +60,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a220ff-48c4-7c23-a479-3308f45c9adc
+  author: joe
+  timestamp: 2026-11-28T07:12:10.948770902Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes: []
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
   branch: main

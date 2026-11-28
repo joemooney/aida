@@ -1,5 +1,6 @@
 id: 01a22082-a2e4-7232-97fa-2c8fd9434a2d
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-070
+agreed_id: TASK-3589
 title: Other scaffolded user-facing examples still cite FR-0042, an ID style new projects never issue
 description: |
   TASK-3957 changed the commit-msg hook's example ID from FR-0042 to TASK-12. Other scaffolded, user-facing text still uses FR-0042: aida-core/templates/hooks/aida-validate-commit.sh:66, aida-core/templates/skills/aida-commit.md:67, aida-search.md and aida-evaluate.md. A new project issues TASK-style IDs, so these examples don't match what the user sees.
@@ -17,6 +18,13 @@ tags:
 - from-implementer:TASK-3957
 - kind:followup-suggestion
 - severity:cosmetic
+history:
+- id: 01a220fa-7fe9-7b32-b00b-3855de4325d7
+  author: joe
+  timestamp: 2026-11-28T07:06:57.385735850Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes: []
 filed_at:
   code_sha: db76bf17561d5f3d0412619f2857904639cfeb10
   branch: task-3957-hook-no-red

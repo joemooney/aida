@@ -1,5 +1,6 @@
 id: 01a220af-92e2-7900-baa6-dacf2799a68d
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-435
+agreed_id: STORY-3265
 title: 'Review PR-4797: [AI:claude] docs(cli): aida --help and review prepare --help lead with what a new user needs (TASK-3959)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a2208a`) for branch `task-3959-help-for-new-users`.
@@ -33,6 +34,12 @@ history:
 - id: 01a220af-bd89-7b63-9dcf-c7ef939cba1a
   author: dirtlab
   timestamp: 2026-11-28T05:45:17.961644778Z
+  changes: []
+- id: 01a22100-ff7a-7893-87aa-c0a6a4f4c95f
+  author: joe
+  timestamp: 2026-11-28T07:14:03.258792618Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
   changes: []
 filed_at:
   code_sha: 4b06a37b464472f759637aecf25042f98a4e33c2

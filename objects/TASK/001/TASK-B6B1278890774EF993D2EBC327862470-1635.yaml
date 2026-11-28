@@ -1,5 +1,6 @@
 id: 01a22089-79ba-7c41-95e6-8a006c029f69
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1635
+agreed_id: TASK-3598
 title: 'Review follow-up: AC1 names ~/salvage, but salvage goes to <main>/.aida/salvage/<tree>/ (the existing salvag'
 description: |-
   From TASK-3891
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a2104e-54cf-7e91-872e-e5e9838f396a
   created_at: 2026-11-28T05:04:10.890871671Z
+history:
+- id: 01a220fd-45cc-75f0-a8d6-6b8a693d7784
+  author: joe
+  timestamp: 2026-11-28T07:09:59.116986109Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 4e6343e0f223086bdc1445e411c9397a29bc9c38
   branch: pr-4784

@@ -1,5 +1,6 @@
 id: 01a220af-2509-7fe3-8708-a51323b10f45
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1639
+agreed_id: TASK-3594
 title: 'Review follow-up: A signed-out challenger CLI still surfaces through runner_failure''s ''<vendor> challenger p'
 description: |-
   From TASK-3958
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a2207d-d156-7d60-81ac-71693e9f5cd0
   created_at: 2026-11-28T05:44:56.990764823Z
+history:
+- id: 01a220fc-08f1-7e93-b6b9-792fd09094d6
+  author: joe
+  timestamp: 2026-11-28T07:08:38.001009241Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 657cb6ce4fd5ba03ba98bf30ccc299d54d46b85e
   branch: pr-4796
