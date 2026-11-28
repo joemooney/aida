@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: .aida/config.toml sets `[lanes] max_compile_concurrency = 4` and `cargo_build_jobs = 4`, with a comment citing the 2026-11-25 dell1 OOM and TASK-3911. One tiny PR to main.
   - AC2 (operational, product seat): after it lands AND dell1's live binary includes TASK-3911, raise the product launcher's lane cap from 5 to 7, watch dell1 MemAvailable for the first hour, and drop back to 5 if it goes under ~8G.
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T07:24:37.851118978Z
-modified_at: 2026-11-28T00:42:59.147630766Z
+modified_at: 2026-11-28T00:43:02.182452210Z
 req_type: Task
 tags:
 - config
@@ -47,6 +47,11 @@ comments:
   content: 'COMPLETED as shipped (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Done as host /etc/aida/lanes.toml on dell1 (product-15 11-26 comment); no repo PR by design.'
   created_at: 2026-11-28T00:42:59.147630766Z
   modified_at: 2026-11-28T00:42:59.147630766Z
+- id: 01a21f9b-02a6-7e03-be45-22e9a50b7534
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was punted on: other: The TASK-3911 knobs are not read from .aida/config.toml: lane_admission.rs:20 hard-codes CONFIG=/etc/aida/lanes.toml (host-owned, [lanes] table, deny_unknown_fields). Adding [lanes] max_compile_concurrency/cargo_build_jobs to the repo''s .aida/config.toml would be a no-op for lane admission, so AC1 as written would ship a config that does nothing. /etc/aida/ does not exist on this host and is outside the lane sandbox, so I cannot set it there either.. No triage reason was given.'
+  created_at: 2026-11-28T00:43:02.182445922Z
+  modified_at: 2026-11-28T00:43:02.182445922Z
 history:
 - id: 01a216c1-400d-76b0-bbdd-cf8524ab2043
   author: joe
@@ -79,6 +84,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a21f9b-02a6-7e03-be45-22d4d7eb0aeb
+  author: joe
+  timestamp: 2026-11-28T00:43:02.182437317Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 0cb984b75d1e780e6f0fc2bcad86651d202d948d
@@ -87,9 +99,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: c8c3a3e139a
   vendor: claude
-attention_reason:
-  category: other
-  detail: 'The TASK-3911 knobs are not read from .aida/config.toml: lane_admission.rs:20 hard-codes CONFIG=/etc/aida/lanes.toml (host-owned, [lanes] table, deny_unknown_fields). Adding [lanes] max_compile_concurrency/cargo_build_jobs to the repo''s .aida/config.toml would be a no-op for lane admission, so AC1 as written would ship a config that does nothing. /etc/aida/ does not exist on this host and is outside the lane sandbox, so I cannot set it there either.'
-  lean: Operator writes /etc/aida/lanes.toml on dell1 ([lanes] max_compile_concurrency = 4, cargo_build_jobs = 4, comment citing the 2026-11-25 OOM / TASK-3911) and closes TASK-3915 without a repo PR; or file a follow-up if the knobs should also be readable from .aida/config.toml.
-  raised_by: implementer
-  raised_at: 2026-11-26T07:48:16.400980815Z
