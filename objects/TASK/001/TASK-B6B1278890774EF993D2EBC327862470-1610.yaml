@@ -9,12 +9,12 @@ description: |-
   - AC3: existing callers that rely on the commit (CI, scripts) pass --commit explicitly; the help text says so.
 
   Source: docs/plans/2026-11-27-fresh-user-walkthrough.md (on branch task-3951-fresh-user-walkthrough / PR #4782), section F5. Advisor aida-d3 2026-11-27 20:30 priority order; filed by product-15 for laning now (one spec per lane).
-status: Approved
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:26:56.215965481Z
-modified_at: 2026-11-28T05:15:35.678818207Z
+modified_at: 2026-11-28T05:28:03.738891660Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -141,6 +141,13 @@ comments:
   modified_at: 2026-11-28T05:15:35.678818207Z
   session_id: 01a22085a946
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2209f-dc4f-7781-bf41-0887409f7575
+  author: dirtlab
+  content: 'r2 addendum: HEAD 82035fe5d5 also regenerates docs/showcase/{getting-started.html,search-data.js} (build.py drift from the getting-started edit). make check-ci-fast exit 0 at this HEAD; all nine CI-named tests pass locally.'
+  created_at: 2026-11-28T05:27:57.263863662Z
+  modified_at: 2026-11-28T05:27:57.263863662Z
+  session_id: 01a22085a946
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a22031-de1f-7b30-a729-5d2554ae7cad
   author: joe
@@ -178,6 +185,15 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a2209f-f5c5-7be0-8377-98a820f3ec0e
+  author: dirtlab
+  timestamp: 2026-11-28T05:28:03.781253496Z
+  session_id: 01a22085a946
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
   branch: main
