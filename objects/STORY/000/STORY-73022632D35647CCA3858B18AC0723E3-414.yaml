@@ -1,5 +1,6 @@
 id: 01a21f5c-d716-7110-8215-8117a7977b97
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-414
+agreed_id: STORY-3243
 title: 'Review PR-4769: [AI:claude] feat(review): aida review rule --fix-first records the rework verdict in one step (TASK-3923)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21f2b`) for branch `task-3923-rule-fix-first`.
@@ -33,6 +34,10 @@ history:
 - id: 01a21f5d-1916-7492-b730-8ecbbfe1fcdc
   author: dirtlab
   timestamp: 2026-11-27T23:35:24.694660653Z
+  changes: []
+- id: 01a21fa2-3428-7e92-a5f4-e83c6c13cc15
+  author: joe
+  timestamp: 2026-11-28T00:50:53.608199999Z
   changes: []
 filed_at:
   code_sha: 0fba3d42ee966dab2866ad59a9ffbe96d2b0e23d

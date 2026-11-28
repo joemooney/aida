@@ -1,5 +1,6 @@
 id: 01a21f6b-5633-7732-811c-a9d413ca5ac8
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-064
+agreed_id: TASK-3568
 title: 'TASK-3936: doctor deputy-binary dedup extracted into a helper so a test could observe it'
 description: |
   AC3 said test-only. To test the doctor dedup (AC2), the inline loop in doctor_multi_agent (doctor_cmd.rs) was moved unchanged into extend_deputy_binary_findings, with no change in behaviour; doctor_multi_agent only prints, so the loop wasn't observable otherwise. Disclosed in PR #4772.
@@ -17,6 +18,11 @@ tags:
 - from-implementer:TASK-3936
 - kind:deviation
 - severity:cosmetic
+history:
+- id: 01a21fa2-2ff2-7cc1-a3ef-1aa15af15c27
+  author: joe
+  timestamp: 2026-11-28T00:50:52.530398918Z
+  changes: []
 filed_at:
   code_sha: 4bd255da781f939809dbb5af57e2c849d0b4eef5
   branch: task-3936-deputy-finding-tests

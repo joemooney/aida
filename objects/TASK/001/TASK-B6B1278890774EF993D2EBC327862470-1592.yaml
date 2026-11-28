@@ -1,5 +1,6 @@
 id: 01a21f5b-77d2-7c42-8871-a9870e4bde22
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1592
+agreed_id: TASK-3570
 title: 'Review follow-up: p3 follow-up: `aida pr train --status` only lists members that are already riding a train,'
 description: |-
   From TASK-3923
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a21abf-bfc9-7c71-b380-311d707bdf0c
   created_at: 2026-11-27T23:33:55.441955220Z
+history:
+- id: 01a21fa2-30e2-7c92-8da0-8763949f804d
+  author: joe
+  timestamp: 2026-11-28T00:50:52.770037316Z
+  changes: []
 filed_at:
   code_sha: e1925d9799108e70f0638a69d6968f57be7eb3bf
   branch: pr-4769

@@ -1,5 +1,6 @@
 id: 01a21f50-e2eb-7400-8d5a-6439c6b85a5a
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-413
+agreed_id: STORY-3242
 title: 'Review PR-4768: [AI:claude] feat(train): a parked recovery record withholds admission while a train waits on CI [slice 1] (Refs TASK-3920)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21f21`) for branch `task-3920-s1-parked`.
@@ -35,6 +36,10 @@ history:
 - id: 01a21f51-079c-7620-864f-3451a037e971
   author: dirtlab
   timestamp: 2026-11-27T23:22:13.788739459Z
+  changes: []
+- id: 01a21fa2-3411-72d3-bbef-247d49497058
+  author: joe
+  timestamp: 2026-11-28T00:50:53.585223215Z
   changes: []
 filed_at:
   code_sha: 0fba3d42ee966dab2866ad59a9ffbe96d2b0e23d

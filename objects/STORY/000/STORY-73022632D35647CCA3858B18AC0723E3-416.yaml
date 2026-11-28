@@ -1,5 +1,6 @@
 id: 01a21f73-c85f-78d0-8c76-e94bc8e9a07d
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-416
+agreed_id: STORY-3240
 title: 'Review PR-4772: [AI:claude] test(doctor): a stale deputy is reported once with pid, binary and restart fix (TASK-3936)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21f5b`) for branch `task-3936-deputy-finding-tests`.
@@ -33,6 +34,10 @@ history:
 - id: 01a21f73-ec4a-7df0-aace-db98fabc3369
   author: dirtlab
   timestamp: 2026-11-28T00:00:20.554966956Z
+  changes: []
+- id: 01a21fa2-338f-7dc3-8530-82f120538b3a
+  author: joe
+  timestamp: 2026-11-28T00:50:53.455128742Z
   changes: []
 filed_at:
   code_sha: 0fba3d42ee966dab2866ad59a9ffbe96d2b0e23d

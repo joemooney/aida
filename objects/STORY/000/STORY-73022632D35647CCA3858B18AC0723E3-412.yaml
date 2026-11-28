@@ -1,5 +1,6 @@
 id: 01a21f4f-5cae-7d90-8669-dcc42ccfd696
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-412
+agreed_id: STORY-3239
 title: 'Review PR-4767: [AI:claude] feat(landing): auto_train_supervised_under_mandate knob, default off, with an explicit knob-off refusal [slice 1] (Refs STORY-3181)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21f2a`) for branch `story-3181-s1-knob`.
@@ -35,6 +36,10 @@ history:
 - id: 01a21f4f-7ede-70f2-9f41-1d3cb37c5f79
   author: dirtlab
   timestamp: 2026-11-27T23:20:33.246845389Z
+  changes: []
+- id: 01a21fa2-336f-7ec3-8b0e-0d61d078860e
+  author: joe
+  timestamp: 2026-11-28T00:50:53.423018022Z
   changes: []
 filed_at:
   code_sha: 0fba3d42ee966dab2866ad59a9ffbe96d2b0e23d
