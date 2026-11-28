@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: d50327f98225c7efecf58776048dfded12f1843e
 
   AC2 display wiring is untested: the new manual_waiter line in `aida advisor loops train-status` (advisor_loop_service.rs status_value/status_lines) and in `aida pr train --check` text/JSON (pr_train_check.rs check_report) has no test; bug2771 test only asserts ManualWaiter::describe(). Add a check_at/status_value test that asserts the 'admission: operator train for #N waiting since HH:MM; auto-train yields next' line and the manual_waiter JSON key.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T14:08:06.242022064Z
-modified_at: 2026-11-28T01:09:58.637669282Z
+modified_at: 2026-11-28T01:10:00.521129534Z
 req_type: Task
 tags:
 - carried-from:BUG-2771
@@ -43,6 +43,13 @@ history:
   author: joe
   timestamp: 2026-11-28T00:35:48.854179155Z
   changes: []
+- id: 01a21fb3-b449-7812-a49c-1a4e061aeaee
+  author: joe
+  timestamp: 2026-11-28T01:10:00.521127639Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: d50327f98225c7efecf58776048dfded12f1843e
   branch: pr-4659
