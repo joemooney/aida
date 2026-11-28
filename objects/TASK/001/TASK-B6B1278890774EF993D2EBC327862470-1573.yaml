@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 95866f79ae773d8edb6d2ab8f04cc105e6afc27c
 
   contained_lane.py SECRET_RUN (`[A-Za-z0-9+/_=-]{32,}`) also matches long filesystem paths and hyphenated identifiers, so a probe line naming a worktree or grant-file path is shown as [REDACTED], losing diagnostic value. Consider excluding '/'-separated path segments or requiring higher-entropy runs.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-27T19:42:46.795997630Z
-modified_at: 2026-11-28T00:41:11.867360443Z
+modified_at: 2026-11-28T00:41:14.204141987Z
 req_type: Task
 tags:
 - carried-from:TASK-3927
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-27T23:19:10.786768993Z
   changes: []
+- id: 01a21f99-5cdc-7a20-9a21-9566e80d7b32
+  author: joe
+  timestamp: 2026-11-28T00:41:14.204139119Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 95866f79ae773d8edb6d2ab8f04cc105e6afc27c
   branch: pr-4750
