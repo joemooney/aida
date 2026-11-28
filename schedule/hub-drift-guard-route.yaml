@@ -8,6 +8,6 @@ note: Fast-forwarded the GitLab store mirror to confirmed GitHub tip dded58e07da
 due_since: 2026-11-21T16:59:02.946972006Z
 due_reason: on CronJobFailed:hub-drift-guard
 due_failure:
-  trip_id: hub-drift-guard@2026-11-28T12:03:23.184787681Z
+  trip_id: hub-drift-guard@2026-11-28T12:53:24.690154641Z
   job: hub-drift-guard
   error: 'exit 1: '
