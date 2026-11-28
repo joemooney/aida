@@ -2,125 +2,161 @@ id: 01a22146-3192-7311-ba67-22c16846dd7c
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1645
 agreed_id: TASK-3963
 title: 'STORY-2894 S1: train generated-file registry + tip regeneration commit (no coverage change)'
-description: |-
-  Slice 1 of the SIGNED STORY-2894 sketch (advisor aida-d3 2026-11-28 01:36; sketch docs/plans/2026-11-28-story-2894-generated-file-regen-sketch.md, PR #4806). Filed as a child so it can lane while the sketch PR is open (one spec per lane).
+description: 'Slice 1 of the SIGNED STORY-2894 sketch (advisor aida-d3 2026-11-28 01:36; sketch docs/plans/2026-11-28-story-2894-generated-file-regen-sketch.md, PR #4806). Filed as a child so it can lane while the sketch PR is open (one spec per lane).
+
 
   ## Acceptance (sketch section 6, S1)
-  - AC1: add the showcase-search and store-writers rows (with --baseline handling) to REGISTRY; add gate/train_generated.rs with the classes, the cross-check and the floor ratchets; add the driver's train phase; add the ONE regen commit at the train tip (Q2) with [AI:aida-train] trailers (Q5), the PR-body block and the journal record.
+
+  - AC1: add the showcase-search and store-writers rows (with --baseline handling) to REGISTRY; add gate/train_generated.rs with the classes, the cross-check and the floor ratchets; add the driver''s train phase; add the ONE regen commit at the train tip (Q2) with [AI:aida-train] trailers (Q5), the PR-body block and the journal record.
+
   - AC2: approval coverage does NOT change in S1.
-  - AC3: the advisor's 01:16 requirements hold: deterministic regeneration (run twice → identical bytes), only registered paths may change, and the PR's own non-generated diff is re-verified unchanged (patch-id over non-generated paths).
+
+  - AC3: the advisor''s 01:16 requirements hold: deterministic regeneration (run twice → identical bytes), only registered paths may change, and the PR''s own non-generated diff is re-verified unchanged (patch-id over non-generated paths).
+
   - AC4: tests: regeneration on a clean tree is a no-op; each section-4 failure mode refuses.
-  - Touches gate/: needs a human merge.
+
+  - Touches gate/: needs a human merge.'
 status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-28T08:29:38.066956221Z
-modified_at: 2026-11-28T09:14:43.803403654Z
+created_at: 2026-11-28 08:29:38.066956+00:00
+modified_at: 2026-11-28 09:14:43.803403+00:00
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a1ec19-04a5-7a73-b69c-876cd6cd48e4
-  created_at: 2026-11-28T08:30:01.299156873Z
+  created_at: 2026-11-28 08:30:01.299156+00:00
 comments:
 - id: 01a2214e-a718-7040-a04e-7c7e7a5fff79
   author: dirtlab
-  content: |-
-    ## Implementer approach
+  content: '## Implementer approach
+
 
     ### Acceptance criteria and evidence
-    - AC1 [behavioral]: unit tests in a new gate/train_generated.rs: the TRAIN_GENERATED table cross-checks the embedded REGISTRY (name, outputs, argv), and a floor ratchet checks that no train path matches the protected floor. The canonical regen message, the trailers and the PR-body block are tested. The regen commit is checked in verify_structure (parent = last car, canonical message, touches only G). The journal record comes from Built.regen (Built is already journaled). Python driver 'train' phase and the store-writers --baseline handling in the conflict lane: fixture tests run the embedded driver in temp git repos.
+
+    - AC1 [behavioral]: unit tests in a new gate/train_generated.rs: the TRAIN_GENERATED table cross-checks the embedded REGISTRY (name, outputs, argv), and a floor ratchet checks that no train path matches the protected floor. The canonical regen message, the trailers and the PR-body block are tested. The regen commit is checked in verify_structure (parent = last car, canonical message, touches only G). The journal record comes from Built.regen (Built is already journaled). Python driver ''train'' phase and the store-writers --baseline handling in the conflict lane: fixture tests run the embedded driver in temp git repos.
+
     - AC2 [behavioral]: add_car and the patch-id checks are not changed; existing story_1690 train tests stay green.
-    - AC3 [behavioral]: the driver test reruns the cheap generators and refuses when the output changes; it refuses when a generator writes any unregistered path. Rust re-checks that the regen tree differs from the tip only in the selected outputs. The cars' patch-ids are not touched.
+
+    - AC3 [behavioral]: the driver test reruns the cheap generators and refuses when the output changes; it refuses when a generator writes any unregistered path. Rust re-checks that the regen tree differs from the tip only in the selected outputs. The cars'' patch-ids are not touched.
+
     - AC4 [behavioral]: driver tests: clean-tree regen is a no-op (report shows no change, so no commit); a non-zero exit, a write outside the outputs, non-determinism, and an E2 violation (changed reviewed row, or a new non-blocked row) each refuse. Rust tests: a protected-set match disables the entry, and the regen-commit check refuses paths outside G or a non-canonical message.
 
+
     ### Expected files
+
     - scripts/repair-generated.py, aida-cli-lib/src/gate/train_generated.rs (+ gate/mod.rs), aida-cli-lib/src/pr_train.rs (Built.regen, regen step in the live build, PR body), pr_train_verified.rs (verify_structure), seat_clone.rs (inventory paths + pinned generators), Built literals in tests.
 
+
     ### Ambiguities / conflicts as questions
-    - cli-help regeneration runs cargo (a cold build took 12m42s) and S1 changes no coverage, so a tip regen almost always does nothing. I plan to list cli-help in TRAIN_GENERATED as Derived but not train-run in S1 (train_eligible=false) until S3 needs it. I will file this as a design-choice finding.
-  created_at: 2026-11-28T08:38:52.440680624Z
-  modified_at: 2026-11-28T08:38:52.440680624Z
+
+    - cli-help regeneration runs cargo (a cold build took 12m42s) and S1 changes no coverage, so a tip regen almost always does nothing. I plan to list cli-help in TRAIN_GENERATED as Derived but not train-run in S1 (train_eligible=false) until S3 needs it. I will file this as a design-choice finding.'
+  created_at: 2026-11-28 08:38:52.440680+00:00
+  modified_at: 2026-11-28 08:38:52.440680+00:00
   session_id: 01a2214b4de1
   harness_version: 2.1.319 (Claude Code)
 - id: 01a22168-fe80-7b23-a914-ffa494f6ea2c
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: 1df06dd6599bc217b4f072c85c494af648c96fbf (PR #4808). Reviewed git diff origin/main...HEAD.
 
+
     Acceptance evidence:
+
     - AC1 [behavioral]: REGISTRY rows plus --baseline (scripts/repair-generated.py with_baseline; seat_clone.rs inventory and pinned generators). gate/train_generated.rs: TRAIN_GENERATED, TrainClass, the ratchet tests every_train_entry_matches_its_embedded_registry_row and no_train_output_is_on_the_protected_floor_and_a_config_match_disables_it. Driver train phase. pr_train_regen.rs regen commit with trailers; pr_body_block in train_pr_body; Built.regen (journaled). verify_structure accepts only one trailing regen commit.
+
     - AC2 [behavioral]: add_car and the patch-id and merge-tree code are unchanged; the existing train test literals only gain regen: None.
-    - AC3 [behavioral]: determinism by double run (python test_each_failure_mode_refuses_and_rolls_back, case 'is not deterministic'). Registered paths only: driver refusal, verify_regen, and Rust sha256 and 100644 checks on staged outputs. The cars' patch-ids are untouched, and verify_structure re-proves them before the regen check.
+
+    - AC3 [behavioral]: determinism by double run (python test_each_failure_mode_refuses_and_rolls_back, case ''is not deterministic''). Registered paths only: driver refusal, verify_regen, and Rust sha256 and 100644 checks on staged outputs. The cars'' patch-ids are untouched, and verify_structure re-proves them before the regen check.
+
     - AC4 [behavioral]: clean-tip no-op (python test_clean_tip_regeneration_is_a_no_op; Rust the_train_tip_gets_one_regen_commit_and_a_clean_tip_gets_none). Each section-4 failure mode refuses: exit, unregistered write, non-determinism, changed reviewed row, non-blocked new row, protected path (runnable), regen commit touching other paths or with an edited message (verify_regen test).
 
-    Deep-pass findings and fixes: (1) verify_structure did not re-check E2, so I added ledger_check there and in regen_commit. (2) The sandbox ignored [contained] read_allowlist; it now honours it as conflict lanes do. (3) A new ambient PATH read tripped the exec-context ratchet; switched to Environment::capture. (4) The driver's new write site needed a store-writers row, which I regenerated.
 
-    Residual risks: the diff is ~640 non-test lines against the 300-line budget (TASK-73022632D35647CCA3858B18AC0723E3-073). cli-help is not train-run in S1 (TASK-...-074). A refusal is printed but not journaled. Conflict-lane restore of a conflicted inventory still takes base's rows (existing semantics).
+    Deep-pass findings and fixes: (1) verify_structure did not re-check E2, so I added ledger_check there and in regen_commit. (2) The sandbox ignored [contained] read_allowlist; it now honours it as conflict lanes do. (3) A new ambient PATH read tripped the exec-context ratchet; switched to Environment::capture. (4) The driver''s new write site needed a store-writers row, which I regenerated.
 
-    Results: cargo test -p aida-cli-lib --lib -- train_generated, 8 passed (bwrap fixture executed); python tests/test_repair_generated.py, 24 passed; cargo test -p aida-ci-guards --lib, 51 passed; make check-ci-fast exit 0 (j20261128T090105984-3-0).
-  created_at: 2026-11-28T09:07:38.752623473Z
-  modified_at: 2026-11-28T09:07:38.752623473Z
+
+    Residual risks: the diff is ~640 non-test lines against the 300-line budget (TASK-73022632D35647CCA3858B18AC0723E3-073). cli-help is not train-run in S1 (TASK-...-074). A refusal is printed but not journaled. Conflict-lane restore of a conflicted inventory still takes base''s rows (existing semantics).
+
+
+    Results: cargo test -p aida-cli-lib --lib -- train_generated, 8 passed (bwrap fixture executed); python tests/test_repair_generated.py, 24 passed; cargo test -p aida-ci-guards --lib, 51 passed; make check-ci-fast exit 0 (j20261128T090105984-3-0).'
+  created_at: 2026-11-28 09:07:38.752623+00:00
+  modified_at: 2026-11-28 09:07:38.752623+00:00
   session_id: 01a2214b4de1
   harness_version: 2.1.319 (Claude Code)
 - id: 01a2216f-7adb-7130-b497-42bec42b7f9d
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `task-3963-train-regen-s1` at head `1df06dd6599bc217b4f072c85c494af648c96fbf`.'
-  created_at: 2026-11-28T09:14:43.803400388Z
-  modified_at: 2026-11-28T09:14:43.803400388Z
+  created_at: 2026-11-28 09:14:43.803400+00:00
+  modified_at: 2026-11-28 09:14:43.803400+00:00
   session_id: 01a2214b4de1
 - id: 01a22177-dc40-7322-ad6f-50ac60d6614d
   author: aida-orchestrator
   content: 'Shelved by leases::shelve_spec_on_failure during reviewer: verdict:request-changes'
-  created_at: 2026-11-28T09:23:53.024020454Z
-  modified_at: 2026-11-28T09:23:53.024020454Z
+  created_at: 2026-11-28 09:23:53.024020+00:00
+  modified_at: 2026-11-28 09:23:53.024020+00:00
   session_id: 01a2216f6457
 - id: 01a22178-9ed4-7f30-bc21-adefa6c0b70d
   author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: TASK-3963 (STORY-2894 S1) at 1df06dd6599b, reviewed as landed on main eb18c450 (3 commits behind; no finding depends on the base delta). CI pending at review time. AC1 verified: REGISTRY rows with --baseline handling (repair-generated.py with_baseline and main), gate/train_generated.rs with classes, the REGISTRY cross-check ratchet and the floor ratchet (every_train_entry_matches_its_embedded_registry_row, no_train_output_is_on_the_protected_floor...), the driver train phase, one regen commit at the tip with [AI:aida-train] trailers (the_regen_commit_message_and_body_block_record_every_change), the PR-body block (train_pr_body), and the journal record via Built.regen (serde default). AC2 verified: add_car and the car patch-id proofs are unchanged and the existing Built literals only gain regen: None. AC3 verified: rerun determinism, registered paths only (driver snapshot diff, verify_regen, Rust staging checks), cars untouched and re-verified in verify_structure. AC4 mostly verified: clean-tree no-op (python test and Rust live test) and non-zero exit, unregistered write, non-determinism, E2 and protected-set refusals are tested; timeout and launch failure are untested. Blocking: generators run from the PR-controlled tip with host-wide read access and a publishing channel, unlike the base-pinned conflict-lane sandbox; the protected-set load fails open to the floor on config error; the sandbox path''s tests skip silently without bwrap. Two p3 follow-ups are deferred.. No triage reason was given.'
-  created_at: 2026-11-28T09:24:42.836850311Z
-  modified_at: 2026-11-28T09:24:42.836850311Z
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: TASK-3963 (STORY-2894 S1) at 1df06dd6599b, reviewed as landed on main eb18c450 (3 commits behind; no finding depends on the base delta). CI pending at review time. AC1 verified: REGISTRY rows with --baseline handling (repair-generated.py with_baseline and main), gate/train_generated.rs with classes, the REGISTRY cross-check ratchet and the floor ratchet (every_train_entry_matches_its_embedded_registry_row, no_train_output_is_on_the_protected_floor...), the driver train phase, one regen commit at the tip with [AI:aida-train] trailers (the_regen_commit_message_and_body_block_record_every_change), the PR-body block (train_pr_body), and the journal record via Built.regen (serde default). AC2 verified: add_car and the car patch-id proofs are unchanged and the existing Built literals only gain regen: None. AC3 verified: rerun determinism, registered paths only (driver
+    snapshot diff, verify_regen, Rust staging checks), cars untouched and re-verified in verify_structure. AC4 mostly verified: clean-tree no-op (python test and Rust live test) and non-zero exit, unregistered write, non-determinism, E2 and protected-set refusals are tested; timeout and launch failure are untested. Blocking: generators run from the PR-controlled tip with host-wide read access and a publishing channel, unlike the base-pinned conflict-lane sandbox; the protected-set load fails open to the floor on config error; the sandbox path''s tests skip silently without bwrap. Two p3 follow-ups are deferred.. No triage reason was given.'
+  created_at: 2026-11-28 09:24:42.836850+00:00
+  modified_at: 2026-11-28 09:24:42.836850+00:00
 - id: 01a22178-aa0b-7d12-8e06-4ffce675e845
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (TASK-3963):
+  content: 'REVIEW FINDINGS TO ADDRESS (TASK-3963):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 1df06dd6599b
+
     Recorded: 2026-11-28T09:22:51.186247507+00:00
+
     Findings:
-    1. aida-cli-lib/src/pr_train_regen.rs run_and_stage: the train runs the generators (docs/showcase/build.py, scripts/check-store-writers.py and anything they import) from the PR-controlled train tip, on the operator host, with the whole filesystem read-only bound (`--ro-bind / /` when [contained] read_allowlist is empty). Their output is committed into the regen commit and pushed with the train branch, so a car that edits a generator can read host secrets (e.g. ~/.ssh, forge tokens) and publish them through docs/showcase/search-data.js or the inventory. Conflict lanes deliberately bind base-pinned copies of these same generators (seat_clone.rs regenerate_repair_outputs, extended in this PR for build.py and check-store-writers.py), and the signed sketch section 3 says the train phase 'applies the existing offline sandbox'. Fix: bind the base (main) versions of the registered generators over the tip worktree as seat_clone does, and skip regeneration when a car changes a generator; or limit reads to the worktree plus the essentials.
-    2. aida-cli-lib/src/pr_train_regen.rs regenerate: `load_human_gates(project_root).map(|g| g.protected).unwrap_or_default()` fails open. When the committed or operator gate config cannot be read, ProtectedPaths::default() is the floor only, so an output the operator protected in config (e.g. scripts/store-writers.toml) is regenerated and committed anyway. The mandate-gate convention is 'Err gates everything' (gate_reason), and sketch section 4 says an entry whose path is in the effective protected set is disabled. Fix: on Err, disable every train entry (no regen commit) and print the reason. Add a test for that refusal path; only the happy-path runnable() split is tested now.
-    3. Sandbox test gap in aida-cli-lib/src/pr_train_regen.rs: the only end-to-end test of the bwrap regeneration step (the_train_tip_gets_one_regen_commit_and_a_clean_tip_gets_none) returns early and passes when bwrap cannot run, which is common on CI runners that restrict unprivileged user namespaces, so the sandboxed refusal path may never run in CI. The generator-timeout path (command_output_with_timeout -> 'the generators timed out') and the launch-failure path, both section-4 failure modes, have no test. Fix: make the skip visible or required on the Linux CI job, and add timeout and launch-failure refusal tests.
-    4. Sketch section 4 says the refusal reason is 'printed and journaled' and that a path written outside the outputs triggers an advisor mail naming it. regen::regenerate only eprintln!s the refusal; neither the train journal nor the mailbox records it. That is acceptable for S1, where a refusal leaves the train as built, but it should be tracked.
+
+    1. aida-cli-lib/src/pr_train_regen.rs run_and_stage: the train runs the generators (docs/showcase/build.py, scripts/check-store-writers.py and anything they import) from the PR-controlled train tip, on the operator host, with the whole filesystem read-only bound (`--ro-bind / /` when [contained] read_allowlist is empty). Their output is committed into the regen commit and pushed with the train branch, so a car that edits a generator can read host secrets (e.g. ~/.ssh, forge tokens) and publish them through docs/showcase/search-data.js or the inventory. Conflict lanes deliberately bind base-pinned copies of these same generators (seat_clone.rs regenerate_repair_outputs, extended in this PR for build.py and check-store-writers.py), and the signed sketch section 3 says the train phase ''applies the existing offline sandbox''. Fix: bind the base (main) versions of the registered generators over the tip worktree as seat_clone does, and skip regeneration when a car changes a generator; or
+    limit reads to the worktree plus the essentials.
+
+    2. aida-cli-lib/src/pr_train_regen.rs regenerate: `load_human_gates(project_root).map(|g| g.protected).unwrap_or_default()` fails open. When the committed or operator gate config cannot be read, ProtectedPaths::default() is the floor only, so an output the operator protected in config (e.g. scripts/store-writers.toml) is regenerated and committed anyway. The mandate-gate convention is ''Err gates everything'' (gate_reason), and sketch section 4 says an entry whose path is in the effective protected set is disabled. Fix: on Err, disable every train entry (no regen commit) and print the reason. Add a test for that refusal path; only the happy-path runnable() split is tested now.
+
+    3. Sandbox test gap in aida-cli-lib/src/pr_train_regen.rs: the only end-to-end test of the bwrap regeneration step (the_train_tip_gets_one_regen_commit_and_a_clean_tip_gets_none) returns early and passes when bwrap cannot run, which is common on CI runners that restrict unprivileged user namespaces, so the sandboxed refusal path may never run in CI. The generator-timeout path (command_output_with_timeout -> ''the generators timed out'') and the launch-failure path, both section-4 failure modes, have no test. Fix: make the skip visible or required on the Linux CI job, and add timeout and launch-failure refusal tests.
+
+    4. Sketch section 4 says the refusal reason is ''printed and journaled'' and that a path written outside the outputs triggers an advisor mail naming it. regen::regenerate only eprintln!s the refusal; neither the train journal nor the mailbox records it. That is acceptable for S1, where a refusal leaves the train as built, but it should be tracked.
+
     5. aida-cli-lib/src/pr_train_verified.rs verify_structure checks the regen commit but does not add it, or its report, to the returned proof vector. The coverage-audit proof lists the cars and the tip but has no per-commit record of the regen commit.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-28T09:24:45.707950746Z
-  modified_at: 2026-11-28T09:24:45.707950746Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-28 09:24:45.707950+00:00
+  modified_at: 2026-11-28 09:24:45.707950+00:00
 history:
 - id: 01a22146-948a-7032-ad96-95a74d9a14d6
   author: joe
-  timestamp: 2026-11-28T08:30:03.402658632Z
+  timestamp: 2026-11-28 08:30:03.402658+00:00
   changes: []
 - id: 01a2214b-a67b-7741-bec9-e5bee6cb1762
   author: aida-session-start
-  timestamp: 2026-11-28T08:35:35.675953349Z
+  timestamp: 2026-11-28 08:35:35.675953+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a22169-17ca-76b2-8d37-9b07dee42e52
   author: dirtlab
-  timestamp: 2026-11-28T09:07:45.226649563Z
+  timestamp: 2026-11-28 09:07:45.226649+00:00
   session_id: 01a2214b4de1
   harness_version: 2.1.319 (Claude Code)
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a22172-276d-70f3-b04d-761bd6d50e2b
+  author: dirtlab
+  timestamp: 2026-11-28 09:17:39.053093+00:00
+  changes: []
 - id: 01a22177-dc40-7322-ad6f-50934e8f2392
   author: aida-orchestrator
-  timestamp: 2026-11-28T09:23:53.024016562Z
+  timestamp: 2026-11-28 09:23:53.024016+00:00
   session_id: 01a2216f6457
   changes:
   - field_name: status
@@ -128,7 +164,7 @@ history:
     new_value: NeedsAttention
 - id: 01a22178-9ed4-7f30-bc21-addb22a5c698
   author: joe
-  timestamp: 2026-11-28T09:24:42.836840173Z
+  timestamp: 2026-11-28 09:24:42.836840+00:00
   changes:
   - field_name: status
     old_value: NeedsAttention
@@ -142,5 +178,5 @@ filed_at:
   vendor: claude
 implementation_info:
   implemented: true
-  implemented_at: 2026-11-28T09:07:45.179724724Z
+  implemented_at: 2026-11-28 09:07:45.179724+00:00
   implemented_by: dirtlab
