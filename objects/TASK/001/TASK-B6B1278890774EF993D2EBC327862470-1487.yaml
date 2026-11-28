@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: e430c0baf88df0c260070b7093e640e9838d6a29
 
   The breach kill in run_watched is incomplete. guard() returns as soon as the direct child exits after SIGTERM, so group members that survive SIGTERM (nextest's test processes or rustc) are never sent SIGKILL. A runner cancel or timeout SIGTERMs python, which dies without raising BaseException, so the start_new_session cargo group is not signalled at all. Both cases rely on the Actions runner's orphan-process cleanup. Consider always sending SIGKILL to the group after the grace period, and installing a SIGTERM handler that forwards to the group.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T05:19:33.336075060Z
-modified_at: 2026-11-28T01:04:45.079022397Z
+modified_at: 2026-11-28T01:04:46.828223969Z
 req_type: Task
 tags:
 - carried-from:BUG-2768
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21fae-eaec-7270-bf69-ac3a0da916c9
+  author: joe
+  timestamp: 2026-11-28T01:04:46.828222020Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: e430c0baf88df0c260070b7093e640e9838d6a29
   branch: pr-4623
