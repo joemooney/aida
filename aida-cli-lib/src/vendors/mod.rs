@@ -390,6 +390,8 @@ mod tests {
 
 pub(crate) mod headless;
 
+pub(crate) mod init_allowlists; // trace:STORY-2838 | ai:claude
+
 // trace:BUG-2486 | ai:codex
 pub(crate) mod codex_auth_hints;
 
