@@ -40,6 +40,13 @@ pub(crate) struct ReviewVendor {
     /// token, so only claude (no tools at all) posts until output redaction.
     // trace:BUG-2783 | ai:claude
     pub post_allowed: bool,
+    /// The CLI's name as a new user knows it.
+    // trace:TASK-3958 | ai:claude
+    pub display: &'static str,
+    /// How to install the CLI (a phrase following "install it with").
+    pub install: &'static str,
+    /// How to sign the CLI in.
+    pub sign_in: &'static str,
 }
 
 /// Where a confined vendor's own auth and config live: `dir` under HOME, or
@@ -63,7 +70,10 @@ pub(crate) struct ConfinedAuth {
 #[derive(Debug)]
 pub(crate) struct AuthRequired {
     pub vendor: &'static str,
+    /// The vendor's own words: its stderr tail, else its stdout tail.
     pub stderr: String,
+    /// How to sign the vendor in. trace:TASK-3958 | ai:claude
+    pub sign_in: &'static str,
     /// The run was bubblewrap-confined, so its auth file was read-only.
     // trace:BUG-2783 | ai:claude
     pub confined: bool,
@@ -78,11 +88,11 @@ pub(crate) const CONFINED_AUTH_HINT: &str = "inside the review confinement its a
 
 impl std::fmt::Display for AuthRequired {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // trace:TASK-3958 | ai:claude
         write!(
             f,
-            "{} is not signed in for non-interactive use; `aida doctor --lane-host` names \
-             the fix (stderr: {})",
-            self.vendor, self.stderr
+            "{} is not signed in: {}, then retry ({} said: {})",
+            self.vendor, self.sign_in, self.vendor, self.stderr
         )?;
         if self.confined {
             write!(f, "; {}: {CONFINED_AUTH_HINT}", self.vendor)?;
@@ -118,6 +128,23 @@ impl ReviewVendor {
         argv
     }
 
+    /// The "this CLI is missing" refusal, checked before any review starts.
+    // trace:TASK-3958 | ai:claude
+    pub(crate) fn missing_message(&self) -> String {
+        let others: Vec<_> = (REVIEW_VENDORS.iter())
+            .filter(|v| v.program != self.program && v.confinement_verified)
+            .map(|v| format!("--agent {}", v.program))
+            .collect();
+        format!(
+            "reviewing with {} needs the `{}` command, which is not on your PATH: install it \
+             with {}, or pick another agent with {}",
+            self.display,
+            self.program,
+            self.install,
+            others.join(" or ")
+        )
+    }
+
     /// Whether `output` carries one of this vendor's not-signed-in messages.
     pub(crate) fn auth_failed(&self, output: &[u8]) -> bool {
         let lower = String::from_utf8_lossy(output).to_ascii_lowercase();
@@ -149,12 +176,16 @@ const CLAUDE: ReviewVendor = ReviewVendor {
     efforts: &["low", "medium", "high", "xhigh", "max"],
     effort_as_config: false,
     print_timeout: None,
-    auth_failure: &[],
+    // Claude prints this on stdout. trace:TASK-3958 | ai:claude
+    auth_failure: &["not logged in", "invalid api key"],
     confinement_verified: true,
     // `--tools ""` leaves the session with no file-read tool at all.
     no_read: true,
     confined_auth: None,
     post_allowed: true,
+    display: "Claude Code",
+    install: "`npm install -g @anthropic-ai/claude-code`",
+    sign_in: "run `claude` and use /login",
 };
 
 /// Codex: read-only sandbox, no session file; `-` reads the prompt from stdin.
@@ -191,6 +222,9 @@ const CODEX: ReviewVendor = ReviewVendor {
         files: &["auth.json", "config.toml"],
     }),
     post_allowed: false,
+    display: "the Codex CLI",
+    install: "`npm install -g @openai/codex`",
+    sign_in: "run `codex login`",
 };
 
 /// Antigravity: print mode with the empty `--print=` value, so the prompt is
@@ -230,6 +264,9 @@ pub(crate) const AGY: ReviewVendor = ReviewVendor {
         files: &["antigravity-oauth-token", "settings.json"],
     }),
     post_allowed: false,
+    display: "the Antigravity CLI",
+    install: "the Antigravity installer",
+    sign_in: "run `agy` and sign in",
 };
 
 /// agy's session-only settings: deny every permission rule kind it names
