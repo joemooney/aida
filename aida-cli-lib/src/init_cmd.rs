@@ -1580,10 +1580,17 @@ fn commit_init_scaffolding(
     };
 
     if !proceed {
-        println!(
-            "  They are not committed. Review them with `git status`, then save them with:\n    git add {} && git commit -m 'chore: scaffold AIDA'\n  (Scripts and CI can run `aida init --commit` instead.)",
-            paths.join(" "),
-        );
+        // Name only stageable paths: one gitignored path makes the whole
+        // `git add` fail (BUG-565). trace:TASK-3952 | ai:claude
+        let (stageable, _) = partition_scaffold_paths_by_gitignore(root, &paths);
+        if stageable.is_empty() {
+            println!("  They are not committed; your .gitignore covers all of them.");
+        } else {
+            println!(
+                "  They are not committed. Review them with `git status`, then save them with:\n    git add {} && git commit -m 'chore: scaffold AIDA'\n  (Scripts and CI can run `aida init --commit` instead.)",
+                stageable.join(" "),
+            );
+        }
         return Ok(false);
     }
 
