@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T04:51:06.569070472Z
-modified_at: 2026-11-28T05:29:51.183356356Z
+modified_at: 2026-11-28T05:32:02.755013398Z
 req_type: Task
 tags:
 - docs:impacted
@@ -40,6 +40,31 @@ comments:
     - None.
   created_at: 2026-11-28T05:14:32.253472425Z
   modified_at: 2026-11-28T05:14:32.253472425Z
+  session_id: 01a2208aaf73
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a220a3-9b43-7831-ae1d-aa9455cb7c28
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 264c5f7dc5 (git diff origin/main...HEAD)
+
+    Acceptance evidence
+    - AC1 [behavioral-test]: help.rs is_root_help_flag + cli_entry.rs routing; GETTING_STARTED gains 'review prepare'. Test help_grouping_tests::root_help_flag_gets_the_new_user_overview (pass). Overview footer still points at 'aida help --all' (unchanged code).
+    - AC2 [behavioral-test]: review_prepare.rs PREPARE_LONG_HELP + reordered flags with Advanced heading; review_cmd_args.rs one-line about. Test review_prepare_help_leads_with_common_uses (pass) checks examples precede Usage, dev flags under Advanced, no spec IDs / AIDA source paths.
+    - AC3: cli_help_snapshot.txt regenerated (help_surface_matches_golden_snapshot pass); no_spec_ids_in_help_text covers the new row.
+    - make check-ci-fast: exit 0.
+
+    Probe findings
+    - P1/P4: only exact 'aida --help' / 'aida -h' (argc 2) route to the overview; 'aida --help --all', 'aida <cmd> --help' keep clap. No script parses root --help (check-template-commands.py and verify-manual.py always pass a command path).
+    - P3: N/A beyond the argv-length cases tested.
+    - Fix during review: restored the AIDA_REVIEW_RUNNER_CMD mention on --agent that the rewrite had dropped.
+
+    Residual risks
+    - Agents running bare 'aida --help' now get the short overview; full list is 'aida help --all' / 'aida help commands'.
+    - Inherited global flags (--format, --canonical-ids) still interleave in review prepare's Options list (pre-existing clap ordering).
+    - docs:impacted tag was written from a sandboxed seat (store change queued for host commit); CI's doc-intent gate depends on it reaching the aida-store branch.
+  created_at: 2026-11-28T05:32:02.755013398Z
+  modified_at: 2026-11-28T05:32:02.755013398Z
   session_id: 01a2208aaf73
   harness_version: 2.1.319 (Claude Code)
 history:
