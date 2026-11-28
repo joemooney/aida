@@ -1,0 +1,24 @@
+id: 01a22035-8b97-7673-8c7c-8bb7f705dc7e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1615
+agreed_id: TASK-3957
+title: 'First-run: the default commit hook does not show a red failure on an ordinary commit (F8)'
+description: |-
+  ## Acceptance
+  - AC1: in a freshly initialised repo, an ordinary commit (no SPEC trailer, no trace marker) does not print a red failure or FAIL line from the default hook; at most a single neutral hint.
+  - AC2: a test commits in a fresh aida init repo and asserts exit 0 and no failure wording.
+
+  Source: docs/plans/2026-11-27-fresh-user-walkthrough.md (on branch task-3951-fresh-user-walkthrough / PR #4782), section F8. Advisor aida-d3 2026-11-27 20:30 priority order; filed by product-15 for laning now (one spec per lane).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T03:31:49.783028382Z
+modified_at: 2026-11-28T03:31:49.783028382Z
+req_type: Task
+filed_at:
+  code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c6
+  vendor: claude
