@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-product-01a22185-a0d0-7351-8bc4-092363a363ef",
+  "thread_id": "deputy-01a22185-a0d0-7351-8bc4-092363a363ef",
+  "from": "deputy-shell:product",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-15"
+  },
+  "timestamp": 1795858796513,
+  "body": "Script deputy \"product\" finished script job 01a22185-a0d0-7351-8bc4-092363a363ef: rc 0 (ok).\nScript: cd /home/joe/ai/aida && AIDA_TRACK=integration aida queue rework STORY-2838 --for implementer --force; aida comment add STORY-2838 \"$(cat /tmp/claude-1000/-home-joe-ai-aida/01a20440-f576-7051-ae10-3ab1f3514777/scratchpad/d4805.txt)\"\nTranscript: /home/joe/.aida/deputy-shell/product/jobs/01a22185-a0d0-7351-8bc4-092363a363ef/transcript.log\nRead it with `aida deputy shell log 01a22185-a0d0-7351-8bc4-092363a363ef --name product`.\n",
+  "subject": "deputy script job 01a22185 done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
