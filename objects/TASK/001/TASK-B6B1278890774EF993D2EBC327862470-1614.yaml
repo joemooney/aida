@@ -7,12 +7,12 @@ description: |-
   - AC1: the first-run guide and init output show the ID format aida add really issues (or aida add issues the short form init promises); a test pins that the text and the real format agree.
 
   Source: docs/plans/2026-11-27-fresh-user-walkthrough.md (on branch task-3951-fresh-user-walkthrough / PR #4782), section F6. Advisor aida-d3 2026-11-27 20:30 priority order; filed by product-15 for laning now (one spec per lane).
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:31:21.556365075Z
-modified_at: 2026-11-28T04:47:39.092065668Z
+modified_at: 2026-11-28T04:54:58.682440309Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -57,6 +57,12 @@ comments:
   modified_at: 2026-11-28T04:47:39.092065668Z
   session_id: 01a220669ee1
   harness_version: 2.1.319 (Claude Code)
+- id: 01a22081-ab7a-7d00-a2cc-902035e5d382
+  author: aida-publication-done
+  content: Implementer push 47cad2ff1726 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-28T04:54:58.682439780Z
+  modified_at: 2026-11-28T04:54:58.682439780Z
+  session_id: 01a220669ee1
 history:
 - id: 01a22035-56ee-7993-bddb-154d028cfb66
   author: joe
@@ -69,6 +75,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a22081-ab7a-7d00-a2cc-9011c963cb4b
+  author: aida-publication-done
+  timestamp: 2026-11-28T04:54:58.682438200Z
+  session_id: 01a220669ee1
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
   branch: main
