@@ -1,0 +1,31 @@
+id: 01a221f3-5610-7853-b043-f4aeffbfe8f3
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1663
+title: 'Review follow-up: Sketch section 4 says that when a generator writes outside its entry''s outputs, the refusa'
+description: |-
+  From TASK-3963
+  Reviewed sha: 4521f5d84a92d3f8535dd1b3031d463407a2dea5
+
+  Sketch section 4 says that when a generator writes outside its entry's outputs, the refusal also sends an advisor mail naming the path. S1 records the refusal only on the stderr warning, Built.regen_refused (journaled) and the train PR body's aida-train-regeneration-refused: line (pr_train_regen.rs regenerate). The refusal itself works and is tested (task_3963_bwrap_a_generator_writing_outside_its_outputs_refuses). Follow-up: add the advisor mail, or record in the sketch that S1 leaves it out.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-28T11:38:45.136974310Z
+modified_at: 2026-11-28T11:38:45.136974310Z
+req_type: Task
+tags:
+- carried-from:TASK-3963
+- finding-hash:b5a4beaf
+- from-review:TASK-3963
+relationships:
+- rel_type: References
+  target_id: 01a22146-3192-7311-ba67-22c16846dd7c
+  created_at: 2026-11-28T11:39:03.479732200Z
+filed_at:
+  code_sha: 4521f5d84a92d3f8535dd1b3031d463407a2dea5
+  branch: pr-4808
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eb18c450c68
+  vendor: claude
+  session: 01a221ef75ef
