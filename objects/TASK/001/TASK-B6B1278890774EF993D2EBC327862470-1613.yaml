@@ -8,12 +8,12 @@ description: |-
   - AC2: never hangs silently; a test with a fake codex that waits on an auth prompt asserts the bounded failure and message.
 
   Source: docs/plans/2026-11-27-fresh-user-walkthrough.md (on branch task-3951-fresh-user-walkthrough / PR #4782), section F14. Advisor aida-d3 2026-11-27 20:30 priority order; filed by product-15 for laning now (one spec per lane).
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:30:54.837993440Z
-modified_at: 2026-11-28T05:40:03.730044049Z
+modified_at: 2026-11-28T06:02:31.346298988Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -106,6 +106,32 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-28T05:14:08.919862786Z
   modified_at: 2026-11-28T05:14:08.919862786Z
+- id: 01a220b9-6351-77f3-83bf-e4b46b47ed78
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: aa819cccf5 (round 2). Fixes for CR @c4a52a47:
+    1. Challenger sign-in: review_prepare.rs now runs sign_in_check on the challenger pass before the first batch. A signed-out codex challenger is never asked. review_batches starts with its cause set, so every finder row comes back unchallenged and the run exits 4 (S5d). The cause names `codex login` and --challenger-agent.
+    2. Wiring test: task3955_signed_out_codex_is_refused_before_any_batch drives handle_review_prepare --run-review with a signed-out fake codex, once as finder (fails with the hint, no exec, no report) and once as forced challenger behind a claude finder (exit 4, cause has the hint, exec never runs, 1 unchallenged finding). Removing either call fails it: the finder hangs, or the challenger's marker appears.
+    Evidence: 13 targeted tests pass (task3955, bug2783, s5d_, s3a filters). make check-ci-fast: 47 gates passed.
+    Probes: a zero-batch run skips both checks. A codex/codex pair fails on the finder first. A signed-out challenger still counts as unconfined for --post-comment (fail-closed).
+    Residual: the challenger test forces --challenger-agent codex. The default pick takes the same code path but has no separate test.
+  created_at: 2026-11-28T05:55:50.225302742Z
+  modified_at: 2026-11-28T05:55:50.225302742Z
+  session_id: 01a220aab1c1
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a220be-9bca-7a21-9b2a-a8f86a47fda1
+  author: aida-publication-done
+  content: Implementer push aa819cccf5ad declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-28T06:01:32.362464871Z
+  modified_at: 2026-11-28T06:01:32.362464871Z
+  session_id: 01a220aab1c1
+- id: 01a220bf-8232-7723-9996-ec036776538d
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3955-codex-signed-out-fast-fail` at head `aa819cccf5ad1906d00be0f33884e865a3e8dadf`.'
+  created_at: 2026-11-28T06:02:31.346294947Z
+  modified_at: 2026-11-28T06:02:31.346294947Z
+  session_id: 01a220aab1c1
 history:
 - id: 01a22034-e919-78c1-a961-1cd42c78c571
   author: joe
@@ -156,6 +182,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a220be-9bca-7a21-9b2a-a8e3783391cb
+  author: aida-publication-done
+  timestamp: 2026-11-28T06:01:32.362461161Z
+  session_id: 01a220aab1c1
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
