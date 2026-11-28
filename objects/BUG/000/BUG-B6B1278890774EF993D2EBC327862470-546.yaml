@@ -14,7 +14,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T06:14:41.499443358Z
-modified_at: 2026-11-28T01:18:28.330107980Z
+modified_at: 2026-11-28T01:18:40.935915385Z
 req_type: Bug
 tags:
 - lanes
@@ -29,6 +29,10 @@ relationships:
 - rel_type: Supersedes
   target_id: 01a21e9e-ea23-7730-b2cd-ce9aac60d115
   created_at: 2026-11-28T01:18:23.602024522Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a21e9e-5759-7f13-87f1-5d306fdfc741
+  created_at: 2026-11-28T01:18:40.935862983Z
   created_by: joe
 comments:
 - id: 01a21e75-6911-76f1-ac63-7d10cb438cff
@@ -127,6 +131,10 @@ history:
 - id: 01a21fbb-6893-7402-9f1e-20555dad2d7b
   author: joe
   timestamp: 2026-11-28T01:18:25.427925058Z
+  changes: []
+- id: 01a21fbb-abfb-7823-bf7b-570588aa9a4f
+  author: joe
+  timestamp: 2026-11-28T01:18:42.683507251Z
   changes: []
 processing_record:
 - id: 01a21ef7-5df3-7e91-a386-3d10b004b133
