@@ -20,6 +20,17 @@ req_type: Task
 tags:
 - standard
 - story-3120
+relationships:
+- rel_type: Child
+  target_id: 01a21102-e2f1-7e62-9354-693f46b82d22
+  created_at: 2026-11-28T00:23:15.509394679Z
+history:
+- id: 01a21f89-3f2d-7fa1-a04b-7bd5813ddf0b
+  author: joe
+  timestamp: 2026-11-28T00:23:38.029821892Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 84fe63bf7c647ba5c65d6b97d1ced29ae3be3596
   branch: integration
