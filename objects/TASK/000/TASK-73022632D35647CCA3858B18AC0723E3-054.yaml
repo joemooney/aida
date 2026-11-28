@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:26:51.396539455Z
-modified_at: 2026-11-28T01:40:41.972783228Z
+modified_at: 2026-11-28T01:49:03.589150812Z
 req_type: Task
 tags:
 - from-implementer:BUG-2775
@@ -25,6 +25,26 @@ comments:
   content: 'APPROVED (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): agent_errors.rs still takes msg.lines().next() on origin/main; render {err:#} chain. Small.'
   created_at: 2026-11-28T00:31:39.925375891Z
   modified_at: 2026-11-28T00:31:39.925375891Z
+- id: 01a21fd7-74e5-7f93-bbc1-6d057eea3588
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 20242f59ed (diff origin/main...HEAD: aida-cli-lib/src/agent_errors.rs only, ~90 lines).
+
+    Acceptance evidence (spec has no formal ## Acceptance; reviewed against the description):
+    - Agent-mode error summary now carries every cause below the outermost context, in {err:#} order (outer: inner: root). Code: agent_errors.rs with_cause_chain, called from agent_error_block. Behavioural tests: agent_errors::tests::agent_error_block_renders_the_whole_cause_chain, ..._flattens_multiline_causes_and_skips_repeats, ..._single_cause_is_unchanged. Existing task970 / BUG-2759 / TASK-1486 tests still pass (lane job: 7 passed, 0 failed).
+
+    Probe findings:
+    - P1 cross-reference: the summary's outer line still comes from the Debug msg's first line (the same as before), so the Error: prefix strip, did-you-mean and help extraction stay as they were.
+    - P3 multiplicity: 0 causes leaves the output byte-identical (test). N causes are joined in chain order. Multi-line causes are flattened with ' | ', matching BUG-2759's one_line_cause_chain.
+    - P4: a context that formatted its source in is de-duplicated by substring containment. Residual risk: a very short cause string that happens to appear in the outer text is skipped. It is redundant there, so accepted.
+    - Outer-context continuation lines (hints) are still dropped from the summary, which is the TASK-972 / BUG-671 contract. Only causes are added.
+    Fixes: none needed after review.
+    Residual risks: agent error summaries get longer for deeply layered errors. Integration tests that assert an exact agent-mode stdout for a chained error, if any exist, would surface in CI.
+  created_at: 2026-11-28T01:49:03.589150812Z
+  modified_at: 2026-11-28T01:49:03.589150812Z
+  session_id: 01a21fcf95f7
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a218e6-eaae-7570-8b7b-68adb3fac1de
   author: joe

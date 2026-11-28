@@ -14,7 +14,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T23:18:00.049566692Z
-modified_at: 2026-11-28T01:44:07.150204027Z
+modified_at: 2026-11-28T01:59:27.912157660Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -79,6 +79,48 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-28T01:40:03.688260671Z
   modified_at: 2026-11-28T01:40:03.688260671Z
+- id: 01a21fd5-6d6e-7a01-baab-66fcad1c9b47
+  author: dirtlab
+  content: |-
+    ## Implementer approach (r2: hermetic fixture)
+
+    ### Acceptance criteria and evidence
+    - **Unit/fixture:** `task3936_deputy_on_a_deleted_image_is_reported_with_pid_binary_and_fix` (both service inclusions) proves AC1 — receipt hosts the test process itself (Identity::current-style, alive everywhere), and the `/proc/<pid>/exe` probe is injected as a symlink whose target carries the kernel ` (deleted)` marker (same seam the existing deputy_binary test uses). No spawned child, no image copy/delete.
+    - **Unit:** `task3936_one_deputy_hosting_both_services_is_reported_once` proves AC2 via the same injected probe, feeding both services' findings into the doctor dedup helper.
+    - AC3: test-only plus a test seam (exe-path closure) on deputy_binary_finding.
+
+    ### Expected files
+    - `aida-cli-lib/src/advisor_loop_service.rs`
+    - `aida-cli-lib/src/doctor_cmd.rs`
+    - `aida-cli-lib/src/tests/doctor_cmd_task_3936_deputy_binary_tests.rs`
+
+    ### Ambiguities / conflicts as questions
+    - None
+  created_at: 2026-11-28T01:46:50.606173083Z
+  modified_at: 2026-11-28T01:46:50.606173083Z
+  session_id: 01a21fd2b6f1
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a21fe0-fba8-7f20-a67f-760daa61db9c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: b209dd2729
+
+    **Acceptance evidence**
+    - AC1 [behavioral-test]: `review_watch::{service,train_service}::loop_tests::task3936_deputy_on_a_deleted_image_is_reported_with_pid_binary_and_fix` asserts category, `night:<pid>` id, the deleted binary path, `blocks behind it`, the restart fix and the `rebind --deputy night` action; with no receipt, and with a host on the live build, there is no finding.
+    - AC2 [behavioral-test]: `doctor_cmd::task_3936_deputy_binary_tests::task3936_one_deputy_hosting_both_services_is_reported_once` gets both services reporting the same id, finds ONE result after the dedup, and stays at one when the dedup runs again; the stale-deputy alias selects the category.
+    - AC3: no production behavior change. The new seams are `deputy_binary_finding_at` / `host_deputy_binary_at` (the exe-link closure; production passes `/proc/<pid>/exe`), and `extend_deputy_binary_findings` now takes its candidates as an argument.
+    - Lane runner: 3 passed, 0 failed.
+
+    **r2 root fix (CI lib-0 red):** the fixture no longer spawns a copied `sleep` and deletes its image. The receipt's host is the test process itself (always alive, observable in its own PID namespace). Its image link is injected as a symlink whose target carries the kernel's ` (deleted)` marker, the same seam the existing deputy_binary unit test uses. So the test no longer depends on the runner's exec/fork behavior or `/proc/<child>/exe`.
+
+    **Probes:** P1: the id format `deputy:pid` is the same in the producer and the dedup. P3: 0, 1 and 2 candidates are covered, plus a repeat. P4: the deleted-marker suffix is matched with `ends_with`, and the fixture writes exactly that suffix. P5: N/A.
+
+    **Residual risk:** I did not run the brief's `env -i HOME=$(mktemp -d)` form, because the lane runner accepts only cargo/make. What supports host independence instead: the tests run under `AmbientGuard::hermetic` with `AIDA_DEV_LIVE_DIR` set to the tempdir, inside the lane sandbox, and they read nothing from ~/.aida. The real proof is CI lib-0 at this head.
+  created_at: 2026-11-28T01:59:27.912157660Z
+  modified_at: 2026-11-28T01:59:27.912157660Z
+  session_id: 01a21fd2b6f1
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21f4d-52bb-7912-beea-868359f153f8
   author: joe
