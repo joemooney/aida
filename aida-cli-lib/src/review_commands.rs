@@ -1576,6 +1576,97 @@ pub(crate) fn run_stranded_sweep(
     Ok(rows)
 }
 
+/// What `aida review stranded --fix` did with one stranded row.
+// trace:TASK-3501 | ai:claude
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum StrandedFix {
+    /// Held and parked in Needs Attention.
+    Shelved,
+    /// The spec has already landed (Completed, or its PR merged since the
+    /// sweep); noted on the spec, no hold placed and not shelved.
+    Landed(&'static str),
+    /// Held, but the shelve changed nothing.
+    NotShelved,
+}
+
+/// Recover one stranded refusal: hold its PR and park its spec, unless the
+/// spec has landed. The sweep only lists Done specs on open PRs, but the PR
+/// can merge between the sweep and this write, so the BUG-2738 landed check
+/// runs here, before any side effect. An unreadable PR state counts as not
+/// merged, so the recovery runs as before.
+// trace:TASK-3501 | ai:claude
+pub(crate) fn fix_stranded_row(
+    project_root: &std::path::Path,
+    row: &stranded_sweep::StrandedRow,
+) -> Result<StrandedFix> {
+    let current = crate::gate::review_verdict::read_recorded_verdict(project_root, &row.spec_id);
+    let writer = current
+        .as_ref()
+        .and_then(|v| v.recorded_by.clone())
+        .unwrap_or_else(|| "aida review stranded --fix".to_string());
+    let verdict = current
+        .as_ref()
+        .map(|v| v.kind.label())
+        .unwrap_or("stranded refusal");
+    if let Some(reason) = crate::leases::record_refusal_on_landed_spec(
+        project_root,
+        &row.spec_id,
+        refused_change_merged(project_root, row.pr),
+        &writer,
+        verdict,
+    )? {
+        return Ok(StrandedFix::Landed(reason));
+    }
+    let reason = format!(
+        "stranded refusal recovered for {} at {}",
+        row.spec_id,
+        row.reviewed_sha
+            .as_deref()
+            .map(crate::gate::review_verdict::short_sha)
+            .unwrap_or("unknown"),
+    );
+    // trace:STORY-1397 | ai:claude — a stranded refusal is rework.
+    // BUG-1532 criterion 10: reference the verdict record, not a quote.
+    // trace:BUG-1532 | ai:claude
+    let mut hold = crate::gate::merge_hold_core::typed_hold(
+        row.pr,
+        crate::gate::merge_hold_core::HoldReasonKind::Rework,
+        &reason,
+        row.reviewed_sha.clone(),
+    );
+    hold.verdict_ref = Some(crate::gate::merge_hold_core::VerdictRef::new(
+        &row.spec_id,
+        Some(row.pr),
+        row.reviewed_sha.clone(),
+        current.and_then(|v| v.recorded_by),
+    ));
+    hold.spec = Some(row.spec_id.to_ascii_uppercase());
+    crate::gate::merge_hold_core::place_hold(project_root, &hold)
+        .with_context(|| format!("could not protect PR-{} with a merge hold", row.pr))?;
+    let detail = row
+        .verdict_summary
+        .clone()
+        .unwrap_or_else(|| "stranded refusal recovered by sweep".to_string());
+    let recovery = format!(
+        "address the review findings, move {} back to In Progress, and clear the PR hold only after approval",
+        row.spec_id
+    );
+    let shelved = shelve_spec_on_failure(
+        project_root,
+        &row.spec_id,
+        "reviewer",
+        3,
+        "verdict:stranded",
+        &detail,
+        &recovery,
+    )?;
+    Ok(if shelved.is_some() {
+        StrandedFix::Shelved
+    } else {
+        StrandedFix::NotShelved
+    })
+}
+
 /// TASK-1423: resolve a branch's CURRENT tip commit from LOCAL git objects
 /// only — no `git fetch`, no forge call. Tries the local branch first (a
 /// still-live worktree may have it), then the `origin` remote-tracking ref
@@ -1793,55 +1884,21 @@ pub(crate) fn handle_review_stranded(json: bool, fix: bool, age: bool) -> Result
 
     if fix {
         let mut fixed_specs = Vec::new();
+        let mut landed_specs = Vec::new();
         for row in &rows {
-            let reason = format!(
-                "stranded refusal recovered for {} at {}",
-                row.spec_id,
-                row.reviewed_sha
-                    .as_deref()
-                    .map(crate::gate::review_verdict::short_sha)
-                    .unwrap_or("unknown"),
-            );
-            // trace:STORY-1397 | ai:claude — a stranded refusal is rework.
-            // BUG-1532 criterion 10: reference the verdict record, not a quote.
-            // trace:BUG-1532 | ai:claude
-            let mut hold = crate::gate::merge_hold_core::typed_hold(
-                row.pr,
-                crate::gate::merge_hold_core::HoldReasonKind::Rework,
-                &reason,
-                row.reviewed_sha.clone(),
-            );
-            let current =
-                crate::gate::review_verdict::read_recorded_verdict(&project_root, &row.spec_id);
-            hold.verdict_ref = Some(crate::gate::merge_hold_core::VerdictRef::new(
-                &row.spec_id,
-                Some(row.pr),
-                row.reviewed_sha.clone(),
-                current.and_then(|v| v.recorded_by),
-            ));
-            hold.spec = Some(row.spec_id.to_ascii_uppercase());
-            crate::gate::merge_hold_core::place_hold(&project_root, &hold)
-                .with_context(|| format!("could not protect PR-{} with a merge hold", row.pr))?;
-            let detail = row
-                .verdict_summary
-                .clone()
-                .unwrap_or_else(|| "stranded refusal recovered by sweep".to_string());
-            let recovery = format!(
-                "address the review findings, move {} back to In Progress, and clear the PR hold only after approval",
-                row.spec_id
-            );
-            if shelve_spec_on_failure(
-                &project_root,
-                &row.spec_id,
-                "reviewer",
-                3,
-                "verdict:stranded",
-                &detail,
-                &recovery,
-            )?
-            .is_some()
-            {
-                fixed_specs.push(row.spec_id.clone());
+            match fix_stranded_row(&project_root, row)? {
+                StrandedFix::Shelved => fixed_specs.push(row.spec_id.clone()),
+                StrandedFix::Landed(reason) => {
+                    if !json {
+                        println!(
+                            "  {} {} not shelved: {reason}; the verdict is noted on the spec.",
+                            crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
+                            row.spec_id.cyan(),
+                        );
+                    }
+                    landed_specs.push(row.spec_id.clone());
+                }
+                StrandedFix::NotShelved => {}
             }
         }
         let remaining = run_stranded_sweep(&project_root)?;
@@ -1850,6 +1907,7 @@ pub(crate) fn handle_review_stranded(json: bool, fix: bool, age: bool) -> Result
                 "{}",
                 serde_json::to_string_pretty(&serde_json::json!({
                     "fixed": fixed_specs,
+                    "landed": landed_specs,
                     "remaining": remaining.iter().map(|r| &r.spec_id).collect::<Vec<_>>(),
                 }))?
             );
@@ -3724,7 +3782,7 @@ fn handle_review_record_context_with_policy_at(
 /// project's forge. A forge that cannot answer (pure-git, no CLI, no network)
 /// is "not merged": the refusal then shelves as before, and says why.
 // trace:BUG-2738 | ai:claude
-fn refused_change_merged(project_root: &std::path::Path, n: u64) -> bool {
+pub(crate) fn refused_change_merged(project_root: &std::path::Path, n: u64) -> bool {
     match crate::forge::forge_for(project_root)
         .change_metadata(n, &mut crate::network_retry::NoopSink)
     {

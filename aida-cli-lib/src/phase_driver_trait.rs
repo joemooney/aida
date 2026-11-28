@@ -3884,6 +3884,39 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         } else {
             failure.reason.clone()
         };
+        // TASK-3501: the BUG-2738 landed guard. A refusing verdict on a spec
+        // that already landed (Completed, or its PR merged) is noted on the
+        // spec, not shelved; `None` tells the drain nothing was parked. An
+        // unreadable PR state counts as not merged, so the shelve runs as
+        // before. trace:TASK-3501 | ai:claude
+        let refusal = match failure.kind {
+            auto_complete::FailureKind::VerdictRequestChanges => {
+                Some(crate::gate::review_verdict::VerdictKind::RequestChanges)
+            }
+            auto_complete::FailureKind::VerdictReject => {
+                Some(crate::gate::review_verdict::VerdictKind::Rejected)
+            }
+            _ => None,
+        };
+        if let Some(refusal) = refusal {
+            let pr_merged = self
+                .pr_number
+                .or(self.phase_done_pr)
+                .is_some_and(|n| crate::refused_change_merged(&self.project_root, u64::from(n)));
+            if let Some(reason) = crate::leases::record_refusal_on_landed_spec(
+                &self.project_root,
+                spec,
+                pr_merged,
+                aida_core::conflict::ORCHESTRATOR_SHELVE_AUTHOR,
+                refusal.label(),
+            )? {
+                eprintln!(
+                    "  {} {spec} not shelved: {reason}; the verdict is noted on the spec.",
+                    "Note:".dimmed(),
+                );
+                return Ok(None);
+            }
+        }
         shelve_spec_on_failure(
             &self.project_root,
             spec,
