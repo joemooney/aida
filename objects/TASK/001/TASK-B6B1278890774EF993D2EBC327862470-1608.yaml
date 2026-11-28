@@ -10,13 +10,21 @@ description: |-
   - AC2: every friction point (a wrong or missing command, a confusing error, a missing step, an internal SPEC ID or jargon in user-facing output, a slow or noisy step) is recorded with the exact command, the output excerpt and the expected behaviour.
   - AC3: the findings are filed as ONE new story (draft) with one AC per friction point, not as separate tasks. The walkthrough transcript is attached as a docs/plans/2026-11-27-fresh-user-walkthrough.md file in the PR.
   - AC4: no product code changes in this task; doc typos found along the way may be fixed in the same PR.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T02:34:53.162188563Z
-modified_at: 2026-11-28T02:34:53.162188563Z
+modified_at: 2026-11-28T02:50:06.970014116Z
 req_type: Task
+history:
+- id: 01a2200f-5afa-7d03-93b1-a07aad176f28
+  author: aida-session-start
+  timestamp: 2026-11-28T02:50:06.970013173Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
   branch: main
