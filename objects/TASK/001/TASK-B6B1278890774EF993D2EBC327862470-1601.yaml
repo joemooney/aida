@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-28T00:28:38.523761983Z
-modified_at: 2026-11-28T00:43:11.735638131Z
+modified_at: 2026-11-28T00:43:13.726892595Z
 req_type: Task
 tags:
 - story-3120
@@ -24,6 +24,14 @@ relationships:
 - rel_type: Child
   target_id: 01a21102-e2f1-7e62-9354-693f46b82d22
   created_at: 2026-11-28T00:28:59.634196321Z
+comments:
+- id: 01a21f9b-7624-7872-8504-5017988410b1
+  author: joe
+  content: 'REJECTED as superseded: STORY-3120 S7-S10 lands as one rebased PR from origin/story-3120-ci-review, per Joe 11-27 17:17 (advisor 17:52). Slice plan kept as fallback reference at /tmp/claude-1000/story-3120-s7-s10-slices.md.'
+  created_at: 2026-11-28T00:43:13.726892595Z
+  modified_at: 2026-11-28T00:43:13.726892595Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a21f8e-7a0f-7461-a0c2-cb5f9c788ecc
   author: joe
