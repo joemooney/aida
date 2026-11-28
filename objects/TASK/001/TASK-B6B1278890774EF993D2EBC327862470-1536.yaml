@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 70b9880abb40efc7fabb59c352a2fe98a31fbffb
 
   Duplicate salvage on retry: in reclaim_exited_branch_clone (aida-cli-lib/src/queue_cmd/work.rs:4251) each retry re-runs seat_clone::destroy. For a clone whose only unpublished state is checkpoint refs (not unshipped), destroy_inner salvages before it reaches the retention gate (seat_clone.rs, 'facts.unshipped() || checkpoints' branch), so a transient refusal that retries writes up to three salvage patches for the same clone. No data is lost; it adds salvage clutter. Skip a salvage when one exists at the same HEAD, or salvage once outside the retry.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T22:05:58.159458069Z
-modified_at: 2026-11-28T01:14:48.595262568Z
+modified_at: 2026-11-28T01:14:50.979106615Z
 req_type: Task
 tags:
 - carried-from:BUG-2778
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21fb8-22e3-7862-a0e1-62b941986387
+  author: joe
+  timestamp: 2026-11-28T01:14:50.979104444Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 70b9880abb40efc7fabb59c352a2fe98a31fbffb
   branch: pr-4693
