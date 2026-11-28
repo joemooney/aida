@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: a8592b5a3072acda740c69bd9ace9ceb35884674
 
   STORY-3120 S3a (aida-cli-lib/src/launch/review_runner.rs RunnerCall::run): the deadline and the output caps are enforced only while the runner's process group holds the pipes. After the poll loop and kill(-group), `child.wait()` is followed by unbounded `writer.join()`, `out.join()` and `err.join()`. A runner descendant that leaves the group (setsid/setpgid, e.g. a daemonised helper or a vendor-spawned sandbox) and inherits stdout/stderr/stdin survives the SIGKILL and keeps the pipe ends open. read_to_end then never sees EOF, and a never-reading holder blocks write_all, so `run` hangs past its deadline. Follow-up before S3a-2 wires `--run-review`: bound the joins (close our read ends or use non-blocking reads at the deadline), and add a test whose runner forks a `setsid sleep` holding stdout.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T23:01:58.965704419Z
-modified_at: 2026-11-28T00:23:05.685234946Z
+modified_at: 2026-11-28T00:23:10.615776116Z
 req_type: Task
 tags:
 - carried-from:TASK-3882
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-26T00:12:49.619932879Z
   changes: []
+- id: 01a21f88-d417-7f82-a403-65e100ef327e
+  author: joe
+  timestamp: 2026-11-28T00:23:10.615773937Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: a8592b5a3072acda740c69bd9ace9ceb35884674
   branch: pr-4599
