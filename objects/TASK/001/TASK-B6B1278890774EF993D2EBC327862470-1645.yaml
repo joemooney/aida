@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T08:29:38.066956Z
-modified_at: 2026-11-28T09:44:46.834821191Z
+modified_at: 2026-11-28T09:51:59.243624230Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -102,6 +102,19 @@ comments:
   content: Commit 7deac79cd4 references this requirement
   created_at: 2026-11-28T09:44:46.834821191Z
   modified_at: 2026-11-28T09:44:46.834821191Z
+  session_id: 01a2217b7a0f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a22191-970b-76c0-b6e6-49f7792543cc
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: f664bab76b (round 2 of #4808, against the 1df06dd6 CR and the STORY-2894 sketch amendment).
+    Fixes, per finding: (1) generators are base-trusted: pin_generators binds train.base's copy of each entry's TrainEntry.generators read-only over a self-contained scratch checkout of the tip; base_trusted disables an entry whose generator any car changes (keeps the strict check). The sandbox (sandbox_args) binds only the checkout rw plus /usr,/bin,/sbin,/lib*,/etc/alternatives,/etc/ld.so.cache ro (and a python3/git install prefix outside HOME, never under HOME), tmpfs /tmp and HOME, --unshare-all --unshare-net, PYTHONSAFEPATH=1; no --ro-bind / /, no repo .git bind (the scratch repo's own index serves git ls-files). Pinned by the_regen_sandbox_binds_only_the_checkout_and_the_toolchain. (2) load_human_gates Err disables regeneration for the whole train: an_unreadable_gate_config_disables_regeneration_for_the_train. (3) timeout and launch-failure refusals: a_generator_timeout_or_launch_failure_refuses (stub launcher, no bwrap needed); live tests renamed task_3963_bwrap_* and added to ci.yml's required-live list + expected/ran counts; they assert under AIDA_REQUIRE_BWRAP_LIVE=1 and print SKIP (bwrap unavailable) otherwise. (4) refusal recorded on Built.regen_refused (serde, so journaled with the train) and in the PR body as a code span. (5) verify_structure pushes the regen commit (parent, message, touched, report) onto the proof vector.
+    Probe findings fixed: pinned-generator write refuses a non-regular or out-of-checkout target; refusal text rendered as a code span so it cannot mention or inject markup. Launch ratchet flagged Command::new(&launch.program); renamed binding to bwrap.
+    Validation: lane jobs: train_generated 14 passed (2 live bwrap tests SKIPPED: this lane cannot create user namespaces, so the live sandbox path is unverified locally and depends on CI's required-live gate); filter train 474 passed; aida-ci-guards --lib 51 passed.
+    Residual risks: live bwrap path unexercised locally (e.g. toolchain mounts on an unusual host); advisor mail for out-of-output writes is still not sent (refusal is journaled and in the PR body only); a store-writers train whose tip inventory does not parse now refuses (the sandbox has no objects for the base fallback), which is fail-closed.
+  created_at: 2026-11-28T09:51:59.243624230Z
+  modified_at: 2026-11-28T09:51:59.243624230Z
   session_id: 01a2217b7a0f
   harness_version: 2.1.319 (Claude Code)
 history:
