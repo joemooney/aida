@@ -1,5 +1,6 @@
 id: 01a22163-ffd2-7f43-b3f1-e3dd81904828
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-073
+agreed_id: TASK-3606
 title: STORY-2894 S1 is about 640 non-test changed lines, against the 300-line slice budget
 description: |
   The brief capped S1 at 300 changed lines. After rustfmt, the S1 diff is about 640 non-test lines and about 1050 with tests. The lines are in gate/train_generated.rs (~280), pr_train_regen.rs (~230), the driver's train phase in scripts/repair-generated.py (~95), and small wiring edits in pr_train.rs, pr_train_verified.rs and seat_clone.rs. AC1 bundles six components (REGISTRY rows with --baseline, the gate table with both ratchets, the driver train phase, the regen commit, the PR-body block and the journal record), and none can be dropped without leaving AC1 unmet. If the reviewer wants it smaller, it splits cleanly into (a) the Python REGISTRY rows, --baseline and train phase with their Python tests, and (b) the Rust gate table plus the live train wiring.
@@ -17,6 +18,13 @@ tags:
 - from-implementer:TASK-3963
 - kind:deviation
 - severity:minor
+history:
+- id: 01a221e8-a9fa-7ba3-ad26-19e644102b73
+  author: joe
+  timestamp: 2026-11-28T11:27:05.722586936Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 1df06dd6599bc217b4f072c85c494af648c96fbf
   branch: task-3963-train-regen-s1

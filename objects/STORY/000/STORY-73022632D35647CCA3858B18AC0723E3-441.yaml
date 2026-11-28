@@ -1,5 +1,6 @@
 id: 01a22149-e0cd-74b3-b7ba-9156966eb92d
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-441
+agreed_id: STORY-3269
 title: 'Review PR-4806: [AI:claude] docs(plans): sketch — the train regenerates registered generated files at stack time (Refs STORY-2894)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a22136`) for branch `story-2894-sketch`.
@@ -35,6 +36,12 @@ history:
 - id: 01a2214a-2ff8-7560-9758-e8a60c3352e2
   author: dirtlab
   timestamp: 2026-11-28T08:33:59.800843473Z
+  changes: []
+- id: 01a221ed-90f6-7e10-b373-fc3730f62529
+  author: joe
+  timestamp: 2026-11-28T11:32:26.998074785Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
   changes: []
 filed_at:
   code_sha: 6d3ca942ec2e4a042f45c48bc90773576e06ffdc

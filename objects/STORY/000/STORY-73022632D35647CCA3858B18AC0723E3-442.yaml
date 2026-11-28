@@ -1,5 +1,6 @@
 id: 01a22171-f151-7cd2-a48f-469db9087c21
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-442
+agreed_id: STORY-3271
 title: 'Review PR-4808: [AI:claude] feat(train): the train regenerates registered generated files in one tip commit [S1] (TASK-3963)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a2214b`) for branch `task-3963-train-regen-s1`.
@@ -33,6 +34,12 @@ history:
 - id: 01a22172-15a4-7c93-87fe-da907e5df80b
   author: dirtlab
   timestamp: 2026-11-28T09:17:34.500167145Z
+  changes: []
+- id: 01a221ee-1b15-71b2-adb9-b472963ddaa1
+  author: joe
+  timestamp: 2026-11-28T11:33:02.357912422Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
   changes: []
 filed_at:
   code_sha: 6d3ca942ec2e4a042f45c48bc90773576e06ffdc

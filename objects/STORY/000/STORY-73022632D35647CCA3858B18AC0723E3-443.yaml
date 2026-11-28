@@ -1,5 +1,6 @@
 id: 01a221ca-0430-7412-ac54-cd91e95a4f02
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-443
+agreed_id: STORY-3270
 title: 'Review PR-4811: [AI:claude] fix(agents): agent CLI --version probes time out instead of hanging (TASK-3965)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a221a8`) for branch `task-3965-bounded-version-probes`.
@@ -33,6 +34,12 @@ history:
 - id: 01a221ca-28b1-7ad2-a6ab-0d07c4032adf
   author: dirtlab
   timestamp: 2026-11-28T10:53:46.545496614Z
+  changes: []
+- id: 01a221ed-d626-7792-9f45-80ab4beba424
+  author: joe
+  timestamp: 2026-11-28T11:32:44.710744281Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
   changes: []
 filed_at:
   code_sha: eb18c450c68d9170041ea975e6283dcb02975138

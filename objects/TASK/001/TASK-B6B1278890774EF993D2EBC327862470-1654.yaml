@@ -1,5 +1,6 @@
 id: 01a22176-386d-7243-a76b-15feefbeedee
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1654
+agreed_id: TASK-3623
 title: 'Review follow-up: consolidate_cross_batch_findings (aida-core/src/review_engine.rs:2964-2979) merges two cod'
 description: |-
   From STORY-3120
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a21102-e2f1-7e62-9354-693f46b82d22
   created_at: 2026-11-28T09:22:23.798191538Z
+history:
+- id: 01a221ed-0428-7c81-86d4-b0210fd19bc2
+  author: joe
+  timestamp: 2026-11-28T11:31:50.952575646Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 46c45d8538e1bbecd7b695f1f8c764a7dbb4c300
   branch: pr-4779
