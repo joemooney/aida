@@ -9,12 +9,12 @@ description: |
 
   Raised by the implementer while working BUG-2782.
   Branch: bug-2782-ccf-no-build  ·  Commit: 71f95102f1  (PR link added on merge)
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:42:51.691935317Z
-modified_at: 2026-11-28T05:26:28.361580501Z
+modified_at: 2026-11-28T09:11:15.425463824Z
 req_type: Task
 tags:
 - ci-gates
@@ -96,6 +96,20 @@ history:
   author: joe
   timestamp: 2026-11-28T05:26:28.493155015Z
   changes: []
+- id: 01a2216c-4c9b-7603-b56c-4990644cb12b
+  author: aida-auto-bump
+  timestamp: 2026-11-28T09:11:15.355549866Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a2216c-4ce1-7ff0-aaec-7ba454e72474
+  timestamp: 2026-11-28T09:11:15.425461176Z
+  agent: aida
+  commit_sha: 0827953290b2351c2dbca2fe841e7b3c80a74c3e
+  summary: 'TASK-3537 (completing): the lane job runner now admits fast-gate jobs (fast_gate_job: exact argv `make check-ci-fast`, or the host-only `/bin/sh -c` form that validate() never accepts from a seat) without a host compile slot. job_settings() clears only max_compile_concurrency, so the job memory floor and CARGO_BUILD_JOBS still apply (lane_admission.rs:541-547, lane_job.rs:1896). Criterion (the fast gate no longer queues behind lanes.max_compile_concurrency) is verified by lane_admission::tests::task_3537_non_compiling_job_skips_full_compile_slots. That test shows three things: with every slot held, a non-compiling job is admitted with no slot; it still waits on the memory floor; a compiling job still queues and reports the slot wait. admit_lane_job has one caller (rg). The cfg(test) branch ignores `compiles` as before. CI pending at review time: the fast gates and the full test shards are green, and the gates and fast-compile jobs are still running. One non-blocking p3 follow-up: the residual risk the PR body already names.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 71f95102f1d8c0bec2d04160642f479d442360a6
@@ -106,3 +120,7 @@ filed_at:
   vendor: claude
   session: 01a21b0347d5
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-28T09:11:15.355542579Z
+  completion_sha: 0827953290b2351c2dbca2fe841e7b3c80a74c3e
