@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:49:05.557728295Z
-modified_at: 2026-11-19T06:43:16.533782479Z
+modified_at: 2026-11-28T00:42:24.993792165Z
 req_type: Story
 tags:
 - area:deputy
@@ -165,6 +165,11 @@ comments:
   created_at: 2026-11-19T06:43:16.533771117Z
   modified_at: 2026-11-19T06:43:16.533771117Z
   session_id: 01a1f261993a
+- id: 01a21f9a-7162-7ff3-8595-20a7b99fe41a
+  author: joe
+  content: 'RETURNED to Approved (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Shelved only by fast-gate failure; no commits on main for it; scope clear.'
+  created_at: 2026-11-28T00:42:24.993792165Z
+  modified_at: 2026-11-28T00:42:24.993792165Z
 history:
 - id: 01a1ebdb-b0c3-74d2-8e57-4c76690dc100
   author: joe
