@@ -9,12 +9,12 @@ description: |-
   - AC1: a fixture test over deputy_binary_finding (advisor_loop_service.rs) with a fake deputy receipt on a stale/deleted binary asserts the finding names the deputy, pid, binary and the restart fix.
   - AC2: a doctor_cmd.rs test with two services reporting the same deputy:pid id (the deputy-binary / stale-deputy alias) asserts ONE deduplicated finding.
   - AC3: test-only.
-status: Done
+status: Completed
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T23:18:00.049566692Z
-modified_at: 2026-11-28T05:26:39.288547955Z
+modified_at: 2026-11-28T09:11:21.409921908Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -190,6 +190,22 @@ history:
   author: joe
   timestamp: 2026-11-28T05:26:39.417848798Z
   changes: []
+- id: 01a2216c-63fb-7851-ba72-1efeacf29be7
+  author: aida-auto-bump
+  timestamp: 2026-11-28T09:11:21.339492136Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a2216c-6441-7651-82ad-803e409d5163
+  timestamp: 2026-11-28T09:11:21.409918115Z
+  agent: aida
+  commit_sha: fec9ba5c8e025cf07543b32bf294bd40b80b09d7
+  summary: 'TASK-3936 PASS. AC1: advisor_loop_service.rs task3936 test writes a receipt hosted by the test process, injects a symlink carrying the kernel '' (deleted)'' marker via the new deputy_binary_finding_at seam, and asserts the finding names deputy, pid (id night:pid), the deleted binary path, the blocked service, the restart/rebind fix, safe_heal=false, plus none-without-receipt and none-on-live-build. AC2: doctor_cmd_task_3936_deputy_binary_tests.rs writes receipts for both review-watch and auto-train services (the shared include! module), asserts both report the same night:pid id, and that extracted extend_deputy_binary_findings yields one finding (idempotent on re-extend) and that the stale-deputy alias selects the category. AC3: production paths unchanged - proc_exe reproduces the former /proc/<pid>/exe path and the dedup loop is moved verbatim into a helper; new fixtures are #[cfg(test)]. CI fast compile and fast gates green at the head; merge-hold-gate pending clearance (not a review dependency).'
+  punted:
+  - 'punted: Advisor FIX-FIRST: full-tier CI is red at this head; the approval cannot land.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 0fba3d42ee966dab2866ad59a9ffbe96d2b0e23d
@@ -202,4 +218,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-27T23:51:05.268739612Z
   implemented_by: dirtlab
+  completed_at: 2026-11-28T09:11:21.339484829Z
+  completion_sha: fec9ba5c8e025cf07543b32bf294bd40b80b09d7
   reopened_at_sha: 82c120dd1cf960e4272004b5cae7243b8d45aa67
