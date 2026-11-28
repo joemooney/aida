@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T01:05:23.598744234Z
-modified_at: 2026-11-27T18:00:42.417129693Z
+modified_at: 2026-11-28T01:11:26.735021466Z
 req_type: Bug
 tags:
 - leases
@@ -226,6 +226,11 @@ comments:
   content: 'DEFERRED FOLLOW-UP from #4748 review (approved @c7431f97; minor): record_refusal_on_landed_spec returns None outside a distributed store, so on a legacy centralized-store project a request-changes verdict on a Done spec whose PR already merged still shelves to NeedsAttention (Completed is already protected by shelve_status_flip). The stranded sweep and RealPhaseDriver::shelve_on_failure also shelve with no merged check.'
   created_at: 2026-11-27T17:17:03.839869167Z
   modified_at: 2026-11-27T17:17:03.839869167Z
+- id: 01a21fb5-050f-7633-b7ef-0ee937944729
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3502): The new tests carry only a module-level `trace:BUG-2738`; they lack `trace:BUG-2738.AC1` / `trace:BUG-2738.AC2` markers (repo convention, e.g. task_1993_review_watch_tests.rs:5967), which is why `aida criteria` reports both criteria untraced. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:11:26.735021466Z
+  modified_at: 2026-11-28T01:11:26.735021466Z
 history:
 - id: 01a20b16-31ad-7873-bd2f-c6f1dee6d013
   author: joe
