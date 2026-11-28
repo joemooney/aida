@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T10:47:01.862391650Z
-modified_at: 2026-11-28T02:44:01.821197645Z
+modified_at: 2026-11-28T02:44:59.723390801Z
 req_type: Task
 tags:
 - from-implementer:BUG-2770
@@ -51,6 +51,12 @@ comments:
   content: Implementer push ae8d56e45084 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-28T02:44:01.821197132Z
   modified_at: 2026-11-28T02:44:01.821197132Z
+  session_id: 01a21ff8ef73
+- id: 01a2200a-aacb-7703-a24b-6b7194c75058
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3478-gc-mailbox-temps` at head `ae8d56e45084226238b180b3a7d26b913e116f0c`.'
+  created_at: 2026-11-28T02:44:59.723386978Z
+  modified_at: 2026-11-28T02:44:59.723386978Z
   session_id: 01a21ff8ef73
 history:
 - id: 01a217a4-df51-7bd1-b679-179793d6c41c
