@@ -25,8 +25,20 @@ pub(crate) const GETTING_STARTED: &[(&str, &str)] = &[
     ("add", "Capture a new spec (a title + a line of why)"),
     ("list", "List specs"),
     ("search", "Search specs"),
+    // trace:TASK-3959 | ai:claude
+    (
+        "review prepare",
+        "Review a change with an AI agent and get line-anchored findings",
+    ),
     ("graph", "Trace impact — what a change affects"),
 ];
+
+/// `aida --help` / `aida -h` with nothing else: the newcomer's first reflex.
+/// It gets the short overview, not the full flag-level command wall (that
+/// stays one step away via `aida help --all`). trace:TASK-3959 | ai:claude
+pub(crate) fn is_root_help_flag(raw_args: &[String]) -> bool {
+    raw_args.len() == 2 && matches!(raw_args[1].as_str(), "--help" | "-h")
+}
 
 /// The full grouped command surface, organized by function. Used by both the
 /// tiered help (group headings only, no command rows) and `aida help --all`
@@ -241,14 +253,14 @@ pub(crate) fn print_tiered_help() {
 
     println!("{}", "Getting started".cyan().bold());
     for (name, desc) in GETTING_STARTED {
-        println!("  {:<10} {}", name.green(), desc);
+        println!("  {:<15} {}", name.green(), desc);
     }
     // The TUI is the flagship surface (EPIC-26) — invite it from the first
     // screen, but only when it's actually compiled in so a --no-default-features
     // build doesn't list a command that errors. trace:SPIKE-66 | ai:claude
     #[cfg(feature = "tui")]
     println!(
-        "  {:<10} {}",
+        "  {:<15} {}",
         "tui".green(),
         "Launch the terminal UI — the at-a-glance home for your project"
     );

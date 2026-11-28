@@ -11,8 +11,90 @@ fn getting_started_leads_with_the_why_magic() {
     assert_eq!(names[0], "why", "the magic leads the first screen");
     assert_eq!(
         names,
-        ["why", "init", "show", "add", "list", "search", "graph"]
+        [
+            "why",
+            "init",
+            "show",
+            "add",
+            "list",
+            "search",
+            "review prepare",
+            "graph"
+        ]
     );
+}
+
+// trace:TASK-3959 | ai:claude — the short overview names every command a new
+// user needs, and a bare `aida --help` / `aida -h` is routed to it.
+#[test]
+fn root_help_flag_gets_the_new_user_overview() {
+    let names: Vec<&str> = GETTING_STARTED.iter().map(|(n, _)| *n).collect();
+    for needed in ["init", "add", "list", "show", "review prepare"] {
+        assert!(names.contains(&needed), "overview lacks `{needed}`");
+    }
+    let argv = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    assert!(is_root_help_flag(&argv(&["aida", "--help"])));
+    assert!(is_root_help_flag(&argv(&["aida", "-h"])));
+    // Command-level help and other flags keep clap's own rendering.
+    assert!(!is_root_help_flag(&argv(&["aida", "init", "--help"])));
+    assert!(!is_root_help_flag(&argv(&["aida", "--version"])));
+    assert!(!is_root_help_flag(&argv(&["aida"])));
+}
+
+// trace:TASK-3959 | ai:claude — `aida review prepare --help` opens with the
+// three common invocations, keeps tuning flags under Advanced, and carries
+// no spec IDs or AIDA-internal paths.
+#[test]
+fn review_prepare_help_leads_with_common_uses() {
+    let mut root = crate::TEST_CLI
+        .built_command()
+        .term_width(100)
+        .color(clap::ColorChoice::Never);
+    root.build();
+    let text = root
+        .try_get_matches_from(["aida", "review", "prepare", "--help"])
+        .expect_err("--help short-circuits")
+        .render()
+        .to_string();
+    let at = |needle: &str| {
+        text.find(needle)
+            .unwrap_or_else(|| panic!("missing `{needle}` in:\n{text}"))
+    };
+    assert!(
+        text.starts_with("Review a change with an AI agent"),
+        "{text}"
+    );
+    let usage = at("Usage:");
+    for example in [
+        "aida review prepare --run-review --pr 42",
+        "aida review prepare --run-review --from v1.2 --to v1.3",
+        "aida review prepare --run-review --from main",
+    ] {
+        assert!(
+            at(example) < usage,
+            "example `{example}` must precede usage"
+        );
+    }
+    let advanced = at("\nAdvanced:");
+    assert!(at("--run-review") < advanced && at("--pr <N>") < advanced);
+    for flag in [
+        "--verify-coverage",
+        "--anchor-findings",
+        "--specs",
+        "--json",
+    ] {
+        assert!(at(flag) > advanced, "`{flag}` belongs under Advanced");
+    }
+    for leak in [
+        "aida-core/",
+        "aida-cli-lib/",
+        "TASK-",
+        "STORY-",
+        "BUG-",
+        "merge base",
+    ] {
+        assert!(!text.contains(leak), "help leaks `{leak}`:\n{text}");
+    }
 }
 
 // trace:STORY-556 | ai:claude

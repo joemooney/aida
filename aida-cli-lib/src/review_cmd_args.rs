@@ -95,10 +95,10 @@ pub enum ReviewCommand {
         output: Option<PathBuf>,
     },
 
-    /// Deterministically classify diff inventory, match path-scoped review playbooks,
-    /// bundle token-budgeted review batches, verify 100% file coverage ledgers, and
-    /// anchor quoted code snippets to exact 1-based line numbers.
+    /// Review a change with an AI agent and get line-anchored findings.
     // trace:STORY-3076 | ai:antigravity
+    // trace:TASK-3959 | ai:claude
+    #[command(long_about = crate::review_prepare::PREPARE_LONG_HELP)]
     Prepare(crate::review_prepare::ReviewPrepareArgs),
 
     /// Record a review verdict for a spec as first-class state.

@@ -356,9 +356,12 @@ pub(crate) fn run(refusal_to_stderr: &mut bool) -> Result<()> {
         // Args after the `help` verb (empty for bare `aida`).
         let rest = raw_args.get(2..).unwrap_or(&[]);
         // `aida help` (clap's builtin help verb) with no further positional —
-        // optionally `--all`. `aida --help` / `aida -h` keep clap's own flag
-        // help (a deliberate escape hatch to the raw flag-level usage).
-        let is_help_verb = first == Some("help") && rest.iter().all(|a| a == "--all" || a == "-a");
+        // optionally `--all`. A bare `aida --help` / `aida -h` is a newcomer's
+        // first reflex, so it gets the same short overview; the full list is
+        // `aida help --all`. trace:TASK-3959 | ai:claude
+        let is_help_verb = (first == Some("help")
+            && rest.iter().all(|a| a == "--all" || a == "-a"))
+            || help::is_root_help_flag(&raw_args);
         let is_bare = raw_args.len() == 1;
         // `aida help <topic>` — the middle granularity between bare `help`
         // (group names) and `help --all` (everything): expand one group. A
