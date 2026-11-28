@@ -1,0 +1,31 @@
+id: 01a2220a-a2ee-7722-9509-10f8ca87ce64
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1665
+title: 'Review follow-up: Budget arithmetic in .github/workflows/ci.yml Live bwrap step: each of the two watchdog in'
+description: |-
+  From BUG-2788
+  Reviewed sha: c69eb5939c5b2b4ac8074fd3b609b915466f66c5
+
+  Budget arithmetic in .github/workflows/ci.yml Live bwrap step: each of the two watchdog invocations has a 480s overall deadline that starts only after its own `cargo test --no-run` build, so the worst case (2x480s of tests plus two builds) exceeds the step's 15-minute timeout. If the lib selection runs slow but under its per-test limits, GitHub can kill the step during the second selection before the watchdog prints anything. A single stalled test is still caught by the 120s per-test timeout, so AC2/AC3 hold. Follow-up: derive the overall deadline from the time left in the step, or use one budget shared by both selections.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-28T12:04:12.142079480Z
+modified_at: 2026-11-28T12:04:12.142079480Z
+req_type: Task
+tags:
+- carried-from:BUG-2788
+- finding-hash:2c56fd89
+- from-review:BUG-2788
+relationships:
+- rel_type: References
+  target_id: 01a221b1-4d25-72d2-b640-0e69f626c22f
+  created_at: 2026-11-28T12:04:31.243831549Z
+filed_at:
+  code_sha: c69eb5939c5b2b4ac8074fd3b609b915466f66c5
+  branch: pr-4815
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eb18c450c68
+  vendor: claude
+  session: 01a222083610

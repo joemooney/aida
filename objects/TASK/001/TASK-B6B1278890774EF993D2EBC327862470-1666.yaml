@@ -1,0 +1,31 @@
+id: 01a2220a-ef2a-7701-8952-5bfa7a830b0f
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1666
+title: 'Review follow-up: scripts/ci-live-test-watchdog.py kill(): after SIGTERM it returns as soon as the group lea'
+description: |-
+  From BUG-2788
+  Reviewed sha: c69eb5939c5b2b4ac8074fd3b609b915466f66c5
+
+  scripts/ci-live-test-watchdog.py kill(): after SIGTERM it returns as soon as the group leader exits, so a descendant in the same process group that ignores SIGTERM is never sent SIGKILL. Tests that exit normally never have their process group swept either. A lingering sandbox descendant could outlive its test. The step result is unaffected because output goes to a file, not a pipe. Follow-up: always killpg(SIGKILL) after the SIGTERM grace period, and sweep the group after a normal exit.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-28T12:04:31.658135536Z
+modified_at: 2026-11-28T12:04:31.658135536Z
+req_type: Task
+tags:
+- carried-from:BUG-2788
+- finding-hash:5b47e779
+- from-review:BUG-2788
+relationships:
+- rel_type: References
+  target_id: 01a221b1-4d25-72d2-b640-0e69f626c22f
+  created_at: 2026-11-28T12:04:50.976249645Z
+filed_at:
+  code_sha: c69eb5939c5b2b4ac8074fd3b609b915466f66c5
+  branch: pr-4815
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eb18c450c68
+  vendor: claude
+  session: 01a222083610
