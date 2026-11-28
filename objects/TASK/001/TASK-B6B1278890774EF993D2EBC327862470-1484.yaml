@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: dcc174ec7be643fcf34c7170094b967c265431b2
 
   Test gap (lane_job.rs:1890-1906): no test drives run_one_authorized to show the job really waits on a held compile slot, holds the slot for the job's whole run, or receives CARGO_BUILD_JOBS in its environment. The three new tests exercise admit_job directly; AC2's test only checks that cargo_build_jobs comes back from admission. A follow-up should add a fixture-lane test (Sandbox::TestUnwrapped) that sets cargo_build_jobs and asserts the child sees CARGO_BUILD_JOBS. Source reading confirms the wiring is correct: the admission binding lives until the function returns, and the bwrap lane wrapper does not --clearenv.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T05:09:42.036929983Z
-modified_at: 2026-11-28T01:04:28.996965062Z
+modified_at: 2026-11-28T01:04:31.101773398Z
 req_type: Task
 tags:
 - carried-from:TASK-3911
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-26T05:11:50.464228644Z
   changes: []
+- id: 01a21fae-ad7d-7721-80bd-8f9c046cbc0e
+  author: joe
+  timestamp: 2026-11-28T01:04:31.101770935Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: dcc174ec7be643fcf34c7170094b967c265431b2
   branch: pr-4624
