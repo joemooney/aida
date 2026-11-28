@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T23:33:38.175003298Z
-modified_at: 2026-11-23T08:05:50.195156787Z
+modified_at: 2026-11-28T00:43:47.327489416Z
 req_type: Bug
 tags:
 - cargo-wrapper
@@ -71,6 +71,11 @@ comments:
   content: 'Product (2026-11-23 01:10): the codex lane punted. The operator cargo wrapper that implements diff_skip_check is NOT in this repository (it lives in aida-host; ~/.local/bin/cargo on the host). This needs routing to the aida-host project, not an aida lane. Leaving it queued-off here.'
   created_at: 2026-11-23T08:05:50.195156787Z
   modified_at: 2026-11-23T08:05:50.195156787Z
+- id: 01a21f9b-b2ff-7ab0-b597-2cda83070520
+  author: joe
+  content: 'ESCALATE ruling (advisor aida-d3 2026-11-27 17:58; applied by product-15): REJECT here. The cargo wrapper lives in aida-host; re-file it in that repo with a link back to this spec.'
+  created_at: 2026-11-28T00:43:47.327489416Z
+  modified_at: 2026-11-28T00:43:47.327489416Z
 history:
 - id: 01a1fb50-9cb2-7cb1-a49c-94ac147e2401
   author: joe
