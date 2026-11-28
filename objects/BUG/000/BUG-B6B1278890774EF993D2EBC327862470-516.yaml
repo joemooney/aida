@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-28T00:59:28.074542063Z
+modified_at: 2026-11-28T00:59:54.425875491Z
 req_type: Bug
 tags:
 - leases
@@ -465,6 +465,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3444): aida-cli-lib/src/doctor/worktrees.rs:1530-1540 — The write-ahead attestation event records outcome ''salvage destination <dest>'' before rename_noreplace runs. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T00:59:15.845609467Z
   modified_at: 2026-11-28T00:59:15.845609467Z
+- id: 01a21faa-74b9-7342-b8e0-b2b03148fd4a
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3447): scripts/store-writers.toml:1258 — The inventory row for the exact-lease reader (now read_exact_lease_snapshot/OpenOptions::new) was reclassified from disposition read_only to the generic caller-owned/blocked template. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T00:59:54.425875491Z
+  modified_at: 2026-11-28T00:59:54.425875491Z
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
   author: joe
