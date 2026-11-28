@@ -1890,8 +1890,11 @@ fn run_one_authorized(
     // Host compile admission at job start, not only at lane launch: a cap
     // on concurrent lane compiles, a memory floor, and CARGO_BUILD_JOBS.
     // Held until this job ends. trace:TASK-3911 | ai:claude
+    // The fast gate builds nothing, so it takes no compile slot.
+    // trace:TASK-3537 | ai:claude
     let mut queued = false;
-    let admission = match crate::lane_admission::admit_lane_job(stop, |why| {
+    let compiles = !fast_gate_job(&job);
+    let admission = match crate::lane_admission::admit_lane_job(compiles, stop, |why| {
         if !queued {
             queued = true;
             lane.log(&format!("{id} queued: {why}"));
