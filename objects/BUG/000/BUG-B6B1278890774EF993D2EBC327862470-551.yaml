@@ -1,0 +1,27 @@
+id: 01a22211-4d3c-7e41-960f-b5bcfa328950
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-551
+agreed_id: BUG-2790
+title: 'merge_lock: an unknown-process holder sometimes does not block acquire (flaky train_observation_preserves_unknown_and_refusal, possible real race)'
+description: |-
+  Found 2026-11-28 05:15 MST by advisor aida-d3 (filed by product-15). Train #4816 (#4784 alone) went red on ONE test: merge_lock::tests::train_observation_preserves_unknown_and_refusal (aida-cli-lib/src/merge_lock.rs:1032): `acquire(..., Duration::ZERO).unwrap_err()` got Ok, i.e. a holder whose process is None (unknown) did NOT block acquire. Main CI was green at the train base 6f4bd7e2 and #4784 touches only repair_journal/doctor/docs, so it is intermittent. In lease code an intermittent pass can mean a real acquire race (two holders).
+
+  Suspects: acquire's staleness check reading file mtime or record age vs a wall clock (sub-second / clock-granularity edge); a zero-duration wait racing the holder write; parallel tests sharing a lock dir or env.
+
+  ## Acceptance
+  - AC1: root-cause it; an unknown-process holder ALWAYS blocks acquire until it is positively proven stale (fail closed); no wall-clock/mtime edge can make it look absent.
+  - AC2: the test uses an isolated lock dir and no shared env; a loop-100 regression (the test repeated 100x in one run) passes.
+  - AC3: if the race is real in production code, say so in the PR and add a test that reproduces it deterministically (injected clock).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T12:11:28.956447070Z
+modified_at: 2026-11-28T12:11:28.956447070Z
+req_type: Bug
+filed_at:
+  code_sha: 6f4bd7e2493be2ecd3d53b1b5baf26803d64abc3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6f4bd7e2493
+  vendor: claude
