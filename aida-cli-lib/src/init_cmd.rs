@@ -491,27 +491,52 @@ fn count_files_and_lines(path: &std::path::Path) -> (usize, usize) {
     }
 }
 
-/// One display row per scaffold path: `path  (N files, M lines)`.
+/// One display row per scaffold path, `path  (N files, M lines)`, then a
+/// total. AIDA's entries in the shared `.agents/skills/` directory collapse
+/// into one row so the listing stays readable.
 // trace:TASK-3952 | ai:claude
 fn scaffold_summary_rows(root: &std::path::Path, paths: &[String]) -> Vec<String> {
+    use aida_core::scaffolding::inventory::PORTABLE_PACK;
     let plural = |n: usize, word: &str| format!("{n} {word}{}", if n == 1 { "" } else { "s" });
-    paths
+    let both = |f: usize, l: usize| format!("{}, {}", plural(f, "file"), plural(l, "line"));
+    let pack_prefix = format!("{PORTABLE_PACK}/");
+    let (mut rows, mut pack, mut total) = (Vec::new(), None::<(usize, usize)>, (0, 0));
+    for p in paths {
+        let full = root.join(p);
+        let (files, lines) = count_files_and_lines(&full);
+        total = (total.0 + files, total.1 + lines);
+        if p.starts_with(&pack_prefix) {
+            let (f, l) = pack.unwrap_or((0, 0));
+            pack = Some((f + files, l + lines));
+        } else if std::fs::symlink_metadata(&full).is_ok_and(|m| m.is_dir()) {
+            rows.push(format!("{p}  ({})", both(files, lines)));
+        } else {
+            rows.push(format!("{p}  ({})", plural(lines, "line")));
+        }
+    }
+    if let Some((f, l)) = pack {
+        rows.push(format!("{PORTABLE_PACK}  ({})", both(f, l)));
+    }
+    rows.push(format!("in all: {}", both(total.0, total.1)));
+    rows
+}
+
+/// The paths for the uncommitted-files hint, with AIDA's skill directories in
+/// the shared `.agents/skills/` folded into one quoted `aida-*` pathspec so the
+/// command stays readable.
+// trace:TASK-3952 | ai:claude
+fn git_add_hint_paths(paths: &[String]) -> Vec<String> {
+    use aida_core::scaffolding::inventory::PORTABLE_PACK;
+    let skill_prefix = format!("{PORTABLE_PACK}/aida-");
+    let mut out: Vec<String> = paths
         .iter()
-        .map(|p| {
-            let full = root.join(p);
-            let (files, lines) = count_files_and_lines(&full);
-            let is_dir = std::fs::symlink_metadata(&full).is_ok_and(|m| m.is_dir());
-            if is_dir {
-                format!(
-                    "{p}  ({}, {})",
-                    plural(files, "file"),
-                    plural(lines, "line")
-                )
-            } else {
-                format!("{p}  ({})", plural(lines, "line"))
-            }
-        })
-        .collect()
+        .filter(|p| !p.starts_with(&skill_prefix))
+        .cloned()
+        .collect();
+    if paths.iter().any(|p| p.starts_with(&skill_prefix)) {
+        out.push(format!("'{skill_prefix}*'"));
+    }
+    out
 }
 
 /// BUG-565: split scaffold paths into `(to_stage, ignored)` by asking git which
@@ -1588,7 +1613,7 @@ fn commit_init_scaffolding(
         } else {
             println!(
                 "  They are not committed. Review them with `git status`, then save them with:\n    git add {} && git commit -m 'chore: scaffold AIDA'\n  (Scripts and CI can run `aida init --commit` instead.)",
-                stageable.join(" "),
+                git_add_hint_paths(&stageable).join(" "),
             );
         }
         return Ok(false);

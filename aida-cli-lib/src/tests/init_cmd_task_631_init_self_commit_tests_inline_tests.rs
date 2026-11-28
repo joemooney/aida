@@ -1052,16 +1052,57 @@ fn scaffold_summary_rows_show_paths_with_line_counts() {
     std::fs::create_dir_all(root.join(".claude/skills/x")).unwrap();
     std::fs::write(root.join(".claude/one.md"), "1\n").unwrap();
     std::fs::write(root.join(".claude/skills/x/SKILL.md"), "1\n2\n").unwrap();
+    for skill in ["aida-a", "aida-b"] {
+        std::fs::create_dir_all(root.join(".agents/skills").join(skill)).unwrap();
+        std::fs::write(
+            root.join(".agents/skills").join(skill).join("SKILL.md"),
+            "x\n",
+        )
+        .unwrap();
+    }
+    let paths: Vec<String> = [
+        "CLAUDE.md",
+        ".claude",
+        ".agents/skills/aida-a",
+        ".agents/skills/aida-b",
+    ]
+    .map(String::from)
+    .to_vec();
 
-    let rows = scaffold_summary_rows(root, &["CLAUDE.md".into(), ".claude".into()]);
+    let rows = scaffold_summary_rows(root, &paths);
 
     assert_eq!(
         rows,
-        vec![
-            "CLAUDE.md  (3 lines)".to_string(),
-            ".claude  (2 files, 3 lines)".to_string(),
+        [
+            "CLAUDE.md  (3 lines)",
+            ".claude  (2 files, 3 lines)",
+            ".agents/skills  (2 files, 2 lines)",
+            "in all: 5 files, 8 lines",
         ]
     );
+}
+
+/// The hint folds AIDA's skill directories into one quoted pathspec.
+// trace:TASK-3952 | ai:claude
+#[test]
+fn git_add_hint_folds_aida_skills_into_one_pathspec() {
+    let paths: Vec<String> = [
+        "CLAUDE.md",
+        ".agents/skills/.aida-delivered",
+        ".agents/skills/aida-a",
+        ".agents/skills/aida-b",
+    ]
+    .map(String::from)
+    .to_vec();
+    assert_eq!(
+        git_add_hint_paths(&paths),
+        [
+            "CLAUDE.md",
+            ".agents/skills/.aida-delivered",
+            "'.agents/skills/aida-*'"
+        ]
+    );
+    assert_eq!(git_add_hint_paths(&paths[..1]), ["CLAUDE.md"]);
 }
 
 /// The `--commit` flag parses, and the older spelling still works.
