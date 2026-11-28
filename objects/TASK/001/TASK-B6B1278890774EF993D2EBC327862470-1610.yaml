@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:26:56.215965481Z
-modified_at: 2026-11-28T05:01:37.661419255Z
+modified_at: 2026-11-28T05:15:35.678818207Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -122,6 +122,23 @@ comments:
     - None. The default stays uncommitted.
   created_at: 2026-11-28T05:01:37.661419255Z
   modified_at: 2026-11-28T05:01:37.661419255Z
+  session_id: 01a22085a946
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a22094-8b7e-70a1-b928-0460130d91b1
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 5528c982c5 (r2 delta: test fixtures + docs/getting-started.md; no production code change).
+
+    Acceptance evidence: AC1/AC2 as in r1 (task_3952_init_no_auto_commit, task_631 inline tests). AC3: the nine CI-red fixtures now pass `--commit` explicitly; the default stays uncommitted. Help text already names `--commit` for scripts/CI. Docs: getting-started install prompt and step 2 describe the uncommitted default, the [y/N] terminal prompt, and that agents/CI must pass `--commit` or run the printed `git add` (checked against init_cmd.rs:1601-1617).
+
+    Probes: (1) consistency: doc wording matches the printed hint and prompt default. (3) multiplicity: no shared init helper exists, so the fix is per-fixture; other fixtures that run init without `--commit` were green in CI, so they do not depend on the commit. (4) codex_init.py runs init 5 times on a TTY; all now carry `--commit`, consistent with its `git show main:` assertions. (5) no gate/authority code touched; no test weakened.
+
+    Local results (lane runner): bug_1683 3/3 ok, bug_1808 5/5 ok, bug_2139 headless_resume_child_gets_its_own_grant ok (+2 reviewer tests ok); four bug_2139 `queue work --fresh` tests hung for >10 min inside the lane sandbox. CI did not flag those (they passed in run 46108658232 with the same fixture shape), so I read the hang as sandbox-only. Results for the remaining binaries are in the lane result.
+
+    Residual risk: other external scripts that relied on non-TTY auto-commit (outside this repo) need `--commit`.
+  created_at: 2026-11-28T05:15:35.678818207Z
+  modified_at: 2026-11-28T05:15:35.678818207Z
   session_id: 01a22085a946
   harness_version: 2.1.319 (Claude Code)
 history:

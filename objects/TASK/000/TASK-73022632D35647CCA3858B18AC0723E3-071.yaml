@@ -1,0 +1,30 @@
+id: 01a2209c-234f-7ff0-b89a-11917bee94cf
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-071
+title: 'review prepare: up-front CLI check for --challenger-agent, and plain wording for the ''using claude from the built-in default'' line'
+description: |
+  TASK-3958 added an up-front PATH check for the finder's agent CLI (review_prepare.rs ensure_agent_installed). Two related gaps remain:
+  1. A forced `--challenger-agent` whose CLI is missing still fails late, mid-run, with the internal "challenger pass, review batch N" prefix.
+  2. The notice "run review: using claude from the built-in default (no [agents] vendor)" (review_prepare.rs run_review_agent) still uses `[agents] vendor` wording, which F12 in docs/plans/2026-11-27-fresh-user-walkthrough.md calls internal. Changing it means updating the story3202 tests that count it.
+
+  Raised by the implementer while working TASK-3958.
+  Branch: task-3958-review-error-next-steps  ·  Commit: 657cb6ce4f  ·  PR #4796
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T05:23:53.295387490Z
+modified_at: 2026-11-28T05:23:53.295387490Z
+req_type: Task
+tags:
+- from-implementer:TASK-3958
+- kind:followup-suggestion
+- severity:minor
+filed_at:
+  code_sha: 657cb6ce4fd5ba03ba98bf30ccc299d54d46b85e
+  branch: task-3958-review-error-next-steps
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4b06a37b46
+  vendor: claude
+  session: 01a22088e0bf
+  harness_version: 2.1.319 (Claude Code)

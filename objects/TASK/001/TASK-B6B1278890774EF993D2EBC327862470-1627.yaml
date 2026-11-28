@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T04:50:46.230140279Z
-modified_at: 2026-11-28T05:04:45.043970244Z
+modified_at: 2026-11-28T05:23:28.603156002Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -42,6 +42,24 @@ comments:
     - None (F14 codex hang and F11 empty range are out of scope).
   created_at: 2026-11-28T05:04:45.043970244Z
   modified_at: 2026-11-28T05:04:45.043970244Z
+  session_id: 01a22088e0bf
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a2209b-c2db-70b2-9b62-096d61103cea
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 657cb6ce4f
+
+    - AC1 [behavioral-test] PASS: `task3958_run_review_on_uncommitted_work_says_what_to_do` (review_prepare.rs run_review_base): workspace mode says to commit and rerun with `--from main`, or drop --run-review; scan/commit modes say use --from/--pr instead.
+    - AC2 [behavioral-test] PASS: `task3958_missing_agent_cli_is_reported_up_front`: ensure_agent_installed runs before tuning, challenger and any batch; names the CLI, its npm install command and the other confined --agent; an installed CLI is not executed by the check.
+    - AC3 [behavioral-test] PASS: `task3958_signed_out_claude_names_the_sign_in_step`: claude stdout `Not logged in` (stderr empty) is a typed AuthRequired: "claude is not signed in: run `claude` and use /login, then retry (claude said: ...)"; the finder pass/batch prefix is dropped for it. Any silent-stderr failure quotes stdout instead of `(empty)`.
+    - AC4 PASS: each test asserts no SPEC-ID pattern and no finder/batch/[agents]/seat/--lane-host wording.
+
+    Probes: (1) stdout is checked for auth markers only when stderr is empty, so review text cannot pass as a sign-in failure when stderr speaks. (3) agy is excluded from the "pick another" list (not a confinement-verified default). (5) no authority path touched; post-comment and confinement gates unchanged.
+    Residual: a forced --challenger-agent that is missing still fails late; the "run review: using claude from the built-in default (no [agents] vendor)" line still says [agents] (F12 wording, not in the ACs); F11/F14 are out of scope.
+    Tests: 7 targeted passed at HEAD; make check-ci-fast exit 0.
+  created_at: 2026-11-28T05:23:28.603156002Z
+  modified_at: 2026-11-28T05:23:28.603156002Z
   session_id: 01a22088e0bf
   harness_version: 2.1.319 (Claude Code)
 history:

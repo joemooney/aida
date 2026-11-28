@@ -13,12 +13,33 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T04:51:24.867906703Z
-modified_at: 2026-11-28T05:09:03.789647476Z
+modified_at: 2026-11-28T05:18:46.060794691Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a22014-1672-7093-9f8f-09bbbefcbf09
   created_at: 2026-11-28T04:51:32.704892490Z
+comments:
+- id: 01a22097-732c-7b53-adcd-8cac3a00e0db
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (documentation-inspection + command-level):** docs/getting-started.md gains "Record your first spec" (aida add with an acceptance description, aida list, aida show <ID>) and "Prepare your first review" (branch, commit, aida review prepare --from main --specs <ID>, what each section of the report means, and that --run-review needs an installed, signed-in agent CLI). Reproduced in a clean HOME + new repo first.
+    - **AC2 (command-level):** new tests/test_getting_started_commands.py extracts the bash blocks between doc-test markers in getting-started.md and runs them in a throwaway repo with an empty HOME, substituting <ID> with the ID `aida add` printed; asserts each exits 0 and key output. `--run-review` (vendor sign-in, network) is documented but not executed. Wired into CI contracts shard next to the other --aida target/debug/aida suites; unittest self-check of the extractor runs build-free.
+
+    ### Expected files
+    - docs/getting-started.md
+    - tests/test_getting_started_commands.py
+    - .github/workflows/ci.yml
+
+    ### Ambiguities / conflicts as questions
+    - None. (Plan suggested `--run-review --from main` as the headline; I document it as the optional next step since it needs a signed-in vendor CLI and cannot be verified offline.)
+  created_at: 2026-11-28T05:18:46.060794691Z
+  modified_at: 2026-11-28T05:18:46.060794691Z
+  session_id: 01a2208e549e
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a2207e-8ed6-78c3-a21e-b686755e363f
   author: joe
