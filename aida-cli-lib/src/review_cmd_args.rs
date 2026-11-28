@@ -98,6 +98,7 @@ pub enum ReviewCommand {
     /// Review a change with an AI agent and get line-anchored findings.
     // trace:STORY-3076 | ai:antigravity
     // trace:TASK-3959 | ai:claude
+    // trace:TASK-3953 | ai:claude
     #[command(long_about = crate::review_prepare::PREPARE_LONG_HELP)]
     Prepare(crate::review_prepare::ReviewPrepareArgs),
 

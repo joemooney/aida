@@ -900,6 +900,11 @@ pub(crate) const EXIT_CODES: &[(i32, &str)] = &[
         crate::review_prepare::PARTIAL_REVIEW_EXIT_CODE,
         "review prepare: partial, challenger unavailable",
     ),
+    // trace:TASK-3953 | ai:claude
+    (
+        crate::review_prepare::NOTHING_TO_REVIEW_EXIT_CODE,
+        "review prepare: nothing to review",
+    ),
     (drain_next_n::DRAIN_CAP_EXIT_CODE, "drain cap reached"),
     (pr_rebase::REBASE_EXIT_CODE_CONFLICT, "pr rebase conflict"),
     (pr_rebase::REBASE_EXIT_CODE_REFUSED, "pr rebase refused"),
@@ -1017,6 +1022,13 @@ pub(crate) fn exit_code_for_error(err: &anyhow::Error) -> i32 {
         .is_some()
     {
         return named_exit_code(crate::review_prepare::PARTIAL_REVIEW_EXIT_CODE);
+    }
+    // trace:TASK-3953 | ai:claude
+    if err
+        .downcast_ref::<crate::review_prepare::NothingToReviewExit>()
+        .is_some()
+    {
+        return named_exit_code(crate::review_prepare::NOTHING_TO_REVIEW_EXIT_CODE);
     }
     err.downcast_ref::<pr_rebase::RebaseFailureExit>()
         .map(|sig| named_exit_code(sig.code))
