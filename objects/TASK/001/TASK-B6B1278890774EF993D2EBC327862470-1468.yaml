@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 9e55228e4279bc1eb9672b40ae1065f6e0c93179
 
   Patch-id equality also drops a branch commit that reapplies a change main later reverted (same patch-id as the original main commit), so its spec trailer leaves the squash body and ship_gate_spec_records (pr_service.rs:181) even though the PR re-delivers the change; the spec then neither auto-completes nor is gate-classified. No new authority bypass (trailers are author-controlled anyway), but worth a guard: ignore base matches that were later reverted, or only match base commits whose patch is still present.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T22:49:53.925045619Z
-modified_at: 2026-11-28T01:01:54.243633752Z
+modified_at: 2026-11-28T01:01:56.463979991Z
 req_type: Task
 tags:
 - carried-from:BUG-2733
@@ -41,6 +41,13 @@ history:
   author: joe
   timestamp: 2026-11-28T00:26:27.540263953Z
   changes: []
+- id: 01a21fac-516f-7460-ba7f-584b2601faf1
+  author: joe
+  timestamp: 2026-11-28T01:01:56.463977592Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 9e55228e4279bc1eb9672b40ae1065f6e0c93179
   branch: pr-4598
