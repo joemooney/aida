@@ -415,15 +415,14 @@ fn fixture_mode(generator: &str, exec: bool) -> Fixture {
     for (name, body) in [("a.md", "a\n"), ("b.md", "b\n")] {
         std::fs::write(repo.join("docs").join(name), body).unwrap();
     }
-    std::fs::write(repo.join(SEARCH), STALE).unwrap();
+    let stale = std::str::from_utf8(STALE).unwrap();
+    if exec {
+        crate::test_exec::write_executable(&repo.join(SEARCH), stale);
+    } else {
+        std::fs::write(repo.join(SEARCH), stale).unwrap();
+    }
     std::fs::create_dir_all(repo.join("scripts")).unwrap();
     std::fs::write(repo.join("scripts/store-writers.toml"), LEDGER).unwrap();
-    #[cfg(unix)]
-    if exec {
-        use std::os::unix::fs::PermissionsExt as _;
-        let mode = std::fs::Permissions::from_mode(0o755);
-        std::fs::set_permissions(repo.join(SEARCH), mode).unwrap();
-    }
     git(&["add", "."]);
     git(&["commit", "-qm", "base"]);
     let base = git(&["rev-parse", "HEAD"]);
