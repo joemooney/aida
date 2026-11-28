@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:31:49.783028382Z
-modified_at: 2026-11-28T07:16:07.298139214Z
+modified_at: 2026-11-28T07:16:11.353764630Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -77,6 +77,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Advisor FIX-FIRST: conflict with base; a serial merge round.. No triage reason was given.'
   created_at: 2026-11-28T07:16:07.298135196Z
   modified_at: 2026-11-28T07:16:07.298135196Z
+- id: 01a22102-f301-7073-97ee-900979d02276
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3957):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: db76bf17561d
+    Recorded: 2026-11-28T07:05:40.450446006+00:00
+    Findings:
+    1. Conflicts with main after the first-run batch (#4787/#4788/#4793) landed. Merge origin/main, keep both intents, regenerate any generated files (help golden, search-data.js, store-writers) with their generators.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-28T07:16:11.137212309Z
+  modified_at: 2026-11-28T07:16:11.137212309Z
 history:
 - id: 01a22035-c5e0-7e70-a058-780324cd7502
   author: joe
