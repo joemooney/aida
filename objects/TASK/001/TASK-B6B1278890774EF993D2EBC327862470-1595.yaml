@@ -1,0 +1,31 @@
+id: 01a21f86-a40f-7270-add5-6644433abc1b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1595
+agreed_id: TASK-3939
+title: 'STORY-3120 S7b: Dismissed findings as SARIF suppressions'
+description: |-
+  Child slice of STORY-3120 (plan comment 87; list /tmp/claude-1000/story-3120-s7-s10-slices.md). Reference: origin/story-3120-ci-review @ a1777130882, ref commits 6a031693b1e.
+  Scope: Dismissed findings as SARIF suppressions: DismissedReviewFinding, apply_adversarial_challenger_with_dismissed, findings_to_sarif_json_with_telemetry. D1: dismissed findings STILL count for --fail-on
+  Files: review_engine.rs, review_prepare.rs
+  Tier: STRICT (gate semantics)
+  Depends on: S7a
+  Size: <=300 changed lines incl. tests. Track: integration.
+  Brief: to be written by the integration seat.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T00:20:47.247655304Z
+modified_at: 2026-11-28T00:20:47.247655304Z
+req_type: Task
+tags:
+- story-3120
+- strict
+filed_at:
+  code_sha: 84fe63bf7c647ba5c65d6b97d1ced29ae3be3596
+  branch: integration
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0fba3d42ee9
+  vendor: claude
+  session: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
