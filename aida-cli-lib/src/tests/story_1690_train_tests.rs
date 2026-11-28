@@ -848,6 +848,32 @@ fn bug2767_a_culprit_is_not_readmitted_at_the_same_head() {
     );
 }
 
+/// TASK-3923 AC1/AC3: the train refuses a fix-first head whether swept in or
+/// named, and admits a new head.
+// trace:TASK-3923 | ai:claude
+#[test]
+fn task3923_a_fix_first_head_is_refused_even_when_named() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    culprit::record_fix_first(root, 4702, "aaaa1111", "advisor-122", "argv leak").unwrap();
+    for (prs, all_ready) in [(&[4702u64][..], false), (&[][..], true)] {
+        let opts = TrainOptions {
+            prs,
+            all_ready,
+            dry_run: false,
+            local_ci: None,
+            max: 10,
+            no_pull: true,
+        };
+        let why = culprit_admission(root, &opts, &member(4702, "aaaa1111", "s"))
+            .unwrap()
+            .expect("the ruled head is refused");
+        assert!(why.ends_with("by advisor-122: argv leak"), "{why}");
+        let moved = culprit_admission(root, &opts, &member(4702, "bbbb2222", "s")).unwrap();
+        assert_eq!(moved, None, "a new head is admitted");
+    }
+}
+
 fn prs_of(ejected: &[Ejected]) -> Vec<u64> {
     let mut prs: Vec<u64> = ejected.iter().map(|e| e.pr).collect();
     prs.sort_unstable();

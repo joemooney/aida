@@ -147,6 +147,16 @@ pub(crate) fn check_one(
     match typed_gate_member_with(checks, base, pr) {
         // A red train's culprit at an unchanged head. trace:BUG-2767 | ai:claude
         Ok(member) => match culprit::hold(checks.marker_root(), pr, &member.head) {
+            // trace:TASK-3923 | ai:claude
+            Some(why) if why.starts_with(culprit::FIX_FIRST) => Row {
+                pr,
+                eligible: false,
+                head: None,
+                gate: Some("fix-first"),
+                reason: Some(why),
+                remedy: Some("push the rework as a new head; review then applies to it".into()),
+                evidence: Evidence::Read,
+            },
             Some(why) => Row {
                 pr,
                 eligible: false,

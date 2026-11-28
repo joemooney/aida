@@ -180,6 +180,26 @@ pub enum ReviewCommand {
         pr: Option<u64>,
     },
 
+    /// Record an advisor ruling on a pull request's current head.
+    ///
+    /// `--fix-first` holds the head out of train candidacy at once, with the
+    /// reason and who ruled, and notes the ruling on the specs the PR covers.
+    /// Re-running at the same head changes nothing; a new head clears it.
+    // trace:TASK-3923 | ai:claude
+    Rule {
+        /// Pull request: `4702`, `#4702` or `PR-4702`.
+        #[clap(value_name = "PR", value_parser = crate::review_rule::pr_ref)]
+        pr: u64,
+
+        /// The head must be fixed before it lands.
+        #[arg(long, required = true)]
+        fix_first: bool,
+
+        /// What must be fixed, shown wherever the hold surfaces.
+        #[clap(long, value_name = "TEXT", allow_hyphen_values = true)]
+        reason: String,
+    },
+
     /// Mark a pull request as under review, so nothing merges it before
     /// your verdict lands.
     ///
