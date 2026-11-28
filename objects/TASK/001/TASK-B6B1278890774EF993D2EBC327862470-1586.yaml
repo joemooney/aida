@@ -10,12 +10,12 @@ description: |-
   - AC2: conformance-launch reuses the PRODUCTION contained child-grant issuance path verbatim (one shared function); any duplicated issuance in the diagnostic entry is deleted.
   - AC3: SubjectMismatch and the subject check are NEVER relaxed.
   - AC4: a test proves conformance-launch's grant subject equals what a production contained launch presents.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T21:50:04.229258473Z
-modified_at: 2026-11-27T23:42:07.134307507Z
+modified_at: 2026-11-28T06:56:36.506109607Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -199,6 +199,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a220f1-1301-70a0-8b53-d1c0a17b461a
+  author: joe
+  timestamp: 2026-11-28T06:56:39.681329492Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: b90f128a0821d45db1f24420e64de1516fc18698
   branch: main
