@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T20:14:03.432463687Z
-modified_at: 2026-11-28T01:00:38.229126710Z
+modified_at: 2026-11-28T01:02:08.269645845Z
 req_type: Task
 tags:
 - ci
@@ -87,6 +87,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3451): Inconclusive CI-cache walk is silent: ci_cache_bytes returns None when the 10s CI_CACHE_WALK_BUDGET expires below the cap (aida-cli-lib/src/doctor/disk.rs ci_cache_bytes/ci_cache_finding), and ci_cache_finding maps None to no finding. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T01:00:27.102031628Z
   modified_at: 2026-11-28T01:00:27.102031628Z
+- id: 01a21fac-7f8d-7953-9e23-011931d1f871
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3458): Test gap: no test drives ci_cache_findings / disk_headroom_light_report to an above-cap finding end to end (aida-cli-lib/src/tests/task_3910_ci_cache_tests.rs only checks cap=0 and an under-cap cache), and nothing pins that the extend() in... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:02:08.269645845Z
+  modified_at: 2026-11-28T01:02:08.269645845Z
 history:
 - id: 01a21461-a683-7013-a237-4532cbf94a9a
   author: joe
