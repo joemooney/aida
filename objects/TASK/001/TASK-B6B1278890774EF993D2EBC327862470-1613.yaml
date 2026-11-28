@@ -8,12 +8,12 @@ description: |-
   - AC2: never hangs silently; a test with a fake codex that waits on an auth prompt asserts the bounded failure and message.
 
   Source: docs/plans/2026-11-27-fresh-user-walkthrough.md (on branch task-3951-fresh-user-walkthrough / PR #4782), section F14. Advisor aida-d3 2026-11-27 20:30 priority order; filed by product-15 for laning now (one spec per lane).
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:30:54.837993440Z
-modified_at: 2026-11-28T05:26:51.911110693Z
+modified_at: 2026-11-28T05:40:03.730044049Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -149,6 +149,13 @@ history:
   author: joe
   timestamp: 2026-11-28T05:26:52.046823932Z
   changes: []
+- id: 01a220aa-f212-7993-bef9-4a8db85113d6
+  author: aida-session-start
+  timestamp: 2026-11-28T05:40:03.730042696Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
