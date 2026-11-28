@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:30:54.837993440Z
-modified_at: 2026-11-28T07:22:43.214868478Z
+modified_at: 2026-11-28T07:31:34.721700496Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -160,6 +160,15 @@ comments:
   content: Commit 599da2b8ea references this requirement
   created_at: 2026-11-28T07:22:43.214868478Z
   modified_at: 2026-11-28T07:22:43.214868478Z
+  session_id: 01a221066ea6
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a22111-0ac1-7a71-89ad-ba8f966eee77
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 599da2b8ea. Round 3: sign_in_check compared v.program to the literal "codex", tripping story_2539_vendor_literal_ratchet. It now compares to CODEX_SIGN_IN_PROBE.program, the registry constant (same value via ..CODEX), so behaviour is unchanged and the ledger was not raised. Evidence: cargo test -p aida-ci-guards --lib story_2539 → 3 passed; cargo test -p aida-cli-lib --lib task3955 → 2 passed (signed-out fail-fast + refused-before-batch). Probes: comparison is exact-string on both sides from the same constant; no authority path changed. Residual risk: none new.
+  created_at: 2026-11-28T07:31:34.721700496Z
+  modified_at: 2026-11-28T07:31:34.721700496Z
   session_id: 01a221066ea6
   harness_version: 2.1.319 (Claude Code)
 history:
