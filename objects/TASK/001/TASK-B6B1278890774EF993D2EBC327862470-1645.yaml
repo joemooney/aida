@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T08:29:38.066956221Z
-modified_at: 2026-11-28T09:07:45.179724724Z
+modified_at: 2026-11-28T09:14:43.803403654Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -64,6 +64,12 @@ comments:
   modified_at: 2026-11-28T09:07:38.752623473Z
   session_id: 01a2214b4de1
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2216f-7adb-7130-b497-42bec42b7f9d
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3963-train-regen-s1` at head `1df06dd6599bc217b4f072c85c494af648c96fbf`.'
+  created_at: 2026-11-28T09:14:43.803400388Z
+  modified_at: 2026-11-28T09:14:43.803400388Z
+  session_id: 01a2214b4de1
 history:
 - id: 01a22146-948a-7032-ad96-95a74d9a14d6
   author: joe
