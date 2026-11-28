@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-25T21:08:28.451137158Z
+modified_at: 2026-11-28T00:41:46.031601575Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -1098,6 +1098,11 @@ comments:
       Deferred under MASS-CHANGE mode (advisor-122 ruling 2026-11-22 12:15 MST) from the PR #4380 (BUG-2629) Changes Requested verdict at 367c23a772. These findings were blocking (unmet claimed AC / below-tier) and now defer; #4380 fixes only p1, data loss and security findings in its final round. ## Findings to address 1. [major/unmet-claimed-ac] aida-cli-lib/src/queue_cmd/work.rs:3328 — BUG-2629 AC3 still fails for N fingerprinted changes bound to one spec. reconcile_waiting_verdicts calls current_verdict for each review key. Each local change projection opens another discovery, and Inventory::current lists all N bindings and stats all N folded ledgers on each open. active_verdicts_for repeats t
   created_at: 2026-11-25T21:08:28.451137158Z
   modified_at: 2026-11-25T21:08:28.451137158Z
+- id: 01a21f99-d92f-70b0-8fb7-ccde0b011220
+  author: joe
+  content: 'RETURNED to Approved (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Comment 11-25: #4380 closed oversized; back to Approved: reproduce on main, fresh <=300-line slice.'
+  created_at: 2026-11-28T00:41:46.031601575Z
+  modified_at: 2026-11-28T00:41:46.031601575Z
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
