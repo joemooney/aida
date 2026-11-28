@@ -5,7 +5,9 @@
 //! with its process group at the deadline or when its output exceeds the caps.
 
 use super::review_tuning::{ReviewTuning, BASE_EFFORTS};
-use crate::vendors::review_runner::{AuthRequired, ConfinedAuth, ReviewVendor};
+use crate::vendors::review_runner::{
+    AuthRequired, ConfinedAuth, ReviewVendor, CODEX_SIGN_IN_PROBE,
+};
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use std::ffi::{OsStr, OsString};
 use std::io::{Read, Write};
@@ -193,6 +195,38 @@ impl RunnerCall<'_> {
             .arg("--")
             .arg(program);
         Ok(cmd)
+    }
+
+    /// Refuse a signed-out codex before the review starts, within `limit`: a
+    /// signed-out `codex exec` retries silently until the run deadline. Other
+    /// vendors and `AIDA_REVIEW_RUNNER_CMD` pass; so does a codex given
+    /// `OPENAI_API_KEY`, which `codex login status` does not count.
+    // trace:TASK-3955 | ai:claude
+    pub(crate) fn sign_in_check(&self, limit: Duration) -> Result<()> {
+        let codex = self.vendor().is_some_and(|v| v.program == "codex");
+        if !codex || self.var("OPENAI_API_KEY").is_some() {
+            return Ok(());
+        }
+        let probe = RunnerCall {
+            agent: Some(&CODEX_SIGN_IN_PROBE),
+            pass: "sign-in check",
+            deadline: limit,
+            stdout_cap: STDERR_CAP,
+            tuning: ReviewTuning::default(),
+            ..*self
+        };
+        match probe.run("") {
+            Ok(_) => Ok(()),
+            Err(e) if e.downcast_ref::<AuthRequired>().is_some() => {
+                bail!("codex is not signed in: run `codex login`, then retry the review")
+            }
+            Err(e) if e.downcast_ref::<DeadlineExceeded>().is_some() => bail!(
+                "codex did not answer its sign-in check within {}s; run `codex login status` \
+                 to see why, or `codex login` to sign in",
+                limit.as_secs()
+            ),
+            Err(e) => Err(e.context("codex sign-in check (`codex login status`)")),
+        }
     }
 
     /// Absolute runner path; refused when relative, missing, not a regular
@@ -1064,6 +1098,57 @@ mod tests {
             plain.to_string().contains("review runner failed"),
             "{plain:#}"
         );
+    }
+
+    /// A signed-out codex whose `exec` waits forever on sign-in is refused by
+    /// the sign-in check in seconds with the `codex login` hint; a check that
+    /// itself hangs ends at its bound, naming the check; a signed-in codex,
+    /// an API key or another vendor passes.
+    // trace:TASK-3955 | ai:claude
+    #[test]
+    fn task3955_signed_out_codex_fails_fast_with_the_sign_in_hint() {
+        let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        passthrough_bwrap(bin.path());
+        let fake = |status: &str| {
+            let body = format!(
+                "#!/bin/sh\n[ \"$1 $2\" = 'login status' ] && {{ {status}; }}\nsleep 600\n"
+            );
+            script(bin.path(), "codex", &body);
+        };
+        let path = format!("{}:/usr/bin:/bin", bin.path().display());
+        let check = |extra: &[(&str, &str)], agent: &str| {
+            let mut pairs = vec![("PATH", path.as_str()), ("HOME", "/nonexistent")];
+            pairs.extend_from_slice(extra);
+            let env = vars(&pairs);
+            let started = Instant::now();
+            let res = RunnerCall {
+                agent: vendor(agent),
+                ..call(checkout.path(), &env)
+            }
+            .sign_in_check(Duration::from_secs(2));
+            assert!(started.elapsed() < Duration::from_secs(10), "{res:?}");
+            res.map_err(|e| format!("{e:#}"))
+        };
+        fake("echo 'Not logged in' >&2; exit 1");
+        let err = check(&[], "codex").unwrap_err();
+        assert_eq!(
+            err,
+            "codex is not signed in: run `codex login`, then retry the review"
+        );
+        // `codex login status` ignores an API key, which exec does use.
+        check(&[("OPENAI_API_KEY", "sk-test")], "codex").unwrap();
+        check(&[], "claude").unwrap();
+        fake("sleep 600");
+        let err = check(&[], "codex").unwrap_err();
+        assert!(
+            err.contains("did not answer its sign-in check within 2s"),
+            "{err}"
+        );
+        fake("echo 'Logged in using ChatGPT'; exit 0");
+        check(&[], "codex").unwrap();
+        // It ran confined, like the review it guards.
+        let argv = std::fs::read_to_string(bin.path().join("bwrap.argv")).unwrap();
+        assert!(argv.ends_with("codex\nlogin\nstatus\n"), "{argv}");
     }
 
     #[test]

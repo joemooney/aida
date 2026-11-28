@@ -387,6 +387,11 @@ fn review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
         let pass = challenge.as_ref().map(|(pass, _)| pass);
         let passes = [Some(call.vendor()), pass.map(|p| p.vendor())];
         ensure_postable(args.post_comment, passes.into_iter().flatten())?;
+        // A signed-out codex would otherwise retry silently until the
+        // deadline. trace:TASK-3955 | ai:claude
+        if !batches.is_empty() {
+            call.sign_in_check(SIGN_IN_DEADLINE)?;
+        }
         let (found, ledger, refuted, unchallenged) =
             review_batches(&call, pass, &batches, prompt, &inventory)?;
         // Count the challenger even when it gave up partway: it may already
@@ -694,6 +699,9 @@ fn pr_comparison(root: &Path, base: &str, head: &str) -> Result<(String, String)
 
 /// Per-batch runner deadline for `--run-review`.
 const RUN_DEADLINE: std::time::Duration = std::time::Duration::from_secs(15 * 60);
+/// Bound on the codex sign-in check that runs before the first batch.
+// trace:TASK-3955 | ai:claude
+const SIGN_IN_DEADLINE: std::time::Duration = std::time::Duration::from_secs(20);
 
 /// The trusted base for `--run-review`: the merge base of the target (the
 /// forge's with `--pr`, `--from` otherwise) and the reviewed head. Workspace,
@@ -859,12 +867,17 @@ fn run_review_agent(
     trusted: &TrustedBase,
     env: &[(std::ffi::OsString, std::ffi::OsString)],
 ) -> Result<Option<&'static ReviewVendor>> {
-    if let Some(name) = flag {
-        return review_vendor(name).map(Some);
-    }
     let custom = env
         .iter()
         .any(|(k, v)| k == "AIDA_REVIEW_RUNNER_CMD" && !v.is_empty());
+    if let Some(name) = flag {
+        let vendor = review_vendor(name)?;
+        // The custom command replaces a named vendor. trace:TASK-3955 | ai:claude
+        if !custom {
+            eprintln!("run review: using {} from --agent", vendor.program);
+        }
+        return Ok(Some(vendor));
+    }
     if custom {
         return Ok(None);
     }

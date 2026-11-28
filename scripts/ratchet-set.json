@@ -132,7 +132,8 @@
         "s3a2_runner_fails_closed_on_escaped_descendant",
         "s3b_runner_argv_carries_only_validated_tuning",
         "story3202_agy_auth_failure_is_a_typed_cause",
-        "story3202_agy_effort_mapping_and_print_timeout"
+        "story3202_agy_effort_mapping_and_print_timeout",
+        "task3955_signed_out_codex_fails_fast_with_the_sign_in_hint"
       ],
       "scope": "module"
     },
