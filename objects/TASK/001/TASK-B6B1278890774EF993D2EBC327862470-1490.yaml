@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T07:24:37.851118978Z
-modified_at: 2026-11-26T07:48:47.415864976Z
+modified_at: 2026-11-28T00:42:59.147630766Z
 req_type: Task
 tags:
 - config
@@ -42,6 +42,11 @@ comments:
   content: 'DONE as HOST config, not repo config (product-15 2026-11-26 00:55). The implementer punt was right: TASK-3911''s knobs are read from the host-owned /etc/aida/lanes.toml (lane_admission.rs:20, deny_unknown_fields), not .aida/config.toml. Installed on dell1 as root:root 0644: [lanes] max_concurrent_cold_starts=2, min_memory_headroom_gib=4 (unchanged defaults), max_compile_concurrency=4, cargo_build_jobs=4, min_job_memory_headroom_gib=8. dell1''s live binary 0cb984b75d includes TASK-3911. The file parses with the expected keys. No repo PR.'
   created_at: 2026-11-26T07:54:39.508315964Z
   modified_at: 2026-11-26T07:54:39.508315964Z
+- id: 01a21f9a-f6cb-7d83-a50c-f7b5d498abcf
+  author: joe
+  content: 'COMPLETED as shipped (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Done as host /etc/aida/lanes.toml on dell1 (product-15 11-26 comment); no repo PR by design.'
+  created_at: 2026-11-28T00:42:59.147630766Z
+  modified_at: 2026-11-28T00:42:59.147630766Z
 history:
 - id: 01a216c1-400d-76b0-bbdd-cf8524ab2043
   author: joe
