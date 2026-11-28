@@ -369,6 +369,33 @@ pub(crate) fn handle_doctor_command(
                 let root = main_worktree_root_from(&find_project_root()?);
                 anyhow::ensure!(!yes && !sub_yes, "attested release refuses --yes");
                 anyhow::ensure!(!json && !heal_json, "attested release refuses --json");
+                let operator_only = || -> Result<()> {
+                    crate::gate::seat_authority::require_direct_human()?;
+                    anyhow::ensure!(
+                        crate::gate::role_authority::has_integrity_floor_authority()
+                            && !crate::pr_service::ship_caller_is_drive_seat()
+                            && !doctor_running_autonomously(&root),
+                        "attested release requires a human operator"
+                    );
+                    Ok(())
+                };
+                // Neither --id nor --attest: release only reservations the
+                // forge and the lease registry prove finished, salvage first.
+                // trace:TASK-3891 | ai:claude
+                if repair && id.is_none() && attest.is_none() {
+                    operator_only()?;
+                    let lines = crate::repair_journal::RepairGuard::release_dead_reservations(
+                        &root,
+                        &mut crate::repair_journal::ForgeProbe,
+                    )?;
+                    if lines.is_empty() {
+                        println!("No held repair reservations");
+                    }
+                    for line in lines {
+                        println!("{line}");
+                    }
+                    return Ok(());
+                }
                 let id = id
                     .as_deref()
                     .context("attested release requires one --id")?;
@@ -377,13 +404,7 @@ pub(crate) fn handle_doctor_command(
                     .map(str::trim)
                     .filter(|s| !s.is_empty())
                     .context("attested release requires a nonempty --attest reason")?;
-                crate::gate::seat_authority::require_direct_human()?;
-                anyhow::ensure!(
-                    crate::gate::role_authority::has_integrity_floor_authority()
-                        && !crate::pr_service::ship_caller_is_drive_seat()
-                        && !doctor_running_autonomously(&root),
-                    "attested release requires a human operator"
-                );
+                operator_only()?;
                 if repair {
                     crate::repair_journal::RepairGuard::attest_reservation(
                         &root,
