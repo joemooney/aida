@@ -9,12 +9,12 @@ description: |-
   - AC3: golden help snapshots updated; no internal SPEC IDs in help text.
 
   Source: docs/plans/2026-11-27-fresh-user-walkthrough.md, sections F3, F9 (on main after #4782). Advisor aida-d3 2026-11-27 20:30 priority (g); grouped by area by product-15 for laning now.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T04:51:06.569070472Z
-modified_at: 2026-11-28T07:11:49.298902375Z
+modified_at: 2026-11-28T07:11:57.892131196Z
 req_type: Task
 tags:
 - docs:impacted
@@ -163,6 +163,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a220ff-15c4-7520-afd4-16267ead058c
+  author: aida-session-start
+  timestamp: 2026-11-28T07:11:57.892129587Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 4b06a37b464472f759637aecf25042f98a4e33c2
