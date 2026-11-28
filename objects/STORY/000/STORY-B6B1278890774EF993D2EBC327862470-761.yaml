@@ -53,7 +53,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T03:41:07.856444Z
-modified_at: 2026-11-28T09:43:29.789742792Z
+modified_at: 2026-11-28T10:01:32.930491367Z
 req_type: Story
 tags:
 - containment
@@ -252,6 +252,18 @@ comments:
   content: 'DEFERRED (#4805 S2 review draft @0c402489; advisor 02:42 kept 3 deferred; product-15): [p3] aida-cli-lib/src/init_allowlist_report.rs plan/apply: shape errors are only caught mid-apply. A string-valued `[contained] allowed_hosts = "x"` (existing_entries maps it to ["x"]) or an inline `contained.vendors` table passes planning and the pre-write checks, then fails in the TOML branch / set_nested after .claude/settings.json (and possibly allowed_hosts) were already writte | [p3] aida-cli-lib/src/init_cmd.rs agent_cli_detected: every SpawnFailed is retried (3 attempts, 50 ms sleeps), including ENOENT for an agent that simply is not installed, adding ~100 ms per absent agent CLI. Use command_output_with_timeout_io and retry only ETXTBSY. | [test-gap] aida-cli-lib/src/init_allowlist_report.rs confirm_write: the interactive [y/N] prompt path (terminal detection, yes/no answers) has no automated test; tests only drive --write and the JSON/non-terminal path (disclosed in the PR body). This is init config-writing code, not gate/sandbox enforcement code.'
   created_at: 2026-11-28T09:39:17.937690196Z
   modified_at: 2026-11-28T09:39:17.937690196Z
+- id: 01a2219a-5802-7f91-953a-5c7fcba33ce3
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 082b3e5718 (S2 r3, PR #4805)
+    Fixes: (1) apply_allowlist_writes' settings.json read: only NotFound starts empty. Any other read error aborts with the cause ('nothing was written'). The planner's earlier read already aborts too. (2) The settings.json replace goes through write_settings_keeping_mode: write_atomic_mode with the existing file's mode bits, chown back to the old uid/gid, and a new file gets 0600. A file owned by another user is refused unless running as root.
+    Evidence [behavioral-test]: write_aborts_on_an_unreadable_settings_file_and_leaves_it_untouched (end-to-end, plus the writer called directly after planning); write_keeps_the_settings_mode_and_creates_a_new_file_0600. init_allowlist: 13/13 ok. aida-ci-guards --lib: 51/51 ok. make check-ci-fast: exit 0. Store-writer inventory updated and reconciled.
+    Residual risks: the chmod-000 test is a no-op under root, where the file stays readable. A gid restore is attempted after the rename, so a non-root user changing to a group they are not in errors after the replace (the mode is already kept). The TOML branches are unchanged (out of scope). The other 3 draft findings stay deferred as recorded.
+  created_at: 2026-11-28T10:01:32.930491367Z
+  modified_at: 2026-11-28T10:01:32.930491367Z
+  session_id: 01a221896359
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e0f7-c069-77f2-b73d-5d3a4f0f8d52
   author: joe
