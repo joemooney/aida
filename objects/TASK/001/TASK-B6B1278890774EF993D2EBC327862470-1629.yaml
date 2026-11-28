@@ -8,12 +8,12 @@ description: |-
   - AC2: a doc test or script runs the documented commands in a throwaway repo (where feasible without network/vendor sign-in) to keep them from drifting.
 
   Source: docs/plans/2026-11-27-fresh-user-walkthrough.md, sections F1 (on main after #4782). Advisor aida-d3 2026-11-27 20:30 priority (g); grouped by area by product-15 for laning now.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T04:51:24.867906703Z
-modified_at: 2026-11-28T04:51:24.867906703Z
+modified_at: 2026-11-28T05:09:03.789647476Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -24,6 +24,13 @@ history:
   author: joe
   timestamp: 2026-11-28T04:51:34.742436488Z
   changes: []
+- id: 01a2208e-90ad-7a93-9d9d-2661bd52fc64
+  author: aida-session-start
+  timestamp: 2026-11-28T05:09:03.789636264Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 4b06a37b464472f759637aecf25042f98a4e33c2
   branch: main
