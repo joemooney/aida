@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-27T10:10:23.089170025Z
-modified_at: 2026-11-27T10:19:07.285058858Z
+modified_at: 2026-11-28T00:47:01.787678980Z
 req_type: Task
 tags:
 - agy
@@ -35,6 +35,13 @@ comments:
   modified_at: 2026-11-27T10:19:07.285058858Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21f9e-fa0d-77e1-81fc-2cb2b025c28c
+  author: joe
+  content: 'Advisor 2026-11-27 17:50: DELIVERED by #4741, squash 1633dfe0a75 on main, independently approved at f3cb2791. The squash kept the old "(STORY-3202)" trailer despite the PR retitle, so the merge didn''t auto-complete this task; completing it by hand.'
+  created_at: 2026-11-28T00:47:01.787678980Z
+  modified_at: 2026-11-28T00:47:01.787678980Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a21c81-2c0f-79c2-8d45-bb35bf0dc892
   author: joe
