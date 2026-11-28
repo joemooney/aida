@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2787",
+  "publishes": [
+    {
+      "at": "2026-11-28T01:46:15.401344659Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-27T20:46:21.774741485Z",
+      "spec": "BUG-2787",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4758,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "c8a4fbf642a1ab06385225ce78bbf5def9d3bb24"
+      }
+    },
+    {
+      "ts": "2026-11-27T20:46:35.346100709Z",
+      "spec": "BUG-2787",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2787 at c8a4fbf642a1 (1 commit behind main; findings do not depend on base changes). AC1: implemented. dev_fresh run_check_fresh prints 'live binary Nh / M change(s) behind main; autobuild skipping since <t> (last <t>): <reason>' plus 'Clear it: <hint>' on the STALE refusal that scripts/lane-run.sh calls. lane_host adds an advisory 'autobuild' row when a same-project dev binary is behind. The log format matches scripts/aida-autobuild.sh ('%F %T skip:/FAILED:/promoted and verified'). AC2: verified by dev_fresh::tests::stale_binary_names_the_autobuild_skip_streak_and_its_clearing_hint (fake log with consecutive skips, a stale built sha, streak reset by FAILED/promoted, missing log reported). Bug protocol 'touches at least one test file': met via the inline #[cfg(test)] module in dev_fresh.rs. The blocker: the new AIDA_AUTOBUILD_LOG literal is unclassified in launch_policy, which fails the story_2326 ambient-input ratchet, matching the red fast-compile 'Ratchet set' step. The fast-gates job is also red, and its gate could not be identified from the sandbox. Two non-blocking follow-ups: lane_host has no test, and the AC1 'one command' hint wording.",
+        "recovery_hint": "address the review findings, move BUG-2787 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-27T20:47:54.657386925Z",
+      "spec": "BUG-2787",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-27T21:27:16.629425805Z",
+      "spec": "BUG-2787",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4758,
+        "verdict": "APPROVED",
+        "reviewed_sha": "2497ea339f90a66cc4e643bdc99d4b9a02077ac7"
+      }
+    },
+    {
+      "ts": "2026-11-28T01:41:02.739952834Z",
+      "spec": "BUG-2787",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4758
+      }
+    },
+    {
+      "ts": "2026-11-28T01:46:15.093358848Z",
+      "spec": "BUG-2787",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "2585c0fa9a398b6fdbd30104641cdd2a7cef443e",
+        "pr": 4758,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
