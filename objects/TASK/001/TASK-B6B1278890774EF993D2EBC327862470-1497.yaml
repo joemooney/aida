@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: aeb25528590f62531a8b19593e3fc98c019b71fe
 
   gather_signals IO is still not unit-tested: ledger to Verdict mapping, the lease/open-PR held-set fail-closed path (s.held = None), the git-log landing collection and landing_opened_since parsing. The pure helpers are covered. This is reporting code, so it follows the list.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T09:32:17.739941655Z
-modified_at: 2026-11-28T01:08:54.494787531Z
+modified_at: 2026-11-28T01:08:56.589199708Z
 req_type: Task
 tags:
 - carried-from:STORY-3143
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21fb2-ba8d-7013-ae2e-372664567650
+  author: joe
+  timestamp: 2026-11-28T01:08:56.589197348Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: aeb25528590f62531a8b19593e3fc98c019b71fe
   branch: pr-4641
