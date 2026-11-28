@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T08:51:09.419544492Z
-modified_at: 2026-11-26T12:45:23.235530295Z
+modified_at: 2026-11-28T01:06:46.336761096Z
 req_type: Bug
 tags:
 - agents
@@ -104,6 +104,11 @@ comments:
   content: "DEFERRED minors (advisor-122 override-approval of #4645 @ 820435a1, 2026-11-26 04:12):\n- aida-core/src/mailbox_lifecycle/leftovers.rs scan_scoped_at: anchor-level write_source_id temps are scanned with Owner::Unattributed, so under aida agent gc they are always Unknown and kept forever, while the unscoped retention report (activation.rs:234 via scan()) still lists them as reapable. They have no reap path now and will accumulate. Follow\n- aida-cli-lib/src/agent_registry_root.rs LeftoverOwners::probe is untested: the CLI test builds LeftoverOwners by hand, so the complete=false derivation (list_leases_strict_all error, PidObserver isolated) and the canonicalize-then-match of lease worktree paths are not exercised. judge() itself, including the incomplete-view Unknown path, is tested.\n- aida-core/src/mailbox_lifecycle/activation.rs:234: the retention dry run still calls the unscoped scan() (every owner Dead, no age floor), so it reports a live owner's leftovers as reapable. That is inconsistent with the new gc output; AC3 covers only the gc dry run, so this is informational. Follow-up: share the owner judge or label the report as \nFOLLOW-UP: make the mail-retention dry run (activation.rs ~:234) use the SAME scoped scan as gc, so it stops reporting a live owner's leftovers as reapable (today it says 460 leftovers while lanes run)."
   created_at: 2026-11-26T11:08:28.117322581Z
   modified_at: 2026-11-26T11:08:28.117322581Z
+- id: 01a21fb0-bdc1-7042-b56a-aeae2b1f75e3
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3481): aida-core/src/mailbox_lifecycle/activation.rs:234: the retention dry run still calls the unscoped scan() (every owner Dead, no age floor), so it reports a live owner''s leftovers as reapable. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:06:46.336761096Z
+  modified_at: 2026-11-28T01:06:46.336761096Z
 history:
 - id: 01a2173e-e582-7153-b482-a9c2c1f63d41
   author: joe
