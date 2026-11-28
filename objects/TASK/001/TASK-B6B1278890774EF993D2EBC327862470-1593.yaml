@@ -14,8 +14,31 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T00:07:20.208196382Z
-modified_at: 2026-11-28T02:50:33.460035303Z
+modified_at: 2026-11-28T02:53:00.934417184Z
 req_type: Task
+comments:
+- id: 01a22012-0286-7f81-a3b8-577c7525b5b1
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit + command-level):** `check-ratchets.py --only-set` emulates cargo's selection from source: for each group it walks the crate target (`--lib` = `<pkg>/src` module tree, `--test X` = `<pkg>/tests/X.rs`), derives each `#[test]`-family fn's module path, keeps those whose path contains the group filter (cargo substring filter) and are not `#[ignore]`, and diffs against the manifest; shared modules are compared to the tests aida-ci-guards/lib.rs pulls in via `#[path]`. Failure names module + test (added/removed). Proved by fixture tests in tests/test_ratchet_set.py.
+    - **AC2 (unit):** the check runs as a fast-tier gate with no cargo (wired via ci.yml/ci-gate-tiers or check-ci-fast); a test asserts the wiring.
+    - **AC3 (fixture unit):** temp-dir fixture crate whose module gains an unregistered test -> failure naming it; also a removed test and a crate-wide filter collision.
+    - **Cargo agreement:** run `cargo test --profile agent -p <pkg> ... -- --list` via lane jobs once and compare per-group counts to --only-set.
+
+    ### Expected files
+    - scripts/check-ratchets.py
+    - tests/test_ratchet_set.py
+    - Makefile and/or .github/workflows/ci.yml + scripts/ci-gate-tiers.toml
+
+    ### Ambiguities / conflicts as questions
+    - None (wiring location chosen by whichever runs without cargo).
+  created_at: 2026-11-28T02:53:00.934417184Z
+  modified_at: 2026-11-28T02:53:00.934417184Z
+  session_id: 01a2200f86b5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a2200f-c274-7b13-9095-9db5a621a6dd
   author: aida-session-start
