@@ -8,12 +8,12 @@ description: |
 
   Raised by the implementer while working BUG-2775.
   Branch: bug-2775-run-review-errors  ·  Commit: 46793d2c72  (PR-4672)
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:26:51.396539455Z
-modified_at: 2026-11-28T00:32:08.394913969Z
+modified_at: 2026-11-28T01:40:41.972783228Z
 req_type: Task
 tags:
 - from-implementer:BUG-2775
@@ -39,6 +39,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a21fcf-cd74-73e3-8d69-87b83c61a675
+  author: aida-session-start
+  timestamp: 2026-11-28T01:40:41.972781952Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 46793d2c72c82cc39b20ba2ae9a81b17ebc8cd17
   branch: bug-2775-run-review-errors
