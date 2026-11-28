@@ -1,0 +1,31 @@
+id: 01a21f88-762c-78b2-bb81-fc08c8e49022
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1597
+agreed_id: TASK-3941
+title: 'STORY-3120 S7d: Scoring'
+description: |-
+  Child slice of STORY-3120 (plan comment 87; list /tmp/claude-1000/story-3120-s7-s10-slices.md). Reference: origin/story-3120-ci-review @ a1777130882, ref commits 5cb4741015e.
+  Scope: Scoring: compute_severity_weighted_score, compute_f_beta_score (F0.5/F1/F2), compute_addressed_findings_with, extract_confirmed_findings_from_sarif, and the 3-condition exacerbated_by_pr challenger rubric
+  Files: review_engine.rs (+ small prepare wiring)
+  Tier: STANDARD (pure logic)
+  Depends on: S7a, S7b
+  Size: <=300 changed lines incl. tests. Track: integration.
+  Brief: to be written by the integration seat.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T00:22:46.572554754Z
+modified_at: 2026-11-28T00:22:46.572554754Z
+req_type: Task
+tags:
+- standard
+- story-3120
+filed_at:
+  code_sha: 84fe63bf7c647ba5c65d6b97d1ced29ae3be3596
+  branch: integration
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0fba3d42ee9
+  vendor: claude
+  session: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
