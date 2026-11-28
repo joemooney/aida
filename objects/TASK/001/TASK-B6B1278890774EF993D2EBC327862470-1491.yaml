@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: f694d9696a374985b149f9ee6227fe59e0e98c8e
 
   AC1 says 'ENOENT on the path AND no mount', but attest_clone_lease's pin() (aida-cli-lib/src/doctor/worktrees.rs:79-95) only walks to the first existing ancestor and checks that it canonicalizes to itself. It does not detect that the ancestor is an empty mount point whose filesystem is unmounted (e.g. a lane-host NVMe not mounted), and the confirmation warning does not tell the operator the tree was found absent. In that state the operator-attested release ends the lease as 'tree absent, nothing to salvage' while the tree still exists on the unmounted filesystem. No data is deleted, and the release needs a typed-ID human attestation. Follow-up: show 'tree absent' in the prompt, or refuse when the nearest existing ancestor is on a different st_dev than the lease's recorded main/expected filesystem.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T07:28:44.099846343Z
-modified_at: 2026-11-28T01:05:34.087647459Z
+modified_at: 2026-11-28T01:05:36.058312743Z
 req_type: Task
 tags:
 - carried-from:BUG-2755
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21faf-ab3a-7ba2-acb9-43f590f7180e
+  author: joe
+  timestamp: 2026-11-28T01:05:36.058310776Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: f694d9696a374985b149f9ee6227fe59e0e98c8e
   branch: pr-4632
