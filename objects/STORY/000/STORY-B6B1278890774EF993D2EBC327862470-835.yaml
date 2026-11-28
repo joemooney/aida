@@ -10,12 +10,12 @@ description: |
   - AC2: each such landing records the mandate id in the train record and the landed spec's history, so `aida mandate status` and the audit trail show what it shipped.
   - AC3: when the mandate expires or is stopped, supervised PRs fall back to human-only on the next poll; a test.
   - AC4: set the knob to true in .aida/config.toml once it lands (a follow-up).
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T15:15:41.002272518Z
-modified_at: 2026-11-27T23:17:49.331250171Z
+modified_at: 2026-11-28T01:45:09.143979085Z
 req_type: Story
 tags:
 - landing
@@ -171,6 +171,11 @@ comments:
   created_at: 2026-11-27T23:17:49.331246799Z
   modified_at: 2026-11-27T23:17:49.331246799Z
   session_id: 01a21f2a5f6d
+- id: 01a21fd3-e117-71c3-bf41-6004b7e2bfac
+  author: lane-recovery
+  content: Reference merge `85cb4ce7cbb20bf607806f523f6bbad317e33ec2` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-28T01:45:09.143970958Z
+  modified_at: 2026-11-28T01:45:09.143970958Z
 history:
 - id: 01a21873-34ec-7e40-815b-1570489bba5e
   author: joe
@@ -190,6 +195,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21fd3-e117-71c3-bf41-6017107526f3
+  author: lane-recovery
+  timestamp: 2026-11-28T01:45:09.143978776Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: fd10cfd3049a6cdf799e17ca5d2d70b27f35d9d7
