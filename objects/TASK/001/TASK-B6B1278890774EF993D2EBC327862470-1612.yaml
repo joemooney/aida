@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:30:00.472477642Z
-modified_at: 2026-11-28T04:06:52.671643310Z
+modified_at: 2026-11-28T04:15:20.595079471Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -61,6 +61,12 @@ comments:
   modified_at: 2026-11-28T03:54:05.168175635Z
   session_id: 01a220416c9d
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2205d-6213-7141-bc83-d22e19b141de
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3954-installer-fail-loud` at head `5729fc1868420e814d5dd2bf0798f0ef133ad528`.'
+  created_at: 2026-11-28T04:15:20.595076252Z
+  modified_at: 2026-11-28T04:15:20.595076252Z
+  session_id: 01a220416c9d
 history:
 - id: 01a22034-5b2b-79c1-b9b2-fe4621fcfd47
   author: joe
