@@ -98,7 +98,13 @@ pub enum ReviewCommand {
     /// Deterministically classify diff inventory, match path-scoped review playbooks,
     /// bundle token-budgeted review batches, verify 100% file coverage ledgers, and
     /// anchor quoted code snippets to exact 1-based line numbers.
+    ///
+    /// Exits 5 when there is nothing to review (no changed files in the
+    /// range, commit or working tree): no file was reviewed, so this is not
+    /// a pass. It exits 1 on an error or a `--fail-on` match, and 4 when the
+    /// `--adversarial` challenger was unavailable.
     // trace:STORY-3076 | ai:antigravity
+    // trace:TASK-3953 | ai:claude
     Prepare(crate::review_prepare::ReviewPrepareArgs),
 
     /// Record a review verdict for a spec as first-class state.

@@ -3671,7 +3671,7 @@ pub(crate) mod hermetic_ancestry_seam {
 /// injectable process tree so the walk is testable without `/proc`.
 // trace:TASK-2272 | ai:claude
 #[cfg(unix)]
-fn session_start_agent_pid_in(
+pub(crate) fn session_start_agent_pid_in(
     mut child_pid: u32,
     agent_type: &str,
     parent_of: impl Fn(u32) -> Option<u32>,

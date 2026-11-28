@@ -1582,6 +1582,38 @@ fn commit_init_scaffolding(
     }
 }
 
+/// The ID `aida add` will issue for this project's first task, predicted
+/// without writing anything, so the first-run loop names a real ID instead of
+/// a hard-coded `TASK-1`. `None` when the store cannot be read yet, or when
+/// `aida add` will dispense from an ID block (claimed at add time, so not
+/// predictable here) — the caller then prints a placeholder, never a guess.
+// trace:TASK-3956 | ai:claude
+pub(crate) fn first_task_id_example(root: &std::path::Path) -> Option<String> {
+    let store_path = crate::usage_mcp_helpers::detect_store_path(root)?;
+    let policy = aida_core::allocation_authority::effective_policy_for(
+        &store_path,
+        crate::store_sync::read_id_format_policy(root),
+        Some(aida_core::RequirementType::Task.default_prefix()),
+    )
+    .ok()?;
+    if policy.uses_blocks() {
+        return None;
+    }
+    let backend = aida_core::GitBackend::new(&store_path).ok()?;
+    let mut template = aida_core::Requirement::new(String::new(), String::new());
+    template.req_type = aida_core::RequirementType::Task;
+    let id = backend
+        .peek_spec_id(&template, 0, &std::collections::HashSet::new())
+        .ok()?;
+    (!id.is_empty()).then(|| id.to_ascii_uppercase())
+}
+
+/// Whether `id` carries a node-local machine part (`TASK-<32 hex>-001`).
+// trace:TASK-3956 | ai:claude
+fn is_long_local_id(id: &str) -> bool {
+    aida_core::id_identity::IdKey::parse(id).is_some_and(|k| k.is_node_local())
+}
+
 /// Workflow scaffolding shared by all `aida init` modes — builds skills,
 /// commands, hooks, MCP integration, etc. Called by both centralized and
 /// distributed init paths after their respective storage setup is complete.
@@ -2134,25 +2166,48 @@ fn complete_init_scaffolding(
         "capture".bold(),
         "link".bold()
     );
+    // TASK-3956: show the ID `aida add` will really issue here, not a
+    // hard-coded `TASK-1` that a local-only clone never mints.
+    // trace:TASK-3956 | ai:claude
+    let first_id = first_task_id_example(root);
+    let shown_id = first_id.as_deref().unwrap_or("<ID>");
     println!(
-        "    {}{}capture a task{}",
+        "    {}{}capture a task",
         "aida add \"Build login page\"".cyan(),
-        " ".repeat(3),
-        "   → TASK-1".dimmed()
+        " ".repeat(4),
     );
+    match &first_id {
+        Some(id) => println!(
+            "      {} AIDA will give it the ID {}",
+            "→".dimmed(),
+            id.bold()
+        ),
+        None => println!(
+            "      {} {}",
+            "→".dimmed(),
+            "aida add prints the new task's ID; use it below".dimmed()
+        ),
+    }
+    if first_id.as_deref().is_some_and(is_long_local_id) {
+        println!(
+            "        {}",
+            "(the long middle part names this copy of the project, so IDs made in different copies never clash)"
+                .dimmed()
+        );
+    }
     println!(
         "    {}{}see what's on your plate",
         "aida list".cyan(),
-        " ".repeat(21)
+        " ".repeat(22)
     );
     println!(
         "    {}",
-        "… now build it in your editor, and put (TASK-1) in your commit message …".dimmed()
+        format!("… now build it in your editor, and put ({shown_id}) in your commit message …")
+            .dimmed()
     );
     println!(
-        "    {}{}mark it finished",
-        "aida done TASK-1".cyan(),
-        " ".repeat(14)
+        "    {}    mark it finished",
+        format!("aida done {shown_id}").cyan()
     );
     // BUG-585: `aida done` is advisor-gated off a TTY, so a scripted/agent
     // first-user (a primary intended caller) would hit the gate on this taught
@@ -2163,9 +2218,8 @@ fn complete_init_scaffolding(
         "      (enter advisor at a human TTY with `aida role enter advisor`)".dimmed()
     );
     println!(
-        "    {}{}see your commit linked to the task — {}",
-        "aida show TASK-1".cyan(),
-        " ".repeat(14),
+        "    {}    see your commit linked to the task — {}",
+        format!("aida show {shown_id}").cyan(),
         "that's the point".bold()
     );
 
