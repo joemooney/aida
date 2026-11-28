@@ -27,12 +27,12 @@ description: |
   3. The train records which generated files it regenerated, and the commands it ran, on the train PR.
   4. The excluded set comes only from the registry; no config can exclude a non-generated path, and protected gate paths can never be registered as generated.
   5. Replay check: #4224 and #4229 as they stood on 2026-11-17 would have landed without ejection.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T00:40:24.997836173Z
-modified_at: 2026-11-28T08:23:04.763576284Z
+modified_at: 2026-11-28T08:34:02.235120761Z
 req_type: Story
 tags:
 - architecture
@@ -128,6 +128,13 @@ history:
   author: joe
   timestamp: 2026-11-28T08:31:19.037433967Z
   changes: []
+- id: 01a2214a-397b-7ad0-80b6-c4071caa39c9
+  author: aida-pr-open
+  timestamp: 2026-11-28T08:34:02.235120015Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
   branch: main
