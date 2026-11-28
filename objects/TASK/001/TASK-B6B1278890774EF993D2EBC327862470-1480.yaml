@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: f7538e24f20a874b18dea010f8fb2bc85be59679
 
   aida-cli-lib/src/dispatch_flow.rs:292 invoke_pr_train_with_ctx passes the PR as a named train (all_ready=false), so prs_named_on_command_line is true and culprit_admission (pr_train.rs:5552) silently clears a culprit hold whenever `aida dispatch flow <PR>` runs, recording the clearance as '<user> (named on `aida pr train`)'. An automated advisor dispatch flow for a culprit at its red head therefore re-admits it, which is the re-admission BUG-2767 targets, and the recorded clearance names the wrong surface. Follow-up: treat only an interactive or operator-named train as clearance, or record the dispatch request as the clearer.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T03:00:17.758604999Z
-modified_at: 2026-11-28T01:04:13.004045144Z
+modified_at: 2026-11-28T01:04:15.029686217Z
 req_type: Task
 tags:
 - carried-from:BUG-2767
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-26T05:11:50.443439186Z
   changes: []
+- id: 01a21fae-6eb5-7ae0-a5e2-dd603d4a4db4
+  author: joe
+  timestamp: 2026-11-28T01:04:15.029683637Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: f7538e24f20a874b18dea010f8fb2bc85be59679
   branch: pr-4615
