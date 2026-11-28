@@ -2625,6 +2625,36 @@ mod tests {
         assert!(manual_train_admission(root, false, &[5]).unwrap().is_some());
     }
 
+    /// The owner check is the authority: the token is readable by anyone, so
+    /// another process resuming a live owner's record with its REAL token
+    /// gets no position and stays withheld. trace:TASK-3920 | ai:claude
+    #[test]
+    fn task3920_real_token_from_a_non_owner_gets_no_position() {
+        let temp = zero_wait_train_fixture();
+        let root = temp.path();
+        let mut owner = std::process::Command::new("sleep")
+            .arg("60")
+            .spawn()
+            .unwrap();
+        let identity = ProcIdentity::capture_child(&owner).unwrap();
+        assert_ne!(
+            Some(&identity),
+            ProcIdentity::capture(std::process::id()).ok().as_ref()
+        );
+        let record = park(root, identity, 60, 120);
+        let resumed = resume_train(root, &record.token);
+        // An intent newer than the position still binds a non-owner.
+        let wait = Deadline::start(Duration::from_secs(60));
+        let intent = register_intent(root, "manual", IntentKind::Train, wait).unwrap();
+        let reason = yield_reason_before(root, "legacy auto-train", Some(&record.token));
+        drop(intent);
+        owner.kill().unwrap();
+        owner.wait().unwrap();
+        let error = resumed.err().expect("a non-owner is withheld");
+        assert!(error.to_string().contains("parked since"), "{error}");
+        assert!(reason.is_some(), "a non-owner keeps no position");
+    }
+
     /// TASK-3920 T5: a record whose owner died, that expired, that is dated
     /// past any lifetime or that does not parse lets a manual train
     /// through; a live one does not. trace:TASK-3920 | ai:claude
@@ -2642,7 +2672,11 @@ mod tests {
         admitted(false);
         park(root, me.clone(), 300, -1);
         admitted(false);
-        park(root, me.clone(), 0, 30 * 86400);
+        // Each lifetime bound alone: parked long ago but expiring soon, and
+        // a short span that ends far past now. trace:TASK-3920 | ai:claude
+        park(root, me.clone(), 30 * 86400, 120);
+        admitted(true);
+        park(root, me.clone(), 60 - 30 * 86400, 30 * 86400);
         admitted(true);
         std::fs::write(&path, b"{broken").unwrap();
         admitted(true);
