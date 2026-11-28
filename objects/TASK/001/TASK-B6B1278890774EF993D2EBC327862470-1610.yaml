@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:26:56.215965481Z
-modified_at: 2026-11-28T04:57:10.772885570Z
+modified_at: 2026-11-28T04:57:14.188198383Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -92,6 +92,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Advisor FIX-FIRST: red full CI; the reviewer''s predicted AC3 caller gap.. No triage reason was given.'
   created_at: 2026-11-28T04:57:10.772879191Z
   modified_at: 2026-11-28T04:57:10.772879191Z
+- id: 01a22083-bc2d-7e20-a1de-e1a9b747a465
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3952):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 2c764ec06581
+    Recorded: 2026-11-28T04:56:31.161973149+00:00
+    Findings:
+    1. Full CI red at this head: 9 aida-cli integration tests (bug_2139, bug_2201 ×2, task_1717, bug_1683, bug_1808, bug_2752, story_1486, story_1662) run 'aida init' in fixtures and expect committed scaffolding. Per AC3 those callers must pass --commit: update the shared init test fixture to pass --commit, keep the new no-auto-commit default unchanged, and fix the getting-started step for agent-run init.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-28T04:57:14.029753928Z
+  modified_at: 2026-11-28T04:57:14.029753928Z
 history:
 - id: 01a22031-de1f-7b30-a729-5d2554ae7cad
   author: joe
