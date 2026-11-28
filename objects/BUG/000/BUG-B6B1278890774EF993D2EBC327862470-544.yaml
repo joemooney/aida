@@ -324,6 +324,13 @@ comments:
   content: Reference merge `591f0a2543e3909712a1e4c82e07b323079331d3` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-28T04:15:20.040449580Z
   modified_at: 2026-11-28T04:15:20.040449580Z
+- id: 01a2205d-6c80-7ee1-b4b3-9a6afb5945e0
+  author: aida-auto-bump
+  content: |-
+    [aida:refs-landing] 591f0a2543e3
+    A reference merge (commit 591f0a2543e3, `(Refs BUG-2783)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
+  created_at: 2026-11-28T04:15:23.264513240Z
+  modified_at: 2026-11-28T04:15:23.264513240Z
 - id: 01a22060-c76c-7d11-89fd-048c4c43f7aa
   author: lane-recovery
   content: Reference merge `1d956ee6792d6b737c3e17d88ba92f818002348d` left unfinished work with no lease or open PR; returned to Approved.
