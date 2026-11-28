@@ -32,7 +32,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T00:40:24.997836173Z
-modified_at: 2026-11-28T09:24:50.526504764Z
+modified_at: 2026-11-28T13:19:01.207983945Z
 req_type: Story
 tags:
 - architecture
@@ -115,6 +115,13 @@ comments:
   content: 'SKETCH AMENDMENT (advisor aida-d3 2026-11-28 02:27; recorded by product-15): generator code is ALWAYS base-trusted. The train runs each registered generator from the trusted base (origin/main at train start), never from the train tip or any member; an entry whose generator (or its inputs'' definition) a member changes is not regenerated and keeps the strict patch-id check. The regen sandbox binds only the temp worktree (rw) + minimal toolchain paths (ro), an empty tmpfs HOME, no ~ binds, no network, never --ro-bind / /. Any error reading the protected-path config disables regeneration for the train (fail closed).'
   created_at: 2026-11-28T09:24:50.526504764Z
   modified_at: 2026-11-28T09:24:50.526504764Z
+- id: 01a2224f-2257-7bb0-8622-5f1d871eee56
+  author: aida-auto-bump
+  content: |-
+    [aida:refs-landing] deb1d5f921ba
+    A reference merge (commit deb1d5f921ba, `(Refs STORY-2894)`) landed while this spec was In Progress, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
+  created_at: 2026-11-28T13:19:01.207977260Z
+  modified_at: 2026-11-28T13:19:01.207977260Z
 history:
 - id: 01a1ec19-7b04-7850-af52-2ebbc7e873d2
   author: joe
