@@ -12,7 +12,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:31:21.556365075Z
-modified_at: 2026-11-28T04:54:58.682440309Z
+modified_at: 2026-11-28T04:56:00.239641620Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -62,6 +62,12 @@ comments:
   content: Implementer push 47cad2ff1726 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-28T04:54:58.682439780Z
   modified_at: 2026-11-28T04:54:58.682439780Z
+  session_id: 01a220669ee1
+- id: 01a22082-9bef-76d0-a0bd-a12479025b18
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3956-init-id-format` at head `47cad2ff17262896f5ad25dc03bb5e1abd88b05c`.'
+  created_at: 2026-11-28T04:56:00.239637923Z
+  modified_at: 2026-11-28T04:56:00.239637923Z
   session_id: 01a220669ee1
 history:
 - id: 01a22035-56ee-7993-bddb-154d028cfb66
