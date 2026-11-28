@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T15:12:00.311702285Z
-modified_at: 2026-11-28T02:48:14.055553357Z
+modified_at: 2026-11-28T02:51:06.798841812Z
 req_type: Task
 tags:
 - from-implementer:BUG-2738
@@ -33,6 +33,11 @@ relationships:
   target_id: 01a21e01-384b-75c0-a6a7-65a83b9235e0
   created_at: 2026-11-28T00:39:18.343900411Z
   created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a2200f-d42b-74e1-bf46-221538084177
+  created_at: 2026-11-28T02:51:06.798829538Z
+  created_by: dirtlab
 comments:
 - id: 01a21f8d-e873-76c0-86ee-2ab43ee62db7
   author: joe
@@ -106,6 +111,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a22010-4d41-79e3-9fed-a86873443a2d
+  author: dirtlab
+  timestamp: 2026-11-28T02:51:08.993118965Z
+  changes: []
 filed_at:
   code_sha: 5a1122ae5b2334814944b81c225392581cc5ccb4
   branch: bug-2738-shelve-completed
