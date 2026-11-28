@@ -42,6 +42,10 @@ use colored::Colorize;
 pub(crate) mod init_cmd_args;
 pub(crate) use init_cmd_args::*;
 
+// trace:STORY-2838 | ai:claude
+#[path = "init_allowlist_report.rs"]
+mod init_allowlist_report;
+
 use aida_core::{
     determine_requirements_path, merge_agents_md_aida_block, seed_meta_requirements,
     AgentsMdBlockMerge, DatabaseBackend, Requirement, RequirementPriority, RequirementStatus,
@@ -5118,6 +5122,14 @@ pub(crate) struct InitArgs {
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
     #[clap(long, value_name = "N", value_parser = clap::value_parser!(u8).range(0..=12))]
     pub id_width: Option<u8>,
+
+    /// Report the sandbox allowlist and permission entries init would set
+    /// for each enabled agent (from `--agent` or PATH detection), using the
+    /// forge hosts your git remotes name. Writes nothing. Honors the global
+    /// `--format json`.
+    // trace:STORY-2838 | ai:claude
+    #[clap(long)]
+    pub report_allowlists: bool,
 }
 
 /// Record `[ids] seq_width` and/or `node_seq_width` in
@@ -5152,7 +5164,7 @@ pub(crate) fn write_ids_widths(
 }
 
 // Handle init before path resolution (no DB exists yet)
-fn run_init(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
+fn run_init(matches: &clap::ArgMatches, ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <InitArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let InitArgs {
         no_skills,
@@ -5190,7 +5202,19 @@ fn run_init(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> an
         gitlab_enable_ci,
         gitlab_runner_tags,
         id_width,
+        report_allowlists,
     } = &args;
+    // Read-only report; short-circuits before any init path writes.
+    // trace:STORY-2838 | ai:claude
+    if *report_allowlists {
+        let json = ctx.globals.and_then(|g| g.format) == Some(crate::cmdkit::OutputFormat::Json);
+        // `aida init DIR` reports on DIR (not yet created → no remotes).
+        let root = match dir {
+            Some(d) => std::path::PathBuf::from(d),
+            None => std::env::current_dir()?,
+        };
+        return init_allowlist_report::run_report_allowlists(&root, agent.as_deref(), json);
+    }
     // STORY-757: the markdown-only first run — scaffold just a `specs/`
     // folder + a runnable `aida why` demo, none of the orphan-branch / cache
     // / MCP / skills / roles machine. Proves the 60-second magic needs no
