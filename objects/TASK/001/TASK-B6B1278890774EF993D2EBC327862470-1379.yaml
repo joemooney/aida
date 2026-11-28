@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: (F4) the snapshot-regeneration fallback warning records the actual compiler/Cargo diagnostic (captured stderr tail), not only argv + exit status. Test.
   - AC2: (F7) the Rust seat-publish fixture drives a real failing regeneration command instead of a fabricated warning. Test.
-status: NeedsAttention
+status: Approved
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T20:53:36.980920917Z
-modified_at: 2026-11-28T00:42:50.433855013Z
+modified_at: 2026-11-28T00:42:52.279502667Z
 req_type: Task
 tags:
 - conflict-repair
@@ -51,6 +51,11 @@ comments:
   content: 'RETURNED to Approved (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Parked on BUG-2756 (#4533 8177ad2) which is now on origin/main and completed.'
   created_at: 2026-11-28T00:42:50.433855013Z
   modified_at: 2026-11-28T00:42:50.433855013Z
+- id: 01a21f9a-dbf7-7d12-83fd-3b0882e69898
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: Assigned origin/integration and seat HEAD both resolve to 48f3c08730, which lacks the BUG-2756 snapshot fallback and warning fixture. BUG-2756 commit 6d12ee315a is on a separate branch. Please integrate the approved prerequisite or route this follow-up onto its intended successor before retrying.. No triage reason was given.'
+  created_at: 2026-11-28T00:42:52.279499240Z
+  modified_at: 2026-11-28T00:42:52.279499240Z
 history:
 - id: 01a20f56-6c1a-7c13-8bdd-1a29b59f834a
   author: joe
@@ -85,6 +90,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a21f9a-dbf7-7d12-83fd-3afdb9adc67f
+  author: joe
+  timestamp: 2026-11-28T00:42:52.279493248Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 95eaccf328557402d176c0b41983afe1b677965f
@@ -93,8 +105,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 8a4c9ba4ba5
   vendor: claude
-attention_reason:
-  category: blocked-dependency
-  detail: Assigned origin/integration and seat HEAD both resolve to 48f3c08730, which lacks the BUG-2756 snapshot fallback and warning fixture. BUG-2756 commit 6d12ee315a is on a separate branch. Please integrate the approved prerequisite or route this follow-up onto its intended successor before retrying.
-  raised_by: implementer
-  raised_at: 2026-11-25T03:22:00.770416292Z
