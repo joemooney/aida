@@ -13,7 +13,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T21:04:03.035149773Z
-modified_at: 2026-11-25T00:25:27.272217516Z
+modified_at: 2026-11-28T00:42:54.997190468Z
 req_type: Task
 tags:
 - forge
@@ -46,6 +46,11 @@ comments:
   content: 'PARKED (product-15 17:26): depends on BUG-2735 (#4464; interactive throttle + review-watch fixture), which is not yet on main or integration. Relaunch after #4464 lands.'
   created_at: 2026-11-25T00:25:27.272217516Z
   modified_at: 2026-11-25T00:25:27.272217516Z
+- id: 01a21f9a-e695-78b0-8161-7fadcea33656
+  author: joe
+  content: 'RETURNED to Approved (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Parked on BUG-2735 #4464 (5bea72c), now on origin/main.'
+  created_at: 2026-11-28T00:42:54.997190468Z
+  modified_at: 2026-11-28T00:42:54.997190468Z
 history:
 - id: 01a20f5f-9bfc-71d2-8ab9-9a49e196522f
   author: joe
