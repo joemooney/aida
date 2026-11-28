@@ -4,6 +4,7 @@
 //! `scripts/repair-generated.py` (a ratchet test keeps both tables equal);
 //! train eligibility comes only from this host-compiled table, on the
 //! protected floor. Approval coverage is unchanged in S1.
+// mandate-gate
 // trace:TASK-3963 | ai:claude
 
 use crate::gate::mandate_gates::{touches_gates, ProtectedPaths};
