@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:35:29.174799431Z
-modified_at: 2026-11-27T23:59:49.241294671Z
+modified_at: 2026-11-28T00:20:33.015139250Z
 req_type: Task
 tags:
 - admission
@@ -189,6 +189,20 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-27T23:59:49.047671233Z
   modified_at: 2026-11-27T23:59:49.047671233Z
+- id: 01a21f86-6c77-7553-98e6-898880616a65
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 10c90e8e74 (PR #4768, S1 r2). Covered criteria: T1 admission half and T5, plus binding items (1)-(3) of the r2 brief.
+    Evidence: targeted run `cargo test --profile agent -p aida-cli-lib --lib -- task3920`: 4 passed.
+    (1) Mutation kill: new test `task3920_real_token_from_a_non_owner_gets_no_position`. The record is owned by a live spawned `sleep 60` child. This process presents the REAL token: resume_train is refused naming the parked recovery, and yield_reason_before still yields to a newer intent. I deleted `&& p.owner == me` by hand, and that test FAILED (admission_owner.rs:2653, 'a non-owner is withheld'). The others passed.
+    (2) Lifetime bounds, each alone: parked 30 days ago expiring in 120 s, and a 60 s span ending 30 days from now. Neutralizing either the now-bound or the parked_at-bound by hand made task3920_stale_parked_records_never_withhold FAIL. All mutants were reverted.
+    (3) Fixed the PR body wording: only an I/O error fails closed. An unparsable or newer-version record is ignored and pruned after 30 s, and S2 decides whether it should withhold.
+    Residual: the test's live owner is a child process that is killed before the asserts run, so no child leaks on panic paths before the kill. Probes 1-5: the owner check is the only authority path; there is no fail-open on owner capture error (`?` refuses).
+  created_at: 2026-11-28T00:20:33.015139250Z
+  modified_at: 2026-11-28T00:20:33.015139250Z
+  session_id: 01a21f7583a9
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a218f0-1d5d-7983-a93f-c3e8f06dcafd
   author: joe
