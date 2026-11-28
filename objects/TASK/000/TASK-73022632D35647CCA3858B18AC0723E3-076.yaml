@@ -1,0 +1,28 @@
+id: 01a221f2-e14d-77f3-bed2-ae751165bd95
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-076
+title: 'BUG-2788 PR #4815 is ~310 changed lines vs the brief''s 200-line budget'
+description: |
+  The brief capped BUG-2788 at <=200 changed lines. PR #4815 has about 310: scripts/ci-live-test-watchdog.py (~160) plus its fixture test (~130). libtest has no stable per-test timeout, and nextest is not installed in the gates shard (its result format would also change the step's ok-line counting). So a small per-process harness with a hang-fixture proof was the smallest change that meets AC2-AC4.
+
+  Raised by the implementer while working BUG-2788.
+  Branch: bug-2788-bwrap-step-timeout  ·  Commit: c69eb5939c  (PR #4815)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T11:38:15.245975831Z
+modified_at: 2026-11-28T11:38:15.245975831Z
+req_type: Task
+tags:
+- from-implementer:BUG-2788
+- kind:deviation
+- severity:cosmetic
+filed_at:
+  code_sha: c69eb5939c5b2b4ac8074fd3b609b915466f66c5
+  branch: bug-2788-bwrap-step-timeout
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eb18c450c6
+  vendor: claude
+  session: 01a221df696f
+  harness_version: 2.1.319 (Claude Code)

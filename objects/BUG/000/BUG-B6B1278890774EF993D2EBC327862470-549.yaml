@@ -18,17 +18,23 @@ description: |
   2. Each test in the live list has its own timeout, e.g. nextest `--slow-timeout` with `terminate-after`, or a per-test wrapper. A stalled test is killed and NAMED in the step output.
   3. On a stall, the step prints the currently running test(s) and the tail of the live-bwrap log BEFORE it fails, so the next occurrence identifies its culprit.
   4. A fixture or test proves a deliberately hanging live test is killed and named within the step timeout.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T10:26:37.477984708Z
-modified_at: 2026-11-28T11:18:42.285416963Z
+modified_at: 2026-11-28T11:38:04.219900062Z
 req_type: Bug
 tags:
 - ci
 - flaky
 - train
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a221f1-4305-70c0-8f55-9dc173638cdf
+  created_at: 2026-11-28T11:36:36.909273622Z
+  created_by: dirtlab
 comments:
 - id: 01a221e0-fb6d-7132-9a8e-43787860e6f0
   author: dirtlab
@@ -52,6 +58,32 @@ comments:
   modified_at: 2026-11-28T11:18:42.285416963Z
   session_id: 01a221df696f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a221f0-b7d7-7ac1-95b1-854930c5991a
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 38a73dd1a2 (git diff origin/main...HEAD: ci.yml, scripts/ci-live-test-watchdog.py, tests/test_ci_live_test_watchdog.py, scripts/store-writers.toml).
+
+    Acceptance evidence:
+    - AC1 [configuration]: `timeout-minutes: 15` on the step (.github/workflows/ci.yml, the "Live bwrap OS-wrap confinement gate" step); WorkflowStepTest asserts it.
+    - AC2 [behavioral]: the watchdog runs each listed test in its own process group with a 120s timeout; test_hanging_test_is_killed_and_named_within_its_timeout proves a sleeping-forever test is killed (grandchild too) and named `::error::test mod::hangs_forever exceeded its 2s timeout; killed`.
+    - AC3 [behavioral]: same test asserts the running-tests list, the stalled test's own output tail and the live log tail print before the final summary; the overall-deadline test covers a stall of the whole selection.
+    - AC4 [behavioral]: fixture test above, finishing in <15s. Also checked against a real rustc --test libtest binary: ok / failed / ignored handled, SKIP output kept in the log.
+
+    Probe findings: (1) result lines keep libtest --logfile `ok <name>` form, so the downstream `^ok ` counts and the SKIP grep are unchanged; (3) zero-match selection fails (test_zero_match_filter_fails), ignored tests are excluded the way cargo test excludes them; (5) fail-closed: build/list errors raise, a run with exit 0 but no `test result: ok. 1 passed;` counts as failed, AIDA_REQUIRE_BWRAP_LIVE untouched and no checks removed.
+    Fixes during review: ExecContext env ratchet (fixture used os.environ; now a path) and store-writer inventory rows.
+    Residual risks: process-per-test replaces one libtest process (the in-process locks in these files guard env vars only, and nextest lanes already run them per-process); a sandbox child that calls setsid escapes killpg (bwrap --die-with-parent normally covers it); diff is ~310 lines vs the 200-line brief budget. Gate: make check-ci-fast exit 0 at 38a73dd; python3 -m unittest tests/test_ci_live_test_watchdog.py 5/5 OK. No cargo test run: no Rust changed.
+  created_at: 2026-11-28T11:35:53.559763714Z
+  modified_at: 2026-11-28T11:35:53.559763714Z
+  session_id: 01a221df696f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a221f0-f0bc-7f53-8d60-29868c452450
+  author: aida-publication-done
+  content: Implementer push c69eb5939c5b declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-28T11:36:08.124400426Z
+  modified_at: 2026-11-28T11:36:08.124400426Z
+  session_id: 01a221df696f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a221b3-6753-7fb2-add9-43dfca3c1423
   author: joe
@@ -71,6 +103,27 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a221f0-f0bc-7f53-8d60-297045b289ad
+  author: aida-publication-done
+  timestamp: 2026-11-28T11:36:08.124398533Z
+  session_id: 01a221df696f
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a221f1-69ce-74d2-9b3f-74c5248a3130
+  author: dirtlab
+  timestamp: 2026-11-28T11:36:39.118589934Z
+  session_id: 01a221df696f
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a221f2-bac8-7283-9a03-114a23422ad2
+  author: dirtlab
+  timestamp: 2026-11-28T11:38:05.384944611Z
+  session_id: 01a221df696f
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: fb1f8edfbad86ac5eac7132125376d2f410757b7
@@ -81,3 +134,7 @@ filed_at:
   vendor: claude
   session: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-28T11:38:04.219900062Z
+  implemented_by: dirtlab

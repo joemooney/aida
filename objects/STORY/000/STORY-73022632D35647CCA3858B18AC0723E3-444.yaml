@@ -1,0 +1,59 @@
+id: 01a221f1-4305-70c0-8f55-9dc173638cdf
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-444
+title: 'Review PR-4815: [AI:claude] chore(ci): inventory the live-test watchdog''s log writes (BUG-2788)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a221df`) for branch `bug-2788-bwrap-step-timeout`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4815>
+  - Branch: `bug-2788-bwrap-step-timeout` → `main`
+
+  ## Covers
+
+  - BUG-2788
+  - TASK-3960
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4815` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T11:36:29.189591217Z
+modified_at: 2026-11-28T11:36:41.186115982Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a221b1-4d25-72d2-b640-0e69f626c22f
+  created_at: 2026-11-28T11:36:33.262881081Z
+  created_by: dirtlab
+- rel_type:
+    custom: implements
+  target_id: 01a2207e-6843-7553-b394-841b7a1925e1
+  created_at: 2026-11-28T11:36:41.186016410Z
+  created_by: dirtlab
+history:
+- id: 01a221f1-5b79-7ce2-9150-67b9e5d2f2e6
+  author: dirtlab
+  timestamp: 2026-11-28T11:36:35.449087425Z
+  session_id: 01a221df696f
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a221f1-7a58-72a1-89ce-4fcaba66722f
+  author: dirtlab
+  timestamp: 2026-11-28T11:36:43.352155318Z
+  session_id: 01a221df696f
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: c69eb5939c5b2b4ac8074fd3b609b915466f66c5
+  branch: bug-2788-bwrap-step-timeout
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eb18c450c6
+  vendor: claude
+  session: 01a221df696f
+  harness_version: 2.1.319 (Claude Code)
