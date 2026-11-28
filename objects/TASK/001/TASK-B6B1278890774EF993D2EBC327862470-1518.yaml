@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 5a1122ae5b2334814944b81c225392581cc5ccb4
 
   Merged/closed detection is GitHub-only and degrades silently: review_commands.rs:3609 calls forge::github_pr_state (raw `gh pr view`) rather than the forge abstraction (forge::forge_for(root).change_metadata, used by the stranded sweep). On a GitLab-forge clone, or in a contained reviewer seat where gh/network is unavailable, pr_state is None and a Done spec whose PR already merged is still shelved to NeedsAttention -- exactly the BUG-2728 shape. Fail-closed to today's behaviour, so not a regression; follow up by routing through forge_for and/or noting the degraded case in output.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T15:22:22.271678976Z
-modified_at: 2026-11-28T00:29:01.771722386Z
+modified_at: 2026-11-28T00:29:47.792107418Z
 req_type: Task
 tags:
 - carried-from:BUG-2738
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21f8e-e390-7932-9408-a53dd8758901
+  author: joe
+  timestamp: 2026-11-28T00:29:47.792105392Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 5a1122ae5b2334814944b81c225392581cc5ccb4
   branch: pr-4663
