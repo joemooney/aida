@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T01:24:58.703993536Z
-modified_at: 2026-11-28T03:01:50.644476717Z
+modified_at: 2026-11-28T03:17:10.607852676Z
 req_type: Task
 tags:
 - leases
@@ -44,6 +44,36 @@ comments:
     - A present tree is always salvaged (the patch records HEAD, unique commits and uncommitted changes); "nothing to salvage" is reported when the tree is gone.
   created_at: 2026-11-28T03:01:50.644476717Z
   modified_at: 2026-11-28T03:01:50.644476717Z
+  session_id: 01a22017cfa4
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a22028-214f-7001-99ff-9e9e413b691b
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 595589fc56 (git diff origin/main...HEAD: repair_journal.rs, doctor_cmd.rs, docs/cli/07-project-setup.md, scripts/store-writers.toml).
+
+    Acceptance evidence:
+    - AC1 [behavioral-test]: repair_journal.rs task_3891_releases_closed_and_merged_dead_lanes_after_salvage — CLOSED (tree gone) and MERGED (tree present, salvaged first) release without attestation; a failed salvage keeps the reservation. CLI: bare `aida doctor heal repair-reservations` (doctor_cmd.rs) calls RepairGuard::release_dead_reservations with ForgeProbe (forge observe_change_status + seat_clone::salvage_complete).
+    - AC2 [behavioral-test]: same test asserts the printed line and the journal ReservationRelease reason: id, PR #N CLOSED|MERGED, lease state, salvage <path> | nothing to salvage.
+    - AC3 [behavioral-test]: task_3891_open_unknown_or_live_keeps_attested_path — OPEN, unknown/unreachable (None), and a live-owner lease are kept with a line naming --id <id> --attest; nothing salvaged, no release recorded. The attested path code is unchanged except the shared operator gate closure.
+    Targeted run: cargo test --profile agent -p aida-cli-lib --lib -- repair_journal: 9 passed, 0 failed.
+
+    Probe findings:
+    - P1/P2: forge state is the typed ChangeState from the settled Known(Ok) read; Pending/Transient/refusal all map to unknown -> kept.
+    - P3: N entries handled per entry, lock taken and dropped per entry; released entries skipped on later passes (asserted).
+    - P4: symlinked/ambiguous tree paths fail path_absent -> kept; malformed lease TOML -> 'lane not proven dead' -> kept (seen live when my fixture had a bad timestamp).
+    - P5: sweep uses the same direct-human + integrity-floor + not-drive-seat + not-autonomous gate as the attested path; every error turns into keep, never release; forge/salvage run unlocked and the entry, lease verdict and tree presence are re-proven under the journal lock before release. No test weakened.
+
+    Fixes during review: store-writer inventory regenerated and the new save row documented with its real lock and gate.
+
+    Residual risks / deviations:
+    - Salvage lands in <main>/.aida/salvage/<tree>/ (existing complete clone salvage, patch + bundle) rather than ~/salvage as AC1 words it; the audit line names the actual path.
+    - A present tree is always salvaged; 'nothing to salvage' is reported only when the tree is gone.
+    - 'Lane dead' means no lease or a lease whose recorded owner is provably dead, the same evidence the attested path accepts.
+    - Diff is ~330 lines vs the 250 budget; ~190 are tests.
+    - The operator-only CLI gate itself has no new test (unchanged logic, shared with the attested path).
+  created_at: 2026-11-28T03:17:10.607852676Z
+  modified_at: 2026-11-28T03:17:10.607852676Z
   session_id: 01a22017cfa4
   harness_version: 2.1.319 (Claude Code)
 history:
