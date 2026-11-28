@@ -7,12 +7,12 @@ description: |
 
   Raised by the implementer while working BUG-2777.
   Branch: bug-2777-ejection-routing  ·  Commit: 36ffea9bc5  ·  PR #4685
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T20:27:39.429848017Z
-modified_at: 2026-11-28T00:34:02.598072277Z
+modified_at: 2026-11-28T02:20:36.677269301Z
 req_type: Task
 tags:
 - from-implementer:BUG-2777
@@ -38,6 +38,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a21ff4-57c5-76c3-9c40-8531a0a17758
+  author: aida-session-start
+  timestamp: 2026-11-28T02:20:36.677267636Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 36ffea9bc51797e6a523d58c668abd4888c859e1
   branch: bug-2777-ejection-routing
