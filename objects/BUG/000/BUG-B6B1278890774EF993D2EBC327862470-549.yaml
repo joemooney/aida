@@ -18,12 +18,12 @@ description: |
   2. Each test in the live list has its own timeout, e.g. nextest `--slow-timeout` with `terminate-after`, or a per-test wrapper. A stalled test is killed and NAMED in the step output.
   3. On a stall, the step prints the currently running test(s) and the tail of the live-bwrap log BEFORE it fails, so the next occurrence identifies its culprit.
   4. A fixture or test proves a deliberately hanging live test is killed and named within the step timeout.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T10:26:37.477984708Z
-modified_at: 2026-11-28T10:34:58.403981795Z
+modified_at: 2026-11-28T11:17:13.751622903Z
 req_type: Bug
 tags:
 - ci
@@ -41,6 +41,13 @@ history:
   author: joe
   timestamp: 2026-11-28T10:34:58.494482973Z
   changes: []
+- id: 01a221df-a197-78f2-be78-d05bb3e87e7c
+  author: aida-session-start
+  timestamp: 2026-11-28T11:17:13.751621887Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: fb1f8edfbad86ac5eac7132125376d2f410757b7
