@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 696fd8422f05691585f0f2f06339b8f5a0aaa397
 
   scripts/store-writers.toml:1258 — The inventory row for the exact-lease reader (now read_exact_lease_snapshot|OpenOptions::new) was reclassified from disposition read_only to the generic caller-owned/blocked template. That drops its BUG-2655 gate description (read-only, O_NOFOLLOW, O_NONBLOCK) and its coordination::tests::bug2655_unknown_rebound_lease_refuses_force_and_heal evidence test, even though the function body is unchanged and still read-only. Carry the read_only classification over to the renamed item.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T22:33:45.920572360Z
-modified_at: 2026-11-28T00:59:58.531341028Z
+modified_at: 2026-11-28T01:00:00.832069037Z
 req_type: Task
 tags:
 - carried-from:BUG-2755
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-26T00:12:49.500932913Z
   changes: []
+- id: 01a21faa-8dc0-7602-ba7b-97cc59c85218
+  author: joe
+  timestamp: 2026-11-28T01:00:00.832066306Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 696fd8422f05691585f0f2f06339b8f5a0aaa397
   branch: pr-4541
