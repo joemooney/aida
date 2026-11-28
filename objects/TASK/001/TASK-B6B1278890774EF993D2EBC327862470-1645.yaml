@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T08:29:38.066956Z
-modified_at: 2026-11-28T12:25:55.190280339Z
+modified_at: 2026-11-28T12:25:58.243786318Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -209,6 +209,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: STORY-2894 S1 / TASK-3963 train tip regeneration. Design follows the signed sketch and is sound: a host-compiled table that ratchets against REGISTRY and the protected floor; generators pinned from base and disabled when a car edits them; an offline bwrap sandbox with only the toolchain and a scratch checkout (no home, no read_allowlist, PYTHONSAFEPATH); host git never runs in the sandbox-writable checkout; check_report, verify_regen and the E2 writer-row rule run on the host; refusal leaves the train as built (fail-closed to today''s behaviour); and the PR body refusal line is sanitised. Approval coverage (add_car, patch-ids) is untouched. The docs change matches the behaviour. Blocking under ADR-76: two refusal paths in train landing and sandbox code have no test. They are verify_structure''s regen-commit proof and stage()''s host re-check of sandbox output against the report. Two p3 hardening follow-ups: the E2 check covers only writer rows, and stage() follows a symlinked parent directory. CI pending at review time.. No triage reason was given.'
   created_at: 2026-11-28T12:25:55.190274668Z
   modified_at: 2026-11-28T12:25:55.190274668Z
+- id: 01a2221e-9042-7a73-82e7-02ec221e0c32
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3963):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3ab9a48e3ebc
+    Recorded: 2026-11-28T12:24:22.935928667+00:00
+    Findings:
+    1. verify_structure's new regeneration branch (aida-cli-lib/src/pr_train_verified.rs:940-959) has no test. It is the landing proof for the train's regen commit: parent must be the last car, the message must be canonical, touched paths must equal the report, and the E2 ledger rule is re-checked from blobs. No test builds a Built with regen: Some(..) (rg 'regen: Some' finds none), so a mutation that deletes the parent ensure, the verify_regen call or the ledger_check call survives every test. Add a test that runs verify_structure on a real-git train with a regen commit, accepts the canonical one, and refuses a re-parented commit, an edited message and an extra touched path.
+    2. The host-side check of sandbox output in pr_train_regen.rs stage() (lines ~495-517) is untested. The PR claims Rust re-checks each output's sha256 against the report, that it is a regular file, and that the tip holds it as a 100644 blob, then stages it. Nothing exercises the refusal ('<path> is not the reported regular 100644 file'): the bwrap tests only reach the in-sandbox Python driver's refusals. This is the host's trust boundary against the sandbox's report. The existing stub-launcher pattern (a_generator_timeout_or_launch_failure_refuses) can cover it without bwrap: a stub that writes a different file and prints a forged canonical report whose 'after' sha does not match, plus one where the output is replaced by a symlink. Both must refuse with no commit.
+    3. The E2 re-check in Rust (gate/train_generated.rs ledger_violation) and in the Python driver only compares the `writer` array of scripts/store-writers.toml. The regenerated `operation` and `mediated_route` tables, and the top-level `version`, are committed with no host re-check. Today's base generator forces operation rows to blocked and copies mediated_route verbatim, so this is not exploitable. Extend the post-condition to refuse a changed mediated_route, a non-blocked operation row, or a version change, so the guarantee does not rest on the generator alone.
+    4. pr_train_regen.rs stage() checks symlink_metadata only on the output's final component, then std::fs::read(wt.join(path)) follows any symlinked parent directory the sandbox left behind. The sha-vs-report match keeps the committed bytes equal to the reported bytes, so the impact is nil today. Hardening: canonicalize the parent and require it to stay under the canonical wt, as pin_generators already does.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-28T12:25:58.082874769Z
+  modified_at: 2026-11-28T12:25:58.082874769Z
 history:
 - id: 01a22146-948a-7032-ad96-95a74d9a14d6
   author: joe
