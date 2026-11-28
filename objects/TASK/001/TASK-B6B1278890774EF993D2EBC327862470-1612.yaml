@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:30:00.472477642Z
-modified_at: 2026-11-28T03:49:35.710295702Z
+modified_at: 2026-11-28T03:54:05.168175635Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -38,6 +38,27 @@ comments:
     - None
   created_at: 2026-11-28T03:49:35.710295702Z
   modified_at: 2026-11-28T03:49:35.710295702Z
+  session_id: 01a220416c9d
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a22049-ebf0-7bb1-88b3-17f714e444c9
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: a172528c51
+
+    Acceptance evidence
+    - AC1 [behavioral-test]: scripts/install.sh keeps set -euo pipefail, wraps the body in main() called on the last line (a cut-off script is a syntax error), checks curl exit + empty file + `tar tzf` integrity before installing, and names the URL with an offline `--archive` route. Docs (README.md, docs/getting-started.md, showcase rebuilt) now use `curl -fsSL URL -o install.sh && bash install.sh`, which exits non-zero (56 in the repro) instead of 0.
+    - AC2 [behavioral-test]: tests/test_install_download_failure.py, 8 tests, all pass; 7 failures against the origin/main installer. Picked up by CI via scripts/discover-python-tests.py (confirmed).
+
+    Probe findings / fixes
+    - Probe 3/4: `--archive` with `--host gitlab` still resolved the latest tag over the network; fixed (archive short-circuits URL resolution) and covered by test_offline_archive_installs_without_the_network.
+    - Existing tests/test_porcelain_install.py install.sh cases still use `curl -fSL -o`; passes 8/8 with a writable TMPDIR. In this sandbox it fails identically on origin/main (read-only /tmp), so not a regression.
+
+    Residual risks
+    - `--help` when piped (`curl | bash`) cannot read its own header (pre-existing; BASH_SOURCE is empty there). The documented download-then-run form is unaffected.
+    - A user who still pastes the old `curl ... | bash` from elsewhere gets the old silent behaviour; only our docs can change that.
+  created_at: 2026-11-28T03:54:05.168175635Z
+  modified_at: 2026-11-28T03:54:05.168175635Z
   session_id: 01a220416c9d
   harness_version: 2.1.319 (Claude Code)
 history:
