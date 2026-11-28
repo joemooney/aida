@@ -9,12 +9,12 @@ description: |
 
   Raised by the implementer while working TASK-3924.
   Branch: task-3924-train-waiters  ·  Commit: a4f7da7206  ·  PR #4728
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T06:09:31.745784818Z
-modified_at: 2026-11-28T00:37:49.309231781Z
+modified_at: 2026-11-28T02:23:47.769962982Z
 req_type: Task
 tags:
 - from-implementer:TASK-3924
@@ -49,6 +49,13 @@ history:
   author: joe
   timestamp: 2026-11-28T00:37:51.171312011Z
   changes: []
+- id: 01a21ff7-4239-74e0-860b-212b9ebfd157
+  author: aida-session-start
+  timestamp: 2026-11-28T02:23:47.769961195Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: a4f7da7206450b57610db4aa4bdd76a78aa0cad3
   branch: task-3924-train-waiters
