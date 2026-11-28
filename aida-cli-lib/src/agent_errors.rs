@@ -28,26 +28,22 @@ pub(crate) fn agent_error_block(err: &anyhow::Error, msg: &str) -> String {
 /// Append every cause below the outermost context to `summary`, in anyhow's
 /// alternate-Display order (`outer: inner: root`), so an agent sees why a
 /// layered `with_context` error happened, not only its outermost line. A
-/// multi-line cause is flattened with ` | `; a cause whose text the summary
-/// already carries (a context that formatted its source in) is skipped.
+/// multi-line cause is flattened with ` | ` so the summary stays one line.
 // trace:TASK-3511 | ai:claude
 fn with_cause_chain(summary: &str, err: &anyhow::Error) -> String {
-    let mut out = summary.to_string();
-    for cause in err.chain().skip(1) {
-        let text = cause
-            .to_string()
-            .lines()
-            .map(str::trim)
-            .filter(|l| !l.is_empty())
-            .collect::<Vec<_>>()
-            .join(" | ");
-        if text.is_empty() || out.contains(&text) {
-            continue;
-        }
-        out.push_str(": ");
-        out.push_str(&text);
-    }
-    out
+    err.chain()
+        .skip(1)
+        .map(|cause| {
+            cause
+                .to_string()
+                .lines()
+                .map(str::trim)
+                .filter(|l| !l.is_empty())
+                .collect::<Vec<_>>()
+                .join(" | ")
+        })
+        .filter(|text| !text.is_empty())
+        .fold(summary.to_string(), |acc, text| format!("{acc}: {text}"))
 }
 
 pub(crate) fn agent_error_summary_help(msg: &str) -> (&str, Option<String>) {
@@ -99,18 +95,14 @@ mod tests {
 
     // trace:TASK-3511 | ai:claude
     #[test]
-    fn agent_error_block_flattens_multiline_causes_and_skips_repeats() {
-        let root = "CONFLICT in a.yaml\nAutomatic merge failed";
-        let err = anyhow::anyhow!(root)
-            .context(format!(
-                "merge failed: {}",
-                "CONFLICT in a.yaml | Automatic merge failed"
-            ))
+    fn agent_error_block_flattens_multiline_causes() {
+        let err = anyhow::anyhow!("CONFLICT in a.yaml\n\nAutomatic merge failed")
+            .context("merge of abc123 failed")
             .context("sync refused; run `aida sync --retry`\n  details follow");
         let block = agent_error_block(&err, &format!("{err:?}"));
         assert_eq!(
             block,
-            "error: \"sync refused; run `aida sync --retry`: merge failed: \
+            "error: \"sync refused; run `aida sync --retry`: merge of abc123 failed: \
              CONFLICT in a.yaml | Automatic merge failed\"\nhelp: aida sync --retry"
         );
     }
