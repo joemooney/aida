@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T21:56:31.367154426Z
-modified_at: 2026-11-28T01:03:21.943068138Z
+modified_at: 2026-11-28T01:04:24.121877843Z
 req_type: Task
 tags:
 - dell1
@@ -85,6 +85,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3465): Rollout hazard (lane_admission.rs:62-64): HostConfig/Settings use deny_unknown_fields, so once the new [lanes] keys are added to /etc/aida/lanes.toml, any older aida binary still running on the host (a launcher or lane runner not yet restarted) refuses... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T01:03:11.323999685Z
   modified_at: 2026-11-28T01:03:11.323999685Z
+- id: 01a21fae-923a-7d21-9efb-0236c05bf7c7
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3471): Test gap (lane_job.rs:1890-1906): no test drives run_one_authorized to show the job really waits on a held compile slot, holds the slot for the job''s whole run, or receives CARGO_BUILD_JOBS in its environment. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:04:24.121877843Z
+  modified_at: 2026-11-28T01:04:24.121877843Z
 history:
 - id: 01a214b7-0985-7a31-bf46-c7f9bea6c072
   author: joe
