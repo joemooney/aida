@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T00:07:20.208196382Z
-modified_at: 2026-11-28T02:53:00.934417184Z
+modified_at: 2026-11-28T03:05:59.603811766Z
 req_type: Task
 comments:
 - id: 01a22012-0286-7f81-a3b8-577c7525b5b1
@@ -37,6 +37,29 @@ comments:
     - None (wiring location chosen by whichever runs without cargo).
   created_at: 2026-11-28T02:53:00.934417184Z
   modified_at: 2026-11-28T02:53:00.934417184Z
+  session_id: 01a2200f86b5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a2201d-e433-7ba1-85db-9211e38353ba
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6aaaaed5c1 (git diff origin/main...HEAD, 4 files, ~215 added lines; slightly over the 200-line brief budget).
+
+    **Acceptance evidence**
+    - AC1: scripts/check-ratchets.py `--only-set` / `set_drift()` walks each crate target from source (mod, #[path], include!, cfg on Linux + default features, #[ignore] excluded), applies each group's cargo substring filter to the full test path and reports module + test on added/removed/renamed. Real-tree negative control: appending `#[test] fn new_unlisted_guard` to story_1728_command_registry_tests.rs -> exit 1 naming `command_registry::story_1728_command_registry_tests::new_unlisted_guard`.
+    - AC2: new build-job step "Ratchet-set manifest source check" (fast tier in scripts/ci-gate-tiers.toml); `check-ci-gates.py --tier fast --no-build --list` shows `PLAN Ratchet-set manifest source check [fast]`, so check-ci-fast and check-ci-source (CI fast-gates) run it. Asserted in the new test.
+    - AC3: tests/test_ratchet_set.py::test_only_set_names_an_unregistered_removed_or_colliding_test_without_building (fixture crate: unregistered, renamed, crate-wide filter collision, shared-module addition, macro refusal; plus real manifest clean). `python3 -m unittest tests/test_ratchet_set.py`: 8 OK.
+    - Cargo agreement (this host, `cargo test --profile agent ... -- --list` via lane jobs): aida-ci-guards 51 == 51; aida-core 2433 listed = 2429 source + 4 #[ignore]; aida-cli-lib all 15 group counts identical (34,8,8,2,52,23,1,1,1,1,1,3,2,1,1); aida-cli bug_1502 group 2 == 2 (source only, matches CI).
+
+    **Probe findings / fixes**
+    - Found and fixed during self-review: masked string literals hid include!() paths (session/mod.rs, lib.rs review_commands.rs) -> now read from original source.
+    - Multiplicity: duplicate fn names in one file are counted via Counter (reported as Nx).
+
+    **Residual risks**
+    - Macro-generated and proptest! tests are invisible to the source walk; refused inside ratchet sources, but a macro-generated test elsewhere whose path contains a group filter would still only be caught by the cargo run.
+    - cfg evaluation assumes CI Linux + package default features; unknown predicates count as enabled.
+  created_at: 2026-11-28T03:05:59.603811766Z
+  modified_at: 2026-11-28T03:05:59.603811766Z
   session_id: 01a2200f86b5
   harness_version: 2.1.319 (Claude Code)
 history:
