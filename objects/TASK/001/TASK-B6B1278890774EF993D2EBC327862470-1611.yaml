@@ -9,12 +9,12 @@ description: |-
   - AC3: tests for --from with no changes and for a workspace with no changes.
 
   Source: docs/plans/2026-11-27-fresh-user-walkthrough.md (on branch task-3951-fresh-user-walkthrough / PR #4782), section F11. Advisor aida-d3 2026-11-27 20:30 priority order; filed by product-15 for laning now (one spec per lane).
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:28:33.534011321Z
-modified_at: 2026-11-28T03:28:33.534011321Z
+modified_at: 2026-11-28T03:37:52.534619558Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -25,6 +25,13 @@ history:
   author: joe
   timestamp: 2026-11-28T03:29:34.418864209Z
   changes: []
+- id: 01a2203b-1496-7ad2-94aa-2433a4fe101a
+  author: aida-session-start
+  timestamp: 2026-11-28T03:37:52.534618076Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
   branch: main
