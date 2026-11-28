@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-product-01a221f8-13a5-71f3-bb62-fc7b94e0a939",
+  "thread_id": "deputy-01a221f8-13a5-71f3-bb62-fc7b94e0a939",
+  "from": "deputy-shell:product",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-15"
+  },
+  "timestamp": 1795866238804,
+  "body": "Script deputy \"product\" finished script job 01a221f8-13a5-71f3-bb62-fc7b94e0a939: rc 0 (ok).\nScript: cd /home/joe/ai/aida && aida comment add BUG-2789 \"RULE (advisor aida-d3 2026-11-28 04:55): seats must never wrap aida pr train in an outer timeout; a call can sit in the admission queue for over an hour, so timeout 5400 can fire mid-CI. The driver must catch SIGTERM and checkpoint (AC2). Second case: #4806's train #4814 also died at Open, with no timeout wrapper known, and Joe's loop logs stopped at 21:18; cause unknown, so AC1/AC2 must hold for any kill.\"\nTranscript: /home/joe/.aida/deputy-shell/product/jobs/01a221f8-13a5-71f3-bb62-fc7b94e0a939/transcript.log\nRead it with `aida deputy shell log 01a221f8-13a5-71f3-bb62-fc7b94e0a939 --name product`.\n",
+  "subject": "deputy script job 01a221f8 done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
