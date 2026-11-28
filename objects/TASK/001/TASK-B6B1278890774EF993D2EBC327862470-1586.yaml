@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T21:50:04.229258473Z
-modified_at: 2026-11-28T07:13:26.930723863Z
+modified_at: 2026-11-28T07:23:45.140292089Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -160,6 +160,12 @@ comments:
   modified_at: 2026-11-28T07:13:26.930723863Z
   session_id: 01a220f51991
   harness_version: 2.1.319 (Claude Code)
+- id: 01a22109-e074-7f80-bb88-452d5227ddbe
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3933-conformance-child-grant` at head `261a8c4dfb0a5624ff49cb9a27affff241c030ba`.'
+  created_at: 2026-11-28T07:23:45.140288289Z
+  modified_at: 2026-11-28T07:23:45.140288289Z
+  session_id: 01a220f51991
 history:
 - id: 01a21efc-ce96-7363-928e-bbc3f4ebd51b
   author: joe
