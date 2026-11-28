@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: .aida/config.toml sets `[lanes] max_compile_concurrency = 4` and `cargo_build_jobs = 4`, with a comment citing the 2026-11-25 dell1 OOM and TASK-3911. One tiny PR to main.
   - AC2 (operational, product seat): after it lands AND dell1's live binary includes TASK-3911, raise the product launcher's lane cap from 5 to 7, watch dell1 MemAvailable for the first hour, and drop back to 5 if it goes under ~8G.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T07:24:37.851118978Z
-modified_at: 2026-11-28T00:43:02.182452210Z
+modified_at: 2026-11-28T00:43:04.556888503Z
 req_type: Task
 tags:
 - config
@@ -91,6 +91,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a21f9b-0bec-70e2-9c12-e5794e3ed633
+  author: joe
+  timestamp: 2026-11-28T00:43:04.556885407Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 0cb984b75d1e780e6f0fc2bcad86651d202d948d
