@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:26:56.215965481Z
-modified_at: 2026-11-28T04:57:14.188198383Z
+modified_at: 2026-11-28T05:01:37.661419255Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -104,6 +104,26 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-28T04:57:14.029753928Z
   modified_at: 2026-11-28T04:57:14.029753928Z
+- id: 01a22087-c1fd-7143-87be-accb64d16ece
+  author: dirtlab
+  content: |-
+    ## Implementer approach (r2, #4791)
+
+    ### Acceptance criteria and evidence
+    - AC1/AC2 unchanged from r1 (task_3952_init_no_auto_commit + task_631 inline tests).
+    - **AC3 (fixture/command-level):** the nine CI-red integration fixtures relied on the old non-TTY auto-commit; each now passes `--commit` explicitly (no shared helper exists, so per-file). Evidence: the nine `cargo test -p aida-cli --test <name>` runs.
+    - **p2 deferral (documentation-inspection):** docs/getting-started.md install prompt and step 2 now say init leaves files uncommitted, and agents/CI must pass `--commit` or commit the printed `git add`.
+
+    ### Expected files
+    - aida-cli/tests/{bug_2139_headless_child_grant,bug_2201_outside_project_reviewer,task_1717_store_writer_lock,bug_1683_live_drain_lock,bug_1808_delegation_preflight,story_1486_launch_profile,story_1662_bg_lane_identity}.rs, aida-cli/tests/support/codex_init.py
+    - docs/getting-started.md
+
+    ### Ambiguities / conflicts as questions
+    - None. The default stays uncommitted.
+  created_at: 2026-11-28T05:01:37.661419255Z
+  modified_at: 2026-11-28T05:01:37.661419255Z
+  session_id: 01a22085a946
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a22031-de1f-7b30-a729-5d2554ae7cad
   author: joe
