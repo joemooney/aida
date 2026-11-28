@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: c8a4fbf642a1ab06385225ce78bbf5def9d3bb24
 
   [p3, follow-up] AC1 asks for 'the one command that clears it'. The dirty-primary hint is a multi-step instruction ('inspect git -C <primary> status; stash or commit stray changes, then rerun the autobuild'), and the generic hint ('fix the skip reason above') names no command. Consider naming a concrete command, such as the autobuild script invocation with its path.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-27T20:46:00.970449684Z
-modified_at: 2026-11-28T00:40:27.164557101Z
+modified_at: 2026-11-28T00:40:29.203111689Z
 req_type: Task
 tags:
 - carried-from:BUG-2787
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-27T23:19:10.693454506Z
   changes: []
+- id: 01a21f98-ad13-7940-b1cc-d78ef3661970
+  author: joe
+  timestamp: 2026-11-28T00:40:29.203109031Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: c8a4fbf642a1ab06385225ce78bbf5def9d3bb24
   branch: pr-4758
