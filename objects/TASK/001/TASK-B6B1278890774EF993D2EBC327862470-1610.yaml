@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:26:56.215965481Z
-modified_at: 2026-11-28T03:39:59.541044605Z
+modified_at: 2026-11-28T04:19:19.028938057Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -41,6 +41,32 @@ comments:
     - When the default leaves files uncommitted, init will NOT enqueue the old "Commit AIDA scaffolding" onboarding spec (it would take TASK-1 from the user and shift IDs in every test); it prints the plain git command instead.
   created_at: 2026-11-28T03:39:59.541044605Z
   modified_at: 2026-11-28T03:39:59.541044605Z
+  session_id: 01a2203a1ff4
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a22061-0574-7c52-ba50-0b7c6b770b82
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 2c764ec065 (git diff origin/main...HEAD).
+
+    Acceptance evidence:
+    - AC1 [behavioral]: init prints every path it wrote with file and line counts plus a total (`scaffold_summary_rows`, unit test `scaffold_summary_rows_show_paths_with_line_counts`). It leaves the files uncommitted unless asked: the `auto_vs_prompt_decision` table covers no TTY → never, TTY → ask with default no, `--commit` → always. Command-level test `aida-cli/tests/task_3952_init_no_auto_commit.rs` runs the real binary.
+    - AC2 [behavioral]: `default_init_in_a_fresh_repo_creates_no_commit` (real binary, fresh repo) asserts HEAD is unchanged, the branch is still main, and the tree is dirty. The printed git command also works as written. `default_first_init_leaves_head_unchanged_and_files_uncommitted` asserts the same at unit level.
+    - AC3 [behavioral + config]: `--commit` keeps `--commit-scaffold` as an alias (`commit_flag_and_old_alias_parse`). `init_with_commit_flag_commits_and_says_so` covers the commit path. The help text says scripts and CI must pass --commit, and the help golden is regenerated (`help_surface_matches_golden_snapshot` passes). CI callers that relied on the commit now pass --commit: tests/test_bug_1796_normal_two_remote_pull_byte_identical.sh and scripts/multi-clone-harness.sh. docs/environment-variables.md is updated.
+
+    Probe findings / fixes:
+    - The hint first listed gitignored paths, and `git add` refuses the whole batch when one is ignored (BUG-565). Fixed: the hint lists only stageable paths.
+    - The hint and the listing named about 56 skill directories one by one. Fixed: they now fold into one row and one quoted `'.agents/skills/aida-*'` pathspec.
+    - Portability ratchet: the test ran the hint via sh. Fixed: it now runs the arguments through git directly.
+    - Default-uncommitted runs no longer seed the 'Commit AIDA scaffolding' onboarding spec, which would take TASK-1 and shift IDs in every init-driven test. It is still seeded when a requested --commit fails.
+
+    Residual risks:
+    - Some integration tests that run `aida init` may have relied on a clean tree after init. Static search found only the two shell callers above; the full CI suite is the real check.
+    - The `aida-*` pathspec in the hint would also stage a user-authored aida-* skill. The hint tells the user to review with git status first.
+    - The diff is about 500 lines, over the 250-line budget. About 270 of those are tests.
+    - The rest of F5 (hook wiring for absent agents, the unnamed skipped file) is out of scope. Filed as a draft follow-up from-implementer:TASK-3952.
+  created_at: 2026-11-28T04:19:19.028938057Z
+  modified_at: 2026-11-28T04:19:19.028938057Z
   session_id: 01a2203a1ff4
   harness_version: 2.1.319 (Claude Code)
 history:
