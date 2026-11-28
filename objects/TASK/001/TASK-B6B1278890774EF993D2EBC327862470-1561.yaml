@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 9afeaa251dea1e79a3e52c7025844e32053917bb
 
   The AC names 'rework prep / sync', but the other lane merge path, merge_publication_head (seat_clone.rs ~3664, TASK-2879), still runs run_commit_sandboxed with the bare identity, so a disjoint ratchet-set.json addition there still aborts publication. Extend merge_env to that path or record the scope decision.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-27T06:56:31.009993585Z
-modified_at: 2026-11-28T00:37:53.032700447Z
+modified_at: 2026-11-28T00:37:54.900093781Z
 req_type: Task
 tags:
 - carried-from:BUG-2784
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21f96-5254-7fd1-af29-fa85b14ea9a0
+  author: joe
+  timestamp: 2026-11-28T00:37:54.900091290Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 9afeaa251dea1e79a3e52c7025844e32053917bb
   branch: pr-4733
