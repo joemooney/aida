@@ -53,7 +53,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T03:41:07.856444039Z
-modified_at: 2026-11-28T03:46:43.189185263Z
+modified_at: 2026-11-28T03:49:17.447949685Z
 req_type: Story
 tags:
 - containment
@@ -107,6 +107,18 @@ comments:
   created_at: 2026-11-28T03:46:43.189179808Z
   modified_at: 2026-11-28T03:46:43.189179808Z
   session_id: 01a220272d08
+- id: 01a22045-f5d6-7052-b7bb-1a24c73fb8d9
+  author: joe
+  content: |-
+    INTEGRATION: #4785 @ f350b9edd45 FAST is RED (real failures from this PR, not flakes). The pre-check PASS stands, but S1 needs a rework round before p56.
+    Three failing aida-ci-guards ratchets, in both fast compile and fast gates:
+    (1) story_2539_vendor_literal_ratchet: new vendor string literals in init_allowlist_report.rs. build_allowlist_report has "claude", "codex" and "antigravity"; report_agent_selection has "claude", "codex" x2, "agy" and "antigravity". Additions are forbidden. Take the names and programs from the existing vendor registry/constants that init_cmd.rs and agent selection already use, not new literals.
+    (2) and (3) bug_1723_config_trust_tests: init_allowlist_report.rs has 2 config.toml sites with no [readers] entry in scripts/config-trust.toml. These are the ".aida/config.toml" display strings in SettingEntry, plus the resolve_default_vendor read. Classify them in scripts/config-trust.toml (display-only / operator repo at init), or reference the existing path constant if the guard exempts it. The second test also counts sites, so the inventory total must match.
+    Local repro: cargo test -p aida-ci-guards --lib story_2539 bug_1723. check-ci-fast does not build, so it can't catch these.
+  created_at: 2026-11-28T03:49:17.447949685Z
+  modified_at: 2026-11-28T03:49:17.447949685Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1e0f7-c069-77f2-b73d-5d3a4f0f8d52
   author: joe
