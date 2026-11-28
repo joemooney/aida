@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3936",
+  "publishes": [
+    {
+      "at": "2026-11-28T09:11:50.900133620Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-28T00:09:49.648664582Z",
+      "spec": "TASK-3936",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4772,
+        "verdict": "APPROVED",
+        "reviewed_sha": "4bd255da781f939809dbb5af57e2c849d0b4eef5"
+      }
+    },
+    {
+      "ts": "2026-11-28T01:38:54.747089077Z",
+      "spec": "TASK-3936",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4772,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "4bd255da781f939809dbb5af57e2c849d0b4eef5"
+      }
+    },
+    {
+      "ts": "2026-11-28T01:39:24.489333918Z",
+      "spec": "TASK-3936",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Advisor FIX-FIRST: full-tier CI is red at this head; the approval cannot land.",
+        "recovery_hint": "address the review findings, move TASK-3936 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-28T02:38:36.183119964Z",
+      "spec": "TASK-3936",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4772,
+        "verdict": "APPROVED",
+        "reviewed_sha": "b209dd272981b286792f9d147a39c28328e7b4a3"
+      }
+    },
+    {
+      "ts": "2026-11-28T09:06:49.556185335Z",
+      "spec": "TASK-3936",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4772
+      }
+    },
+    {
+      "ts": "2026-11-28T09:11:50.666068735Z",
+      "spec": "TASK-3936",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "fec9ba5c8e025cf07543b32bf294bd40b80b09d7",
+        "pr": 4772,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
