@@ -12,13 +12,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-27T23:04:01.491357777Z
-modified_at: 2026-11-27T23:04:01.491357777Z
+modified_at: 2026-11-28T00:39:47.642504646Z
 req_type: Task
 tags:
 - from-implementer:TASK-3869
 - kind:design-choice
 - review
 - severity:minor
+comments:
+- id: 01a21f98-0aba-76b2-bb3f-afada643a558
+  author: joe
+  content: 'MERGED into STORY-3234 (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Disclosure about String path identity from open PR #4766 (TASK-3869 AC4); resolve in that review.'
+  created_at: 2026-11-28T00:39:47.642504646Z
+  modified_at: 2026-11-28T00:39:47.642504646Z
 history:
 - id: 01a21f4e-3baa-7492-8250-380dac2c48b8
   author: joe
