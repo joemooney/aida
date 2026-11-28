@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 70b9880abb40efc7fabb59c352a2fe98a31fbffb
 
   Test gap (deferred): the new tests exercise retry_transient_admission_with with synthetic outcomes and admission_gap directly, but nothing exercises the wiring: retire_with's mapping of WriterAdmissionUnknown{transient:true} to RetentionRefusal.transient_admission (aida-core/src/mailbox_lifecycle/guard.rs:214-224), nor the two call-site predicates (aida-cli-lib/src/dispatch.rs:2547-2551, aida-cli-lib/src/queue_cmd/work.rs:4260-4263). A mutation that drops the flag survives the suite. Its only effect would be no retry, so the barrier still fails closed and this is not an authority path. Add one test that drives retire_checkout through a transient FRESH_SCAN refusal and then a pass.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T22:05:41.213003351Z
-modified_at: 2026-11-28T01:14:00.669125642Z
+modified_at: 2026-11-28T01:14:03.307968095Z
 req_type: Task
 tags:
 - carried-from:BUG-2778
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21fb7-68ab-7a63-9529-cf6a5b13843c
+  author: joe
+  timestamp: 2026-11-28T01:14:03.307965868Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 70b9880abb40efc7fabb59c352a2fe98a31fbffb
   branch: pr-4693
