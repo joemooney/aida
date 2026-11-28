@@ -822,6 +822,8 @@ jobs:
         if: ${{ matrix.shard == 'contracts' && (steps.changes.outputs.full_ci == 'true') }}
         run: |
           bash tests/test_history_templates.sh
+          # Shared temp-project teardown waits out mid-write workers. trace:TASK-3962 | ai:claude
+          python3 tests/test_fixture_teardown.py
           # Standalone suites require the built CLI. trace:BUG-2734 | ai:codex
           python3 tests/test_gitlab_review_handoff.py --aida target/debug/aida
           python3 tests/test_cache_refresh_outputs.py --aida target/debug/aida

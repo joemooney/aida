@@ -1,7 +1,8 @@
 # trace:TASK-1607 | ai:codex
 # Hermetic actual-CLI takeover regressions; only fixture-owned children are targets.
-import datetime, json, os, pathlib, subprocess, sys, tempfile, time, uuid, textwrap
+import datetime, json, os, pathlib, subprocess, sys, time, uuid, textwrap
 import ctypes, fcntl, select
+from fixture_teardown import temp_project  # trace:TASK-3962 | ai:claude
 
 
 def main():
@@ -25,7 +26,7 @@ def main():
     '''
     worker = textwrap.dedent(worker)
     assert ACTION in ("ack", "release")
-    with tempfile.TemporaryDirectory(prefix='c7-lifecycle-') as tmp:
+    with temp_project('c7-lifecycle-') as tmp:
         root=pathlib.Path(tmp); home=root/'home'; repo=root/'repo'
         home.mkdir(); repo.mkdir()
         env={k:v for k,v in os.environ.items() if not k.startswith(('AIDA_','CLAUDE','CODEX','GIT_'))}

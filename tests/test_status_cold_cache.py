@@ -12,9 +12,9 @@ import json
 from pathlib import Path
 import sqlite3
 import subprocess
-import tempfile
 import time
 import uuid
+from fixture_teardown import temp_project  # trace:TASK-3962 | ai:claude
 
 
 ROWS = 7000
@@ -29,7 +29,7 @@ def run(args, root, env, timeout=30):
 
 
 def check(binary, cold_budget=15, warm_budget=5):
-    with tempfile.TemporaryDirectory(prefix="aida-status-cold-") as temp:
+    with temp_project("aida-status-cold-") as temp:
         root, home = Path(temp) / "project", Path(temp) / "home"
         root.mkdir()
         home.mkdir()

@@ -9,11 +9,11 @@ import json
 import os
 from pathlib import Path
 import subprocess
-import tempfile
+from fixture_teardown import temp_project  # trace:TASK-3962 | ai:claude
 
 
 def check(binary):
-    with tempfile.TemporaryDirectory(prefix="aida-skill-discovery-") as temp:
+    with temp_project("aida-skill-discovery-") as temp:
         root = Path(temp) / "project"
         root.mkdir()
         home = Path(temp) / "home"
