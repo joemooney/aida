@@ -10,12 +10,12 @@ description: |-
   - AC2: every friction point (a wrong or missing command, a confusing error, a missing step, an internal SPEC ID or jargon in user-facing output, a slow or noisy step) is recorded with the exact command, the output excerpt and the expected behaviour.
   - AC3: the findings are filed as ONE new story (draft) with one AC per friction point, not as separate tasks. The walkthrough transcript is attached as a docs/plans/2026-11-27-fresh-user-walkthrough.md file in the PR.
   - AC4: no product code changes in this task; doc typos found along the way may be fixed in the same PR.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T02:34:53.162188563Z
-modified_at: 2026-11-28T03:14:44.026020911Z
+modified_at: 2026-11-28T04:42:51.496758086Z
 req_type: Task
 relationships:
 - rel_type:
@@ -87,6 +87,19 @@ history:
   author: dirtlab
   timestamp: 2026-11-28T03:14:46.207829189Z
   changes: []
+- id: 01a22076-926e-73c2-8d8b-836101febb5e
+  author: aida-auto-bump
+  timestamp: 2026-11-28T04:42:51.374445774Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a22076-92e8-7e43-96cc-44415e96ff1c
+  timestamp: 2026-11-28T04:42:51.496755756Z
+  agent: aida
+  commit_sha: 8aadef335847edcdc1a39b289b599f40c279d4ca
+  summary: Completed via merge 8aadef33
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
   branch: main
@@ -98,3 +111,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-28T03:03:54.086635361Z
   implemented_by: dirtlab
+  completed_at: 2026-11-28T04:42:51.374437313Z
+  completion_sha: 8aadef335847edcdc1a39b289b599f40c279d4ca
