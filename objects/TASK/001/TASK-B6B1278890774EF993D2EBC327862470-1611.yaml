@@ -14,12 +14,35 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:28:33.534011321Z
-modified_at: 2026-11-28T03:37:52.534619558Z
+modified_at: 2026-11-28T03:39:42.221321874Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a22014-1672-7093-9f8f-09bbbefcbf09
   created_at: 2026-11-28T03:29:31.779844979Z
+comments:
+- id: 01a2203c-c10d-79c3-89ef-7f8e75e477e9
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (command-level unit tests in review_prepare.rs):** when no reviewable files are in scope, `review prepare` (and `--run-review`, which then never starts an agent) prints a "Nothing to review" message naming the resolved range, notes uncommitted changes when a range is empty but the tree is dirty, and exits with new named code 5 (registered in EXIT_CODES, documented in `review prepare --help`).
+    - **AC2 (same tests):** Markdown/JSON report carries a nothing-to-review line instead of `Passed: true`; SARIF gets `invocations[0].executionSuccessful=false` plus a notification saying no files were reviewed.
+    - **AC3:** test `--from HEAD` with no committed changes (dirty tree → hint) and a workspace-mode run with a clean tree.
+
+    ### Expected files
+    - `aida-cli-lib/src/review_prepare.rs`
+    - `aida-cli-lib/src/orchestrator_leases.rs` (EXIT_CODES row + mapping)
+    - `aida-cli-lib/src/tests/golden/cli_help_snapshot.txt`
+    - `scripts/ratchet-set.json` if listed
+
+    ### Ambiguities / conflicts as questions
+    - Does "empty" include a range whose changed files are all excluded? Treated as yes (0 reviewable files), and the message says how many were excluded.
+  created_at: 2026-11-28T03:39:42.221321874Z
+  modified_at: 2026-11-28T03:39:42.221321874Z
+  session_id: 01a2203ad983
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a22033-7ad2-7411-84d2-1bbe5e7c7e20
   author: joe
