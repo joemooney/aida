@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T04:07:56.087585344Z
-modified_at: 2026-11-26T07:13:42.917924593Z
+modified_at: 2026-11-28T01:04:40.327777697Z
 req_type: Bug
 tags:
 - ci
@@ -126,6 +126,11 @@ comments:
     AC2 count: this run is GREEN lib-1 #1 of 3. #2 and #3 will be the next two trains' lib-1 runs after #4623 lands.
   created_at: 2026-11-26T05:36:36.832229476Z
   modified_at: 2026-11-26T05:36:36.832229476Z
+- id: 01a21fae-d187-7fe2-9340-4fc9d13e9771
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3473): The breach kill in run_watched is incomplete. guard() returns as soon as the direct child exits after SIGTERM, so group members that survive SIGTERM (nextest''s test processes or rustc) are never sent SIGKILL. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:04:40.327777697Z
+  modified_at: 2026-11-28T01:04:40.327777697Z
 history:
 - id: 01a2160c-52af-7011-8abf-6c6497fc6b7c
   author: joe
