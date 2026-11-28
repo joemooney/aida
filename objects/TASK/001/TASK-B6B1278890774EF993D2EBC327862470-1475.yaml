@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T02:17:50.433674416Z
-modified_at: 2026-11-28T01:09:19.317667536Z
+modified_at: 2026-11-28T01:12:29.846674107Z
 req_type: Task
 tags:
 - landing
@@ -227,6 +227,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3491): Test gap (TASK-3912 AC2): the AC2 test (story_1690_train_tests.rs max_prs_per_train_admits_three_now_and_the_next_three_next_pass) proves the parsed knob plus split_bounded_train selection, but nothing asserts that advisor_train_handler (pr_train.rs)... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T01:09:08.299771537Z
   modified_at: 2026-11-28T01:09:08.299771537Z
+- id: 01a21fb5-fb96-74f0-968b-5dff6c68f9e3
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3510): Cosmetic: the waiting-members line in pr_train_handler_with_dispatch_ctx (aida-cli-lib/src/pr_train.rs:5501) prints ''(--max N)'' even when the cap came from [landing] max_prs_per_train on the automatic train, which points operators at a flag they did... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:12:29.846674107Z
+  modified_at: 2026-11-28T01:12:29.846674107Z
 history:
 - id: 01a215a5-e6d5-7d20-978c-7fd212ad1e3a
   author: joe
