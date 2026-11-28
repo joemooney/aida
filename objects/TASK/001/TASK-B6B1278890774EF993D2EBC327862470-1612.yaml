@@ -8,12 +8,12 @@ description: |-
   - AC2: a test (shell or python) simulates a failed download and asserts a non-zero exit and the message.
 
   Source: docs/plans/2026-11-27-fresh-user-walkthrough.md (on branch task-3951-fresh-user-walkthrough / PR #4782), section F2. Advisor aida-d3 2026-11-27 20:30 priority order; filed by product-15 for laning now (one spec per lane).
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:30:00.472477642Z
-modified_at: 2026-11-28T03:54:05.168175635Z
+modified_at: 2026-11-28T04:06:52.671643310Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -73,6 +73,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a22055-a28c-7e12-b1bf-dd7d05795b7d
+  author: dirtlab
+  timestamp: 2026-11-28T04:06:52.812040166Z
+  session_id: 01a220416c9d
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
   branch: main
@@ -80,3 +89,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: f0ad200d8c6
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-28T04:06:52.671643310Z
+  implemented_by: dirtlab

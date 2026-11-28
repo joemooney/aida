@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:28:33.534011321Z
-modified_at: 2026-11-28T03:39:42.221321874Z
+modified_at: 2026-11-28T04:02:25.438873178Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -41,6 +41,30 @@ comments:
     - Does "empty" include a range whose changed files are all excluded? Treated as yes (0 reviewable files), and the message says how many were excluded.
   created_at: 2026-11-28T03:39:42.221321874Z
   modified_at: 2026-11-28T03:39:42.221321874Z
+  session_id: 01a2203ad983
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a22051-8e1e-7f62-af68-3210c8eba098
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e2d62a346b (diff origin/main...HEAD).
+
+    Acceptance evidence:
+    - AC1 [behavioral-test]: task3953_empty_range_says_nothing_to_review_never_a_pass (review_prepare.rs) — --from HEAD --run-review on a dirty tree: error starts 'Nothing to review: no files changed between `HEAD` (merge base <sha12>) and <sha12>', carries the uncommitted-changes hint, exit_code_for_error == 5 (distinct from 4/1/3; row added to EXIT_CODES so the distinctness test sees it), runner marker never created (no agent starts). Exit 5 documented in 'aida review prepare --help' (golden regenerated) and docs/review-process.md.
+    - AC2 [behavioral-test]: same test asserts JSON nothing_to_review, no coverage block, SARIF invocations[0].executionSuccessful=false + 'No files were reviewed.' notification + properties.filesReviewed=0; task3953_clean_workspace_says_nothing_to_review asserts the Markdown '## Nothing to review' section, 'not a pass', and '**Passed**: not applicable' under --verify-coverage (no `true`).
+    - AC3 [behavioral-test]: the two tests above (--from with no changes; clean workspace). prepare_excludes_credentials_before_revision_reads now also covers the all-excluded range (exit 5, 'no reviewable files changed', '2 changed files are excluded').
+    Targeted run: review_prepare::tests:: 36 passed, 0 failed (lane job). check-ci-fast exit 0 on 60a01a1; rerun on final tree in progress.
+
+    Probe findings / fixes:
+    - Probe 4: base ref and --path values are user/forge strings that reach a posted PR comment; they are now code spans (backtick-safe via code_span) so a hostile ref renders inert.
+    - Probe 3: all-files-excluded range was 'no files changed' (false); now says 'no reviewable files' plus excluded count.
+    - s5_post_comment test relied on an empty range returning Ok; it now commits a change so it still tests what it meant to.
+
+    Residual risks:
+    - Workspace mode counts untracked files as changes (pre-existing); the range-mode uncommitted hint uses --untracked-files=no, so a brand-new untracked file alone gets no hint.
+    - Scripts that ran review prepare on an empty range and expected exit 0 now see 5 (intended behaviour change; documented).
+  created_at: 2026-11-28T04:02:25.438873178Z
+  modified_at: 2026-11-28T04:02:25.438873178Z
   session_id: 01a2203ad983
   harness_version: 2.1.319 (Claude Code)
 history:
