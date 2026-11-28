@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T04:51:24.867906703Z
-modified_at: 2026-11-28T05:18:46.060794691Z
+modified_at: 2026-11-28T05:30:45.820396333Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -38,6 +38,13 @@ comments:
     - None. (Plan suggested `--run-review --from main` as the headline; I document it as the optional next step since it needs a signed-in vendor CLI and cannot be verified offline.)
   created_at: 2026-11-28T05:18:46.060794691Z
   modified_at: 2026-11-28T05:18:46.060794691Z
+  session_id: 01a2208e549e
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a220a2-6ebc-7a40-9035-7312cc435fdc
+  author: dirtlab
+  content: Commit 0e08e12c1a references this requirement
+  created_at: 2026-11-28T05:30:45.820396333Z
+  modified_at: 2026-11-28T05:30:45.820396333Z
   session_id: 01a2208e549e
   harness_version: 2.1.319 (Claude Code)
 history:
