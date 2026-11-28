@@ -1,6 +1,7 @@
 //! BUG-2738: a refusing review verdict must not shelve a spec that already
 //! landed (Completed, or its PR merged); a live spec still shelves. Driven
-//! end to end through `aida review record`.
+//! end to end through `aida review record`; TASK-3501 extends the guard to
+//! `aida review stranded --fix` and the orchestrator's phase-3 shelve.
 //! trace:BUG-2738 | ai:claude
 use super::landed_refusal;
 use aida_core::{DatabaseBackend, Requirement, RequirementStatus};
@@ -209,4 +210,119 @@ fn bug_2738_publish_then_request_changes_stays_parked_and_reworkable() {
         "{outcome:?}"
     );
     assert_eq!(f.spec().status, RequirementStatus::InProgress);
+}
+
+/// TASK-3501: the stranded sweep's row for [`SPEC`] on [`PR`].
+fn stranded_row() -> crate::stranded_sweep::StrandedRow {
+    crate::stranded_sweep::StrandedRow {
+        spec_id: SPEC.into(),
+        pr: PR,
+        conditions: Default::default(),
+        verdict_summary: Some("the regression is still open".into()),
+        reviewed_sha: None,
+        current_head: None,
+    }
+}
+
+/// TASK-3501: `aida review stranded --fix` on a row whose PR merged after the
+/// sweep notes the spec and leaves it Done, with no merge hold placed.
+// trace:TASK-3501 | ai:claude
+#[test]
+fn task_3501_stranded_fix_on_merged_pr_is_noted_not_held_or_shelved() {
+    let f = Fixture::new(RequirementStatus::Done, "MERGED");
+    let outcome = crate::fix_stranded_row(f.root.path(), &stranded_row()).unwrap();
+    assert_eq!(
+        outcome,
+        crate::StrandedFix::Landed("its PR is already merged")
+    );
+    let req = f.spec();
+    assert_eq!(req.status, RequirementStatus::Done);
+    assert!(req.failure_reason.is_none(), "{:?}", req.failure_reason);
+    assert!(
+        req.comments
+            .iter()
+            .any(|c| c.content.contains("not shelved")),
+        "{:?}",
+        req.comments
+    );
+    assert!(crate::gate::merge_hold_core::read_hold(f.root.path(), PR).is_none());
+}
+
+/// TASK-3501: a stranded row on a live PR is still held and shelved.
+// trace:TASK-3501 | ai:claude
+#[test]
+fn task_3501_stranded_fix_on_open_pr_still_holds_and_shelves() {
+    let f = Fixture::new(RequirementStatus::Done, "OPEN");
+    let outcome = crate::fix_stranded_row(f.root.path(), &stranded_row()).unwrap();
+    assert_eq!(outcome, crate::StrandedFix::Shelved);
+    let req = f.spec();
+    assert_eq!(req.status, RequirementStatus::NeedsAttention);
+    assert!(req.failure_reason.is_some());
+    assert!(!req
+        .comments
+        .iter()
+        .any(|c| c.content.contains("not shelved")));
+    assert!(crate::gate::merge_hold_core::read_hold(f.root.path(), PR).is_some());
+}
+
+fn orchestrator_shelve(f: &Fixture) -> Option<aida_core::FailureReason> {
+    use crate::auto_complete::{FailureKind, Phase, PhaseDriver, PhaseFailure};
+    let mut driver = crate::phase_driver::RealPhaseDriver::new(
+        f.root.path().to_path_buf(),
+        SPEC.to_string(),
+        "test-queue".to_string(),
+        None,
+        false,
+        None,
+        crate::AutonomyMode::Default,
+        "run-token".to_string(),
+        false,
+        false,
+        false,
+        false,
+        crate::auto_complete::LifecycleSkip::default(),
+        crate::auto_complete::AutoCompleteVariant::Full,
+    );
+    driver.pr_number = Some(PR as u32);
+    let failure = PhaseFailure::of(
+        FailureKind::VerdictRequestChanges,
+        "reviewer requested changes",
+    );
+    driver
+        .shelve_on_failure(SPEC, Phase::Reviewer, &failure, "resolve the findings")
+        .unwrap()
+}
+
+/// TASK-3501: the orchestrator's phase-3 request-changes shelve leaves a
+/// landed spec alone (Completed, or its PR merged) and notes it.
+// trace:TASK-3501 | ai:claude
+#[test]
+fn task_3501_orchestrator_shelve_skips_landed_specs() {
+    for (status, state) in [
+        (RequirementStatus::Done, "MERGED"),
+        (RequirementStatus::Completed, "OPEN"),
+    ] {
+        let f = Fixture::new(status.clone(), state);
+        assert!(orchestrator_shelve(&f).is_none(), "{status} {state}");
+        let req = f.spec();
+        assert_landed_note(&req, status);
+        assert!(req
+            .comments
+            .iter()
+            .any(|c| c.author == aida_core::conflict::ORCHESTRATOR_SHELVE_AUTHOR));
+    }
+}
+
+/// TASK-3501: a live spec on an open PR still shelves from phase 3.
+// trace:TASK-3501 | ai:claude
+#[test]
+fn task_3501_orchestrator_shelve_still_parks_a_live_spec() {
+    let f = Fixture::new(RequirementStatus::Done, "OPEN");
+    assert!(orchestrator_shelve(&f).is_some());
+    let req = f.spec();
+    assert_eq!(req.status, RequirementStatus::NeedsAttention);
+    assert!(!req
+        .comments
+        .iter()
+        .any(|c| c.content.contains("not shelved")));
 }
