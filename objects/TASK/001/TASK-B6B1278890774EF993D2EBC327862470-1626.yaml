@@ -1,0 +1,31 @@
+id: 01a22073-1b45-7c73-a5d7-80711a6408f1
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1626
+title: 'Review follow-up: Test coverage for AC3''s ''existing callers pass --commit'' rests on a static search plus the'
+description: |-
+  From TASK-3952
+  Reviewed sha: 2c764ec06581bdf3bc0bc1f9cbad815646a0f5f0
+
+  Test coverage for AC3's 'existing callers pass --commit' rests on a static search plus the two updated shell callers. Many Python and shell tests (tests/test_distributed.sh, tests/test_bug_1796_no_origin_pull_warnings.sh, tests/test_work_ci_relay.py, aida-cli/tests/support/repair_attestation.py, scripts/ablations/ryo-friction-benchmark.sh, bench/agent-surface/seed_fixture.sh, docs/internal/demos/spec-kit-composition/demo-spec-kit-composition.sh) run `aida init` without --commit and now get a dirty tree. Inspection found none that asserts a clean tree, but only the fast CI tier has run at this head, so full CI at landing is the real check.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-28T04:39:04.261757872Z
+modified_at: 2026-11-28T04:39:04.261757872Z
+req_type: Task
+tags:
+- carried-from:TASK-3952
+- finding-hash:dd47a990
+- from-review:TASK-3952
+relationships:
+- rel_type: References
+  target_id: 01a22031-10d7-7210-8479-73832a41a87f
+  created_at: 2026-11-28T04:39:22.974328742Z
+filed_at:
+  code_sha: 2c764ec06581bdf3bc0bc1f9cbad815646a0f5f0
+  branch: pr-4791
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c6
+  vendor: claude
+  session: 01a2206d9751

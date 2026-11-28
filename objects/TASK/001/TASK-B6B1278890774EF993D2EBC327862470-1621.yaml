@@ -1,0 +1,31 @@
+id: 01a22071-b29a-7260-90f7-7c98efdfb663
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1621
+title: 'Review follow-up: Onboarding regression for agent-run inits (non-TTY, the path docs/getting-started.md has a'
+description: |-
+  From TASK-3952
+  Reviewed sha: 2c764ec06581bdf3bc0bc1f9cbad815646a0f5f0
+
+  Onboarding regression for agent-run inits (non-TTY, the path docs/getting-started.md has an agent take). The default now leaves the scaffolding uncommitted and also stops seeding the human_only 'Commit AIDA scaffolding' task (init_cmd.rs:2454 `!scaffolding_committed && commit_requested`). The only reminder is one stdout hint. BUG-445 (init_cmd.rs:2478-2486) records why that matters: an `aida queue work` worktree branched from main lacks .gitignore, .claude and .aida/config.toml, so lane work there runs without hooks or skills, and a bare `git add .` can commit cache or session symlinks. Follow-up: keep a durable reminder that does not take the user's first ID (a doctor/status check or first_run hint), or have queue work warn when the primary holds uncommitted AIDA scaffolding.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-28T04:37:31.930150635Z
+modified_at: 2026-11-28T04:37:31.930150635Z
+req_type: Task
+tags:
+- carried-from:TASK-3952
+- finding-hash:8c64f1bb
+- from-review:TASK-3952
+relationships:
+- rel_type: References
+  target_id: 01a22031-10d7-7210-8479-73832a41a87f
+  created_at: 2026-11-28T04:37:49.980913061Z
+filed_at:
+  code_sha: 2c764ec06581bdf3bc0bc1f9cbad815646a0f5f0
+  branch: pr-4791
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c6
+  vendor: claude
+  session: 01a2206d9751
