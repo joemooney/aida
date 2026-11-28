@@ -15,8 +15,30 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T02:34:53.162188563Z
-modified_at: 2026-11-28T02:50:06.970014116Z
+modified_at: 2026-11-28T02:50:39.780895539Z
 req_type: Task
+comments:
+- id: 01a2200f-db24-7cf2-a87f-8c1f60fffe2a
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - AC1 (manual-inspection): run the walkthrough in a mktemp HOME + new git repo following docs/getting-started.md literally; transcript recorded in the plan doc.
+    - AC2 (documentation-inspection): each friction point in docs/plans/2026-11-27-fresh-user-walkthrough.md has command, output excerpt, expected behaviour.
+    - AC3 (manual-inspection): one draft story via `aida add --type story --status draft`, one AC per friction point; referenced in PR body.
+    - AC4 (documentation-inspection): diff touches only docs/ (plan file, optional typo fixes).
+
+    ### Expected files
+    - docs/plans/2026-11-27-fresh-user-walkthrough.md
+    - docs/getting-started.md (typo fixes only, if any)
+
+    ### Ambiguities / conflicts as questions
+    - None
+  created_at: 2026-11-28T02:50:39.780895539Z
+  modified_at: 2026-11-28T02:50:39.780895539Z
+  session_id: 01a2200f0895
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a2200f-5afa-7d03-93b1-a07aad176f28
   author: aida-session-start
