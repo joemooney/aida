@@ -10,12 +10,12 @@ description: |-
   Depends on: -
   Size: <=300 changed lines incl. tests. Track: integration.
   Brief: /tmp/claude-1000/briefs/3120-S7e.md
-status: Draft
+status: Rejected
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-28T00:24:28.479281232Z
-modified_at: 2026-11-28T00:24:28.479281232Z
+modified_at: 2026-11-28T00:40:55.221366814Z
 req_type: Task
 tags:
 - story-3120
@@ -31,6 +31,15 @@ history:
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21f99-12b5-7131-9f2a-a1993bcfa92c
+  author: joe
+  timestamp: 2026-11-28T00:40:55.221363336Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 84fe63bf7c647ba5c65d6b97d1ced29ae3be3596
   branch: integration
