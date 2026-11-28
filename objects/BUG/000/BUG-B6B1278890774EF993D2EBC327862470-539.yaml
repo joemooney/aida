@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T19:18:29.828946179Z
-modified_at: 2026-11-27T00:12:36.622961334Z
+modified_at: 2026-11-28T01:13:56.947545197Z
 req_type: Bug
 tags:
 - lanes
@@ -82,6 +82,11 @@ comments:
   created_at: 2026-11-26T22:21:17.067534236Z
   modified_at: 2026-11-26T22:21:17.067534236Z
   session_id: 01a219ab9ccf
+- id: 01a21fb7-4fd3-73e2-a244-e20f5856b3ec
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3520): Test gap (deferred): the new tests exercise retry_transient_admission_with with synthetic outcomes and admission_gap directly, but nothing exercises the wiring: retire_with''s mapping of WriterAdmissionUnknown{transient:true} to... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:13:56.947545197Z
+  modified_at: 2026-11-28T01:13:56.947545197Z
 history:
 - id: 01a2194e-f4af-7583-8d6e-242d135b3492
   author: joe
