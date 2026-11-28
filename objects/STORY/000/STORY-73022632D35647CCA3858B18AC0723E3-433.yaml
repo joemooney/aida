@@ -1,0 +1,31 @@
+id: 01a2208c-0484-7b90-aad2-a7039cb4ef08
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-433
+title: 'Review PR-4794: [AI:claude] fix(hooks): an ordinary commit in a new repo shows no red hook failure (TASK-3957)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a22073`) for branch `task-3957-hook-no-red`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4794>
+  - Branch: `task-3957-hook-no-red` → `main`
+
+  ## Covers
+
+  - TASK-3957
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4794` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T05:06:16.836426739Z
+modified_at: 2026-11-28T05:06:16.836426739Z
+req_type: Story
+filed_at:
+  code_sha: 4b06a37b464472f759637aecf25042f98a4e33c2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4b06a37b46
