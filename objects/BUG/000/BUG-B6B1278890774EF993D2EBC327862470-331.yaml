@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-331
 agreed_id: BUG-2566
 title: 'Review freshness: rework-routed conflict receipt never re-probes after the base changes'
 description: 'From PR-3956 review (STORY-2763) P2: review_watch.rs:2960-2973 and gate/review_freshness.rs:347-368 key the rework-routed receipt by PR/head only, so if main later resolves the conflict the unchanged PR head stays skipped forever. Acceptance: the receipt records the base tip; a changed base re-probes; regression test.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T21:43:19.156273375Z
-modified_at: 2026-11-28T00:41:38.446416121Z
+modified_at: 2026-11-28T00:41:42.523307538Z
 req_type: Bug
 tags:
 - track:dell1
@@ -25,6 +25,11 @@ comments:
   content: 'RETURNED to Approved (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Advisor 114 approved a dell1 codex lane 11-14; no open blockers; defect and test spec clear.'
   created_at: 2026-11-28T00:41:38.446416121Z
   modified_at: 2026-11-28T00:41:38.446416121Z
+- id: 01a21f99-cb7b-7bf0-8a77-63d54b6d946c
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: This lane HEAD 1801b34105 lacks the STORY-2763 review-freshness implementation from PR-3956: aida-cli-lib/src/gate/review_freshness.rs is absent and review_watch.rs contains no rework-routed receipt. Neither local origin/main nor origin/integration contains that file. Relaunch on a base containing PR-3956 (or explicitly authorize a dependent lane) to fix the receipt and add the requested regression. Git metadata is read-only, so this seat cannot change its base. No source edits or cargo tests performed; untested=true.. No triage reason was given.'
+  created_at: 2026-11-28T00:41:42.523304356Z
+  modified_at: 2026-11-28T00:41:42.523304356Z
 history:
 - id: 01a1d8cb-97e9-73a1-b380-fc9a5da1a32e
   author: joe
@@ -57,6 +62,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a21f99-cb7b-7bf0-8a77-63cd252798e6
+  author: joe
+  timestamp: 2026-11-28T00:41:42.523294562Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 97d2f9fda0856183dee299b29760f3004c5db881
   branch: main
@@ -66,8 +78,3 @@ filed_at:
   vendor: claude
   session: 01a1d684-8599-70e0-a01c-714f54d2f8de
   harness_version: 2.1.323 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: 'This lane HEAD 1801b34105 lacks the STORY-2763 review-freshness implementation from PR-3956: aida-cli-lib/src/gate/review_freshness.rs is absent and review_watch.rs contains no rework-routed receipt. Neither local origin/main nor origin/integration contains that file. Relaunch on a base containing PR-3956 (or explicitly authorize a dependent lane) to fix the receipt and add the requested regression. Git metadata is read-only, so this seat cannot change its base. No source edits or cargo tests performed; untested=true.'
-  raised_by: implementer
-  raised_at: 2026-11-14T06:50:17.261471756Z
