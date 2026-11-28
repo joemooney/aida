@@ -10,12 +10,12 @@ description: |-
   - AC2: every friction point (a wrong or missing command, a confusing error, a missing step, an internal SPEC ID or jargon in user-facing output, a slow or noisy step) is recorded with the exact command, the output excerpt and the expected behaviour.
   - AC3: the findings are filed as ONE new story (draft) with one AC per friction point, not as separate tasks. The walkthrough transcript is attached as a docs/plans/2026-11-27-fresh-user-walkthrough.md file in the PR.
   - AC4: no product code changes in this task; doc typos found along the way may be fixed in the same PR.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T02:34:53.162188563Z
-modified_at: 2026-11-28T02:50:39.780895539Z
+modified_at: 2026-11-28T03:03:54.086635361Z
 req_type: Task
 comments:
 - id: 01a2200f-db24-7cf2-a87f-8c1f60fffe2a
@@ -39,6 +39,21 @@ comments:
   modified_at: 2026-11-28T02:50:39.780895539Z
   session_id: 01a2200f0895
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2201b-bfaa-7812-993e-237040e0da9e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 90e882584b. Diff vs origin/main: one new file, docs/plans/2026-11-27-fresh-user-walkthrough.md (274 lines).
+    - AC1 [manual-inspection]: walkthrough run in mktemp HOME under env -i, new git repo; Option B blocked by the network proxy (recorded as F2), so the live built binary (sha f0ad200d8c) was copied to $HOME/.local/bin. Non-TTY shell is a stated limitation.
+    - AC2 [documentation-inspection]: F1-F15 each give command, output excerpt, expected behaviour.
+    - AC3 [manual-inspection]: one draft story STORY-73022632d35647cca3858b18ac0723e3-423 filed with AC1-AC15, one per finding; transcript in the plan file.
+    - AC4 [documentation-inspection]: no product code; no doc typo fixes were needed (all getting-started links resolve).
+    Probes: no format parsing; the doc contains no host paths. Fix: the first check-ci-fast failed on a stray, harness-created docs/.claude/.cc-writes (untracked, not committed); after it was removed the gate passed with exit 0.
+    Residual risk: F14 (codex hang) may be partly caused by the blocked network; TTY-only prompts during init were not observed.
+  created_at: 2026-11-28T03:03:39.178603836Z
+  modified_at: 2026-11-28T03:03:39.178603836Z
+  session_id: 01a2200f0895
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a2200f-5afa-7d03-93b1-a07aad176f28
   author: aida-session-start
@@ -47,6 +62,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a2201b-fa61-7612-86d3-3254d1832cb3
+  author: dirtlab
+  timestamp: 2026-11-28T03:03:54.209210637Z
+  session_id: 01a2200f0895
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
   branch: main
@@ -54,3 +78,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: f0ad200d8c6
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-28T03:03:54.086635361Z
+  implemented_by: dirtlab

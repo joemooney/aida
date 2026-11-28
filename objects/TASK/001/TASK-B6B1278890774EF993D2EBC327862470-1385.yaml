@@ -14,12 +14,38 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T01:24:58.703993536Z
-modified_at: 2026-11-28T02:59:35.634517737Z
+modified_at: 2026-11-28T03:01:50.644476717Z
 req_type: Task
 tags:
 - leases
 - repair
 - strict
+comments:
+- id: 01a2201a-17b4-7903-ace1-2e9978fc3262
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    Defect confirmed on origin/main (f0ad200d8c): `aida doctor heal repair-reservations` only releases through `--id --attest` (doctor_cmd.rs:367-403, repair_journal.rs `attest_reservation`).
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit):** new `RepairGuard::release_dead_reservations(main, probe)` behind a `DeadReservationProbe` seam (forge PR state + salvage). Test `task_3891_releases_closed_and_merged_dead_lanes_after_salvage`: CLOSED and MERGED PRs with no lease / dead-owner lease are released; a present tree is salvaged first; a salvage failure keeps the reservation. Lane liveness comes from the lease registry (`reservation_lease`), not a /proc scan.
+    - **AC2 (unit):** each release is a `ReservationRelease` journal record plus a returned audit line `released <id>: PR #N CLOSED|MERGED, lane dead, salvage <path>|nothing to salvage`. Asserted in the same test.
+    - **AC3 (unit):** `task_3891_open_unknown_or_live_keeps_attested_path`: OPEN, unknown/unreachable forge state, and a live-owner lease are kept untouched with a line naming the `--id --attest` path.
+    - CLI: bare `aida doctor heal repair-reservations` (no --id/--attest) runs the sweep under the same human-operator gates as the attested path; with --id/--attest the attested path is unchanged.
+
+    ### Expected files
+    - `aida-cli-lib/src/repair_journal.rs`
+    - `aida-cli-lib/src/doctor_cmd.rs`
+    - `docs/cli/07-project-setup.md`
+
+    ### Ambiguities / conflicts as questions
+    - AC1 says `~/salvage`; the existing complete clone salvage (`seat_clone::salvage_complete`, patch + bundle of unique commits) writes under `<main>/.aida/salvage/<tree>/`. I reuse it rather than add a second salvage format; the audit line names the actual path. Flagging as a deviation.
+    - A present tree is always salvaged (the patch records HEAD, unique commits and uncommitted changes); "nothing to salvage" is reported when the tree is gone.
+  created_at: 2026-11-28T03:01:50.644476717Z
+  modified_at: 2026-11-28T03:01:50.644476717Z
+  session_id: 01a22017cfa4
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a2104e-a7aa-72b2-9133-1db6dc6cea6c
   author: joe
