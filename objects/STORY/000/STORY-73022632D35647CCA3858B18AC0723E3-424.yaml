@@ -1,0 +1,31 @@
+id: 01a22025-a281-79a1-b984-9db1ff2c5e04
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-424
+title: 'Review PR-4782: [AI:claude] docs(plans): fresh-user walkthrough of getting started and review prepare (TASK-3951)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a2200f`) for branch `task-3951-fresh-user-walkthrough`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4782>
+  - Branch: `task-3951-fresh-user-walkthrough` → `main`
+
+  ## Covers
+
+  - TASK-3951
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4782` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T03:14:27.073536638Z
+modified_at: 2026-11-28T03:14:27.073536638Z
+req_type: Story
+filed_at:
+  code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c
