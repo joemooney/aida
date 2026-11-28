@@ -139,6 +139,40 @@ pub(crate) struct AttemptReservation {
     replaced: Option<RepairEntry>,
 }
 
+use crate::forge::ChangeState;
+
+/// The outside evidence an unattested release needs.
+// trace:TASK-3891 | ai:claude
+pub(crate) trait DeadReservationProbe {
+    /// The forge's settled PR state; `None` when unknown or unreachable.
+    fn pr_state(&mut self, main: &Path, pr: u64) -> Option<ChangeState>;
+    /// Save the tree's uncommitted work and unique commits; the saved path.
+    fn salvage(&mut self, main: &Path, tree: &Path) -> Result<PathBuf>;
+}
+
+/// The forge and the complete clone salvage (patch plus a bundle of every
+/// commit origin lacks).
+// trace:TASK-3891 | ai:claude
+pub(crate) struct ForgeProbe;
+impl DeadReservationProbe for ForgeProbe {
+    fn pr_state(&mut self, main: &Path, pr: u64) -> Option<ChangeState> {
+        let change = crate::forge::ChangeRef {
+            id: pr,
+            url: String::new(),
+            branch: String::new(),
+            base: String::new(),
+            title: None,
+        };
+        match crate::forge::forge_for(main).observe_change_status(&change) {
+            crate::forge_observed::Observed::Known(Ok(status)) => Some(status.state),
+            _ => None,
+        }
+    }
+    fn salvage(&mut self, main: &Path, tree: &Path) -> Result<PathBuf> {
+        crate::seat_clone::salvage_complete(main, tree)
+    }
+}
+
 pub(crate) struct RepairGuard {
     _lock: File,
     path: PathBuf,
@@ -374,6 +408,96 @@ impl RepairGuard {
             reason: reason.into(),
         });
         guard.save()
+    }
+
+    /// Release, without a per-ID attestation, every reservation whose PR the
+    /// forge reports CLOSED or MERGED and whose lane the lease registry shows
+    /// dead, after salvaging a tree that is still there. Anything else (OPEN,
+    /// unknown or unreachable forge state, a live or unverified lane, a failed
+    /// salvage) is kept for the attested path. One line per reservation.
+    // trace:TASK-3891 | ai:claude
+    pub(crate) fn release_dead_reservations(
+        main: &Path,
+        probe: &mut dyn DeadReservationProbe,
+    ) -> Result<Vec<String>> {
+        let snapshot = Self::read(main, &main.join(".aida/repair-journal.json"))?;
+        let mut lines = Vec::new();
+        for entry in snapshot
+            .entries
+            .iter()
+            .filter(|e| e.spawn != SpawnOutcome::ProvenDead)
+        {
+            let id = reservation_id(entry);
+            let pr = entry.key.pr;
+            let keep = |why: String| {
+                format!("kept {id}: {why}; release it with --id {id} --attest '<reason>'")
+            };
+            let state = match probe.pr_state(main, pr) {
+                Some(state @ (ChangeState::Closed | ChangeState::Merged)) => state,
+                Some(ChangeState::Open) => {
+                    lines.push(keep(format!("PR #{pr} is OPEN")));
+                    continue;
+                }
+                None => {
+                    lines.push(keep(format!("PR #{pr} state is unknown")));
+                    continue;
+                }
+            };
+            let state = if state == ChangeState::Merged {
+                "MERGED"
+            } else {
+                "CLOSED"
+            };
+            let lease = match reservation_lease(entry) {
+                Ok(lease) => lease,
+                Err(error) => {
+                    lines.push(keep(format!("lane not proven dead: {error:#}")));
+                    continue;
+                }
+            };
+            let absent = match path_absent(&entry.tree_path) {
+                Ok(absent) => absent,
+                Err(error) => {
+                    lines.push(keep(format!("tree unreadable: {error:#}")));
+                    continue;
+                }
+            };
+            let salvage = if absent {
+                "nothing to salvage".to_owned()
+            } else {
+                match probe.salvage(main, &entry.tree_path) {
+                    Ok(path) => format!("salvage {}", path.display()),
+                    Err(error) => {
+                        lines.push(keep(format!("salvage failed: {error:#}")));
+                        continue;
+                    }
+                }
+            };
+            // Forge reads and salvage ran unlocked; re-prove under the lock.
+            let mut guard = Self::lock(main)?;
+            let unchanged = guard.journal.reservation(&id).ok() == Some(entry)
+                && reservation_lease(entry).ok() == Some(lease)
+                && path_absent(&entry.tree_path).ok() == Some(absent);
+            if !unchanged {
+                lines.push(keep("reservation, lease or tree changed".into()));
+                continue;
+            }
+            let merge = ReleasedMerge::from(entry);
+            let held = guard.entry_mut(&entry.key)?;
+            held.validation = None;
+            held.spawn = SpawnOutcome::ProvenDead;
+            let audit = format!("PR #{pr} {state}, lane dead (lease {lease}), {salvage}");
+            guard.journal.releases.push(ReservationRelease {
+                merge: Some(merge),
+                id: id.clone(),
+                uid: unsafe { libc::geteuid() },
+                at: chrono::Utc::now().to_rfc3339(),
+                reason: audit.clone(),
+            });
+            guard.save()?;
+            lines.push(format!("released {id}: {audit}"));
+        }
+        Ok(lines)
     }
 
     fn entry_mut(&mut self, key: &RepairKey) -> Result<&mut RepairEntry> {
@@ -1124,6 +1248,180 @@ mod tests {
             journal.entry_mut(&other).unwrap().spawn,
             SpawnOutcome::Started
         );
+    }
+
+    // trace:TASK-3891 | ai:claude
+    struct FakeProbe {
+        states: std::collections::HashMap<u64, Option<ChangeState>>,
+        failing_tree: Option<PathBuf>,
+        salvaged: Vec<PathBuf>,
+    }
+    impl DeadReservationProbe for FakeProbe {
+        fn pr_state(&mut self, _: &Path, pr: u64) -> Option<ChangeState> {
+            self.states.get(&pr).copied().flatten()
+        }
+        fn salvage(&mut self, main: &Path, tree: &Path) -> Result<PathBuf> {
+            self.salvaged.push(tree.to_owned());
+            anyhow::ensure!(self.failing_tree.as_deref() != Some(tree), "disk full");
+            Ok(main.join("salvage").join(tree.file_name().unwrap()))
+        }
+    }
+
+    fn reserve_pr(main: &Path, pr: u64) -> RepairEntry {
+        let mut guard = RepairGuard::lock(main).unwrap();
+        let entry = RepairEntry {
+            key: RepairKey {
+                repository: main.into(),
+                pr,
+                original_head: "a".repeat(40),
+            },
+            dispatched_by: "direct-rework".into(),
+            reserved_at: "now".into(),
+            lane_id: format!("lane-{pr}"),
+            tree_path: main.join(format!("seat-{pr}")),
+            branch: format!("pr-{pr}"),
+            base: "c".repeat(40),
+            spawn: SpawnOutcome::Started,
+            original_conflict_paths: vec!["src/lib.rs".into()],
+            regeneration_success: None,
+            snapshot_deferred: None,
+            regenerated_tree: None,
+            preparation_success: None,
+            validation: None,
+            refusal_notice: None,
+        };
+        guard.reserve(entry.clone()).unwrap();
+        entry
+    }
+
+    fn spawn_of(main: &Path, entry: &RepairEntry) -> SpawnOutcome {
+        RepairGuard::lock(main)
+            .unwrap()
+            .entry_mut(&entry.key)
+            .unwrap()
+            .spawn
+            .clone()
+    }
+
+    // AC1 + AC2: CLOSED and MERGED PRs with dead lanes release without an
+    // attestation, a present tree only after its salvage, each with an audit
+    // record. A failed salvage keeps the reservation.
+    // trace:TASK-3891 | ai:claude
+    #[test]
+    fn task_3891_releases_closed_and_merged_dead_lanes_after_salvage() {
+        let temp = tempfile::tempdir().unwrap();
+        let main = temp.path();
+        let gone = reserve_pr(main, 1);
+        let present = reserve_pr(main, 2);
+        let unsalvageable = reserve_pr(main, 3);
+        std::fs::create_dir(&present.tree_path).unwrap();
+        std::fs::create_dir(&unsalvageable.tree_path).unwrap();
+        let mut probe = FakeProbe {
+            states: [
+                (1, Some(ChangeState::Closed)),
+                (2, Some(ChangeState::Merged)),
+                (3, Some(ChangeState::Merged)),
+            ]
+            .into(),
+            failing_tree: Some(unsalvageable.tree_path.clone()),
+            salvaged: vec![],
+        };
+        let lines = RepairGuard::release_dead_reservations(main, &mut probe).unwrap();
+        let (gone_id, present_id) = (reservation_id(&gone), reservation_id(&present));
+        assert_eq!(lines.len(), 3, "{lines:?}");
+        assert_eq!(
+            lines[0],
+            format!(
+                "released {gone_id}: PR #1 CLOSED, lane dead (lease absent), nothing to salvage"
+            )
+        );
+        let salvage = main.join("salvage/seat-2");
+        assert_eq!(
+            lines[1],
+            format!(
+                "released {present_id}: PR #2 MERGED, lane dead (lease absent), salvage {}",
+                salvage.display()
+            )
+        );
+        assert!(lines[2].starts_with(&format!(
+            "kept {}: salvage failed: disk full",
+            reservation_id(&unsalvageable)
+        )));
+        assert!(lines[2].contains("--attest"), "{}", lines[2]);
+        assert_eq!(
+            probe.salvaged,
+            [present.tree_path.clone(), unsalvageable.tree_path.clone()]
+        );
+        assert_eq!(spawn_of(main, &gone), SpawnOutcome::ProvenDead);
+        assert_eq!(spawn_of(main, &present), SpawnOutcome::ProvenDead);
+        assert_eq!(spawn_of(main, &unsalvageable), SpawnOutcome::Started);
+        let journal = RepairGuard::lock(main).unwrap().journal;
+        let releases: Vec<_> = journal
+            .releases
+            .iter()
+            .map(|r| (&r.id, &r.reason))
+            .collect();
+        assert_eq!(releases.len(), 2);
+        assert_eq!(releases[0].0, &gone_id);
+        assert!(
+            releases[0].1.contains("PR #1 CLOSED") && releases[0].1.contains("nothing to salvage")
+        );
+        assert_eq!(releases[1].0, &present_id);
+        assert!(releases[1].1.contains(&salvage.display().to_string()));
+        // A second pass leaves released entries alone.
+        let again = RepairGuard::release_dead_reservations(main, &mut probe).unwrap();
+        assert_eq!(again.len(), 1, "{again:?}");
+        assert!(again[0].starts_with("kept "));
+    }
+
+    // AC3: an OPEN PR, an unknown or unreachable forge state and a live lane
+    // are never released here; each names the attested path. Nothing is
+    // salvaged for them.
+    // trace:TASK-3891 | ai:claude
+    #[test]
+    fn task_3891_open_unknown_or_live_keeps_attested_path() {
+        let temp = tempfile::tempdir().unwrap();
+        let main = temp.path();
+        let open = reserve_pr(main, 4);
+        let unknown = reserve_pr(main, 5);
+        let live = reserve_pr(main, 6);
+        for entry in [&open, &unknown, &live] {
+            std::fs::create_dir(&entry.tree_path).unwrap();
+        }
+        std::fs::create_dir_all(crate::leases::leases_dir(main)).unwrap();
+        let lease = serde_json::json!({"id":live.lane_id,"scope":"BUG-2669","slug":"bug-2669","owner":"implementer","worktree_path":live.tree_path,"branch":live.branch,"started_at":"2026-01-01T00:00:00Z","hostname":"host","pid_namespace":aida_core::pid_observer::PidObserver::current().namespace,"active_pid":std::process::id()});
+        std::fs::write(
+            crate::leases::lease_path(main, &live.lane_id),
+            toml::to_string(&lease).unwrap(),
+        )
+        .unwrap();
+        let mut probe = FakeProbe {
+            states: [
+                (4, Some(ChangeState::Open)),
+                (5, None),
+                (6, Some(ChangeState::Closed)),
+            ]
+            .into(),
+            failing_tree: None,
+            salvaged: vec![],
+        };
+        let lines = RepairGuard::release_dead_reservations(main, &mut probe).unwrap();
+        assert_eq!(lines.len(), 3, "{lines:?}");
+        assert!(lines[0].contains("PR #4 is OPEN"), "{}", lines[0]);
+        assert!(lines[1].contains("PR #5 state is unknown"), "{}", lines[1]);
+        assert!(lines[2].contains("lane not proven dead"), "{}", lines[2]);
+        assert!(lines[2].contains("live or unverified"), "{}", lines[2]);
+        for (line, entry) in lines.iter().zip([&open, &unknown, &live]) {
+            let id = reservation_id(entry);
+            assert!(line.starts_with(&format!("kept {id}: ")), "{line}");
+            assert!(
+                line.ends_with(&format!("--id {id} --attest '<reason>'")),
+                "{line}"
+            );
+            assert_eq!(spawn_of(main, entry), SpawnOutcome::Started);
+        }
+        assert!(probe.salvaged.is_empty());
+        assert!(RepairGuard::lock(main).unwrap().journal.releases.is_empty());
     }
 
     fn reserved(main: &Path, head: &str) -> RepairKey {
