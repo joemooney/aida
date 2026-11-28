@@ -8,12 +8,12 @@ description: |-
   - AC2: never hangs silently; a test with a fake codex that waits on an auth prompt asserts the bounded failure and message.
 
   Source: docs/plans/2026-11-27-fresh-user-walkthrough.md (on branch task-3951-fresh-user-walkthrough / PR #4782), section F14. Advisor aida-d3 2026-11-27 20:30 priority order; filed by product-15 for laning now (one spec per lane).
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:30:54.837993440Z
-modified_at: 2026-11-28T07:31:34.721700496Z
+modified_at: 2026-11-28T07:41:20.013992664Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -171,6 +171,12 @@ comments:
   modified_at: 2026-11-28T07:31:34.721700496Z
   session_id: 01a221066ea6
   harness_version: 2.1.319 (Claude Code)
+- id: 01a22119-f90d-7803-83ed-f601f8f8ec8d
+  author: aida-publication-done
+  content: Implementer push 599da2b8eaaa declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-28T07:41:20.013992Z
+  modified_at: 2026-11-28T07:41:20.013992Z
+  session_id: 01a221066ea6
 history:
 - id: 01a22034-e919-78c1-a961-1cd42c78c571
   author: joe
@@ -251,6 +257,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a22119-f90d-7803-83ed-f5fd0517acf0
+  author: aida-publication-done
+  timestamp: 2026-11-28T07:41:20.013990010Z
+  session_id: 01a221066ea6
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
