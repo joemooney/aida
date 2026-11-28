@@ -9,7 +9,9 @@ use crate::launch::review_runner::{RunnerCall, STDERR_CAP, STDOUT_CAP};
 use crate::launch::review_tuning::{
     resolve_for_run, trusted_default_vendor, trusted_review_base, TrustedBase,
 };
-use crate::vendors::review_runner::{review_vendor, ReviewVendor, DEFAULT_REVIEW_VENDOR};
+use crate::vendors::review_runner::{
+    review_vendor, AuthRequired, ReviewVendor, DEFAULT_REVIEW_VENDOR,
+};
 use crate::{detect_forge_from_origin, extract_acceptance_section, find_project_root, Storage};
 use aida_core::exec_context::Environment;
 use aida_core::review_engine::{
@@ -349,6 +351,7 @@ fn review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
             stderr_cap: STDERR_CAP,
             tuning: Default::default(),
         };
+        ensure_agent_installed(&call)?;
         let flags = (args.effort.as_deref(), args.model.as_deref());
         call.tuning = resolve_for_run(call.vendor(), &parent_env, flags, trusted)?;
         let (base, head) = (merge_base.as_deref(), head_ref.as_deref());
@@ -702,7 +705,17 @@ const RUN_DEADLINE: std::time::Duration = std::time::Duration::from_secs(15 * 60
 fn run_review_base<'a>(mode: &str, merge_base: Option<&'a str>) -> Result<&'a str> {
     match (mode, merge_base) {
         ("range", Some(base)) => Ok(base),
-        _ => anyhow::bail!("--run-review needs --pr or --from"),
+        // A new user's first try: say what to do. trace:TASK-3958 | ai:claude
+        ("workspace", _) => anyhow::bail!(
+            "--run-review reviews committed work against a base branch: commit your change, \
+             then run `aida review prepare --run-review --from main` (or your base branch); \
+             to list uncommitted changes without an agent review, run `aida review prepare` \
+             without --run-review"
+        ),
+        _ => anyhow::bail!(
+            "--run-review needs a base branch to compare against: use --from <base branch> \
+             (for example --from main) or --pr <number> instead"
+        ),
     }
 }
 
@@ -800,12 +813,26 @@ fn batch_prompt(
 // trace:STORY-3120 | ai:claude
 fn runner_failure(call: &RunnerCall<'_>, batch: &str, e: anyhow::Error) -> anyhow::Error {
     let (who, pass) = (call.label(), call.pass);
+    // A signed-out finder already names its fix; the pass and batch are
+    // internal detail. trace:TASK-3958 | ai:claude
+    if pass == "finder" && e.is::<AuthRequired>() {
+        return e;
+    }
     let hint = if pass == "challenger" && call.vendor().is_some() {
         "; if it is not signed in or is rate-limited, pick another with --challenger-agent"
     } else {
         ""
     };
     anyhow::anyhow!("{who} {pass} pass, {batch}: {e:#}{hint}")
+}
+
+/// Refuse, before any review runs, a vendor CLI that is not on PATH.
+// trace:TASK-3958 | ai:claude
+fn ensure_agent_installed(call: &RunnerCall<'_>) -> Result<()> {
+    match call.vendor().filter(|a| call.on_path(a).is_none()) {
+        Some(agent) => anyhow::bail!(agent.missing_message()),
+        None => Ok(()),
+    }
 }
 
 /// `--post-comment` publishes runner output. A vendor whose tool confinement
@@ -2431,6 +2458,94 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             let head = format!("{who} finder pass, review batch 1: ");
             assert!(line.starts_with(&head) && line.contains(cause), "{line}");
         }
+    }
+
+    /// Messages a new user meets carry no internal IDs or jargon.
+    // trace:TASK-3958 | ai:claude
+    fn assert_plain(text: &str) {
+        let id = regex::Regex::new(r"\b[A-Z]{2,}-\d+").unwrap();
+        assert!(!id.is_match(text), "{text}");
+        for jargon in [
+            "finder",
+            "batch",
+            "[agents]",
+            "seat",
+            "--lane-host",
+            "workspace mode",
+        ] {
+            assert!(!text.contains(jargon), "{jargon}: {text}");
+        }
+    }
+
+    /// `--run-review` on uncommitted work says what to do next.
+    // trace:TASK-3958 | ai:claude
+    #[test]
+    fn task3958_run_review_on_uncommitted_work_says_what_to_do() {
+        let text = run_review_base("workspace", None).unwrap_err().to_string();
+        assert!(text.contains("commit your change"), "{text}");
+        assert!(
+            text.contains("`aida review prepare --run-review --from main`"),
+            "{text}"
+        );
+        assert!(
+            text.contains("`aida review prepare` without --run-review"),
+            "{text}"
+        );
+        assert_plain(&text);
+        let text = run_review_base("scan", None).unwrap_err().to_string();
+        assert!(
+            text.contains("--from <base branch>") && text.contains("--pr"),
+            "{text}"
+        );
+        assert_plain(&text);
+    }
+
+    /// A missing agent CLI is refused before any review runs, naming the CLI,
+    /// how to install it and how to pick another; an installed one never runs.
+    // trace:TASK-3958 | ai:claude
+    #[test]
+    fn task3958_missing_agent_cli_is_reported_up_front() {
+        let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let path = format!("{}:/usr/bin:/bin", bin.path().display());
+        let env: Vec<(std::ffi::OsString, std::ffi::OsString)> = vec![("PATH".into(), path.into())];
+        let call = |agent: &str| RunnerCall {
+            agent: review_vendor(agent).ok(),
+            checkout: checkout.path(),
+            parent_env: &env,
+            pass: "finder",
+            deadline: std::time::Duration::from_secs(2),
+            stdout_cap: STDOUT_CAP,
+            stderr_cap: STDERR_CAP,
+            tuning: Default::default(),
+        };
+        let text = ensure_agent_installed(&call("claude"))
+            .unwrap_err()
+            .to_string();
+        assert_eq!(
+            text,
+            "reviewing with Claude Code needs the `claude` command, which is not on your \
+             PATH: install it with `npm install -g @anthropic-ai/claude-code`, or pick \
+             another agent with --agent codex"
+        );
+        assert_plain(&text);
+        let text = ensure_agent_installed(&call("codex"))
+            .unwrap_err()
+            .to_string();
+        assert!(text.contains("`npm install -g @openai/codex`"), "{text}");
+        assert!(text.ends_with("--agent claude"), "{text}");
+        assert_plain(&text);
+        // Installed: the check passes without running it.
+        let marker = bin.path().join("ran");
+        let src = bin.path().join("src");
+        std::fs::write(&src, format!("#!/bin/sh\ntouch {}\n", marker.display())).unwrap();
+        let cmd = bin.path().join("claude");
+        let installed = Command::new("install")
+            .arg("-m755")
+            .args([&src, &cmd])
+            .status();
+        assert!(installed.unwrap().success());
+        ensure_agent_installed(&call("claude")).unwrap();
+        assert!(!marker.exists());
     }
 
     fn vendor_toml(vendor: &str) -> String {

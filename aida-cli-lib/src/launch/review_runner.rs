@@ -382,20 +382,25 @@ impl RunnerCall<'_> {
             return Err(DeadlineExceeded(self.deadline.as_secs()).into());
         }
         // trace:STORY-3202 | ai:claude
-        if let Some(agent) = vendor.filter(|a| !status.success() && a.auth_failed(&stderr)) {
-            let (vendor, stderr) = (agent.program, stderr_tail(&stderr));
-            let confined = agent.confined_auth.is_some();
+        // A signed-out claude says so on stdout, with stderr empty; stdout is
+        // read only then, so review text cannot pass for a sign-in failure.
+        // trace:TASK-3958 | ai:claude
+        let (stream, said) = runner_said(&stderr, &stdout);
+        let failed_auth = |a: &&ReviewVendor| {
+            a.auth_failed(&stderr) || (stream == "stdout" && a.auth_failed(said.as_bytes()))
+        };
+        if let Some(agent) = vendor.filter(|a| !status.success() && failed_auth(a)) {
             return Err(AuthRequired {
-                vendor,
-                stderr,
-                confined,
+                vendor: agent.program,
+                stderr: said,
+                sign_in: agent.sign_in,
+                confined: agent.confined_auth.is_some(),
             }
             .into());
         }
         ensure!(
             status.success(),
-            "review runner failed ({status}); stderr: {}",
-            stderr_tail(&stderr)
+            "review runner failed ({status}); {stream}: {said}"
         );
         wrote.context("review runner did not read the whole prompt")?;
         String::from_utf8(stdout).context("review runner output is not UTF-8")
@@ -427,6 +432,19 @@ fn stderr_tail(stderr: &[u8]) -> String {
         "" => "(empty)".into(),
         tail if cut > 0 => format!("...{tail}"),
         tail => tail.into(),
+    }
+}
+
+/// The runner's own explanation: its stderr tail, else (nothing on stderr)
+/// its stdout tail, with the stream it came from.
+// trace:TASK-3958 | ai:claude
+fn runner_said(stderr: &[u8], stdout: &[u8]) -> (&'static str, String) {
+    match stderr_tail(stderr) {
+        empty if empty == "(empty)" => match stderr_tail(stdout) {
+            out if out == "(empty)" => ("stderr", empty),
+            out => ("stdout", out),
+        },
+        tail => ("stderr", tail),
     }
 }
 
@@ -997,6 +1015,41 @@ mod tests {
         assert_eq!(secs, [570, 15, 1]);
     }
 
+    /// A signed-out claude prints its reason on stdout with stderr empty: the
+    /// error names the sign-in step and quotes claude, never `stderr: (empty)`;
+    /// any other silent-stderr failure quotes stdout. No internal jargon.
+    // trace:TASK-3958 | ai:claude
+    #[test]
+    fn task3958_signed_out_claude_names_the_sign_in_step() {
+        let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let path = format!("{}:/usr/bin:/bin", bin.path().display());
+        let env = vars(&[("PATH", &path)]);
+        let run = |stdout: &str| {
+            let body = format!("#!/bin/sh\ncat >/dev/null\necho '{stdout}'\nexit 1\n");
+            script(bin.path(), "claude", &body);
+            let runner = RunnerCall {
+                agent: vendor("claude"),
+                ..call(checkout.path(), &env)
+            };
+            runner.run("p").unwrap_err()
+        };
+        let err = run("Not logged in · Please run /login");
+        let cause = err
+            .downcast_ref::<AuthRequired>()
+            .expect("typed auth cause");
+        assert_eq!(cause.vendor, "claude");
+        let text = err.to_string();
+        let want = "claude is not signed in: run `claude` and use /login, then retry \
+                    (claude said: Not logged in · Please run /login)";
+        assert_eq!(text, want);
+        for jargon in ["(empty)", "--lane-host", "pass", "batch", "TASK-", "seat"] {
+            assert!(!text.contains(jargon), "{jargon}: {text}");
+        }
+        // Any other failure with a silent stderr quotes stdout.
+        let other = run("boom").to_string();
+        assert!(other.ends_with("(exit status: 1); stdout: boom"), "{other}");
+    }
+
     /// A keyring-only agy in a lane (no session bus, no TTY) fails at once with
     /// a typed `AuthRequired`, not a hang or a bare exit status; a vendor
     /// without auth markers keeps the plain failure.
@@ -1030,7 +1083,7 @@ mod tests {
         assert_eq!(cause.vendor, "agy");
         let text = err.to_string();
         assert!(
-            text.contains("not signed in") && text.contains("--lane-host"),
+            text.contains("agy is not signed in: run `agy` and sign in, then retry"),
             "{text}"
         );
         // agy runs confined, so the read-only auth bind is named with its

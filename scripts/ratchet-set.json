@@ -79,6 +79,8 @@
         "bug2775_runner_errors_name_runner_pass_batch_and_cause",
         "bug2775_run_review_agent_resolves_and_states_the_default",
         "bug2779_top_level_error_keeps_its_cause",
+        "task3958_run_review_on_uncommitted_work_says_what_to_do",
+        "task3958_missing_agent_cli_is_reported_up_front",
         "t3869_excluded_paths_are_classified_before_any_open",
         "t3869_non_regular_entries_skipped_with_named_reason",
         "t3869_pinned_root_survives_concurrent_symlink_swap",
@@ -124,6 +126,7 @@
       "source": "aida-cli-lib/src/launch/review_runner.rs",
       "tests": [
         "bug2775_runner_gets_stdin_eof_and_a_prompting_cli_fails_fast",
+        "task3958_signed_out_claude_names_the_sign_in_step",
         "bug2783_confined_auth_source_never_lies_inside_the_checkout",
         "bug2783_confined_runner_fails_closed_without_bwrap",
         "s3a_runner_deadline_and_output_caps_fail_closed",
