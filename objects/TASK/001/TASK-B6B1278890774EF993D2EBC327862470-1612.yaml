@@ -13,12 +13,33 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:30:00.472477642Z
-modified_at: 2026-11-28T03:45:05.509252460Z
+modified_at: 2026-11-28T03:49:35.710295702Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a22014-1672-7093-9f8f-09bbbefcbf09
   created_at: 2026-11-28T03:30:29.131674839Z
+comments:
+- id: 01a22045-cf5e-7980-820d-1e1e4993df51
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (fixture):** documented command becomes download-then-run (`curl -fsSL URL -o install.sh && bash install.sh`) so a failed fetch exits non-zero and never pipes an HTTP error page into bash; script body wrapped in `main` so a truncated script runs nothing; release-archive download checks curl exit, empty file and archive integrity, and names the URL plus an offline path. Proven by `tests/test_install_download_failure.py` (stub curl on PATH).
+    - **AC2 (fixture):** same test file asserts non-zero exit, the URL in the message, and an empty prefix for: curl failure, empty download, corrupt/partial archive, and the documented pipeline when the script fetch fails. Wired into ci.yml next to the other python unittests.
+
+    ### Expected files
+    - scripts/install.sh
+    - README.md, docs/getting-started.md, docs/showcase/getting-started.html (+ search-data.js if generated)
+    - tests/test_install_download_failure.py, .github/workflows/ci.yml
+
+    ### Ambiguities / conflicts as questions
+    - None
+  created_at: 2026-11-28T03:49:35.710295702Z
+  modified_at: 2026-11-28T03:49:35.710295702Z
+  session_id: 01a220416c9d
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a22034-5b2b-79c1-b9b2-fe4621fcfd47
   author: joe
