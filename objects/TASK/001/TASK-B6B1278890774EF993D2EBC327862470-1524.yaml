@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 67629843c466be9583facbb0ee20f8c5e445a77a
 
   p3 follow-up (BUG-2773): aida-cli-lib/src/coordination.rs unbound_claim_blocker condition 3 reads agent rows through agent_registry::load_active_entries, which silently skips unreadable or unparseable rows (agent_registry.rs:2143-2148). A corrupt unended agent row on the claim's scope is therefore not seen, while the lease table and lane records in the same predicate fail closed. Failure scenario: an unbound claim older than 24h with a dead creator, no session lease, no lane record, a clean clone, and a truncated .aida/agents/<id>.toml naming the scope is released. Other independent signals (24h floor, strict lease table, clean-clone check) make this narrow; it is documented as residual risk (a) in the implementer self-review. Follow-up: use a strict agent-row reader here so an unparseable row retains the claim, with a refusal test.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T16:49:42.381696241Z
-modified_at: 2026-11-28T01:12:17.290030202Z
+modified_at: 2026-11-28T01:12:19.270151332Z
 req_type: Task
 tags:
 - carried-from:BUG-2773
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21fb5-d246-7de3-85ed-e73a0abbb23b
+  author: joe
+  timestamp: 2026-11-28T01:12:19.270147088Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 67629843c466be9583facbb0ee20f8c5e445a77a
   branch: pr-4666
