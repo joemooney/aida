@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T23:28:15.005813754Z
-modified_at: 2026-11-28T01:11:06.527629953Z
+modified_at: 2026-11-28T01:11:11.497860704Z
 req_type: Bug
 tags:
 - ci
@@ -121,6 +121,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3498): Test gap: bug2766_label_event_runs_and_full_runs covers only the FULL-in-progress line; the ''FULL run at this head has finished'' line (HeadCi::Full{pending:false}) and the cancelled-FULL fallthrough (run conclusion ''cancelled'' is not decisive,... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T01:10:56.577663350Z
   modified_at: 2026-11-28T01:10:56.577663350Z
+- id: 01a21fb4-c989-7973-bb53-8abcb1d5aa14
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3500): spec_approvals_by_head now keeps the NEWEST approval per head and no longer filters on attestation, so a newer unattested spec-keyed approval at a head displaces an older attested one; the PR is then reported ''skipped (approval carries no recorder... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:11:11.497860704Z
+  modified_at: 2026-11-28T01:11:11.497860704Z
 history:
 - id: 01a2150a-c5ca-7f63-8878-e8a8add13a31
   author: joe
