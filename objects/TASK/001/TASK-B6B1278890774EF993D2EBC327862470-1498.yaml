@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 2a68c0ff5333fe0e907b842538af467d6cb7314b
 
   Test gap (TASK-3912 AC2): the AC2 test (story_1690_train_tests.rs max_prs_per_train_admits_three_now_and_the_next_three_next_pass) proves the parsed knob plus split_bounded_train selection, but nothing asserts that advisor_train_handler (pr_train.rs) actually passes landing_policy auto_train_max() into TrainOptions.max; a regression back to a hard-coded max would not fail any test. Follow-up: a handler-level test (or a seam returning the auto-train TrainOptions) asserting max=3 under max_prs_per_train=3.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T11:05:10.287282847Z
-modified_at: 2026-11-28T01:09:11.829468547Z
+modified_at: 2026-11-28T01:09:14.041326444Z
 req_type: Task
 tags:
 - carried-from:TASK-3912
@@ -43,6 +43,13 @@ history:
   author: joe
   timestamp: 2026-11-28T00:31:25.313259227Z
   changes: []
+- id: 01a21fb2-feb9-7303-8198-9f51082037bd
+  author: joe
+  timestamp: 2026-11-28T01:09:14.041324112Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 2a68c0ff5333fe0e907b842538af467d6cb7314b
   branch: pr-4616
