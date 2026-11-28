@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T18:34:14.199561Z
-modified_at: 2026-11-27T02:08:32.932361805Z
+modified_at: 2026-11-28T01:15:01.101011629Z
 req_type: Bug
 tags:
 - landing
@@ -251,6 +251,11 @@ comments:
   created_at: 2026-11-26T23:51:58.143342097Z
   modified_at: 2026-11-26T23:51:58.143342097Z
   session_id: 01a21a0a4dcd
+- id: 01a21fb8-4a6d-72f1-b1d4-0ba00273c933
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3524): [aida-cli-lib/src/pr_train.rs route_drift] Sometimes the drift comes from an earlier train member rather than from main, so the PR branch is already up to date with main. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:15:01.101011629Z
+  modified_at: 2026-11-28T01:15:01.101011629Z
 history:
 - id: 01a21927-2d94-78f3-965f-a43315634e36
   author: joe
