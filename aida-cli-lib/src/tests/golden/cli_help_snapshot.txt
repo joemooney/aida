@@ -23762,6 +23762,11 @@ Options:
           node-local IDs alike. IDs that differ only by leading zeros are the same ID, so changing
           this later renames nothing. Written to `[ids]` in .aida/config.toml
 
+      --report-allowlists
+          Report the sandbox allowlist and permission entries init would set for each enabled agent
+          (from `--agent` or PATH detection), using the forge hosts your git remotes name. Writes
+          nothing. Honors the global `--format json`
+
   -h, --help
           Print help (see a summary with '-h')
 ===== aida memories
@@ -57411,6 +57416,11 @@ Working on aida itself
         "name": "remote",
         "takes_value": true,
         "help": "Bring-your-own remote URL for a new DIR: set origin and push both legs. Covers GitLab and any host with push-to-create"
+      },
+      {
+        "name": "report-allowlists",
+        "takes_value": false,
+        "help": "Report the sandbox allowlist and permission entries init would set for each enabled agent (from `--agent` or PATH detection), using the forge hosts your git remotes name. Writes nothing. Honors the global `--format json`"
       },
       {
         "name": "sibling",
