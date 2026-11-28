@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:26:51.396539455Z
-modified_at: 2026-11-28T02:06:24.157240234Z
+modified_at: 2026-11-28T02:13:01.464355754Z
 req_type: Task
 tags:
 - from-implementer:BUG-2775
@@ -54,6 +54,12 @@ comments:
   modified_at: 2026-11-28T02:06:24.157240234Z
   session_id: 01a21fcf95f7
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21fed-6598-74b3-aa0f-7e3cca959a39
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3511-agent-error-chain` at head `906d0450d57eeca12ca1001a0581352eaba068dc`.'
+  created_at: 2026-11-28T02:13:01.464352876Z
+  modified_at: 2026-11-28T02:13:01.464352876Z
+  session_id: 01a21fcf95f7
 history:
 - id: 01a218e6-eaae-7570-8b7b-68adb3fac1de
   author: joe
