@@ -319,6 +319,11 @@ comments:
   content: 'DEFERRED (#4751 r4 review @af6195b6, p3; product-15): launch/review_runner.rs confined(): CONFINED_SYSTEM binds /usr, /bin and /lib* read-only without checking the checkout under review, so a checkout located under one of them (for example /usr/local/src/repo) would be visible to the confined runner, including untracked files such as a .env. This is non-blocking: posting stays refused for codex and agy, so the exposure is limited to the 0600 local report, the same residual the advisor already accepted for the vendor token. Follow-up: refuse, or tmpfs over, a checkout that lies under a CONFINED_SYSTEM path, with a spawn test.'
   created_at: 2026-11-28T02:39:20.113233375Z
   modified_at: 2026-11-28T02:39:20.113233375Z
+- id: 01a2205d-5fe8-74b2-a35e-044956b2854f
+  author: lane-recovery
+  content: Reference merge `591f0a2543e3909712a1e4c82e07b323079331d3` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-28T04:15:20.040449580Z
+  modified_at: 2026-11-28T04:15:20.040449580Z
 - id: 01a22060-c76c-7d11-89fd-048c4c43f7aa
   author: lane-recovery
   content: Reference merge `1d956ee6792d6b737c3e17d88ba92f818002348d` left unfinished work with no lease or open PR; returned to Approved.
@@ -441,6 +446,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a2205d-5fe8-74b2-a35e-0456b058a744
+  author: lane-recovery
+  timestamp: 2026-11-28T04:15:20.040456284Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 - id: 01a22060-c76c-7d11-89fd-049d56ad3fea
   author: lane-recovery
   timestamp: 2026-11-28T04:19:03.148219932Z
