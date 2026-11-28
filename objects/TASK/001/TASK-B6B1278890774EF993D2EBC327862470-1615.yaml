@@ -8,12 +8,12 @@ description: |-
   - AC2: a test commits in a fresh aida init repo and asserts exit 0 and no failure wording.
 
   Source: docs/plans/2026-11-27-fresh-user-walkthrough.md (on branch task-3951-fresh-user-walkthrough / PR #4782), section F8. Advisor aida-d3 2026-11-27 20:30 priority order; filed by product-15 for laning now (one spec per lane).
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:31:49.783028382Z
-modified_at: 2026-11-28T05:26:58.976192584Z
+modified_at: 2026-11-28T07:06:03.620934289Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -65,6 +65,13 @@ comments:
   created_at: 2026-11-28T05:03:06.148134745Z
   modified_at: 2026-11-28T05:03:06.148134745Z
   session_id: 01a22073d460
+- id: 01a220f9-b410-7bc0-8885-f327ea189523
+  author: aida-orchestrator
+  content: 'Shelved by leases::shelve_spec_on_failure during reviewer: verdict:request-changes'
+  created_at: 2026-11-28T07:06:05.200635162Z
+  modified_at: 2026-11-28T07:06:05.200635162Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a22035-c5e0-7e70-a058-780324cd7502
   author: joe
@@ -94,6 +101,15 @@ history:
   author: joe
   timestamp: 2026-11-28T05:26:59.103955860Z
   changes: []
+- id: 01a220f9-b410-7bc0-8885-f3191716f088
+  author: aida-orchestrator
+  timestamp: 2026-11-28T07:06:05.200629842Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
@@ -106,3 +122,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-28T04:55:50.738857615Z
   implemented_by: dirtlab
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Advisor FIX-FIRST: conflict with base; a serial merge round.'
+  recovery_hint: address the review findings, move TASK-3957 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-28T07:06:03.620934289Z
