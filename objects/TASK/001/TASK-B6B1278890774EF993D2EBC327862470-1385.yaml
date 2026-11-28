@@ -9,12 +9,12 @@ description: |
   - AC1: `aida doctor heal repair-reservations` can release, WITHOUT a per-ID attestation, a reservation whose PR the forge reports CLOSED or MERGED, whose lane has no live process, and whose tree has first been salvaged to ~/salvage when it holds uncommitted or unique commits. Tests.
   - AC2: an audit line per release (id, PR state, salvage path or "nothing to salvage"). Test.
   - AC3: anything else (OPEN PR, unknown or unreachable forge state, live lane) still requires the attested path. Test.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T01:24:58.703993536Z
-modified_at: 2026-11-28T03:54:17.973292696Z
+modified_at: 2026-11-28T04:20:43.547762456Z
 req_type: Task
 tags:
 - leases
@@ -165,6 +165,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a22062-4f9b-77b2-acde-b9469b037c2c
+  author: aida-session-start
+  timestamp: 2026-11-28T04:20:43.547760292Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
 filed_at:
   code_sha: dc27cf1f4cb49a050002334062efb59fe7d2b914
