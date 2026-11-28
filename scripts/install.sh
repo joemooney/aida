@@ -6,10 +6,10 @@
 # `make install` from the AIDA repo.
 #
 # Usage:
-#   curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh | bash
-#   curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh | bash -s -- --version v0.4.0
+#   curl -fsSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh -o install.sh && bash install.sh
 #   ./scripts/install.sh                          # latest release, install to ~/.local/bin
 #   ./scripts/install.sh --version v0.4.0         # pin a specific release
+#   ./scripts/install.sh --archive aida-linux-x86_64.tar.gz  # offline: a tarball you copied here
 #   ./scripts/install.sh --host gitlab            # fetch from gitlab.joemooney.com
 #   ./scripts/install.sh --prefix /usr/local/bin  # install to a different directory (may need sudo)
 #
@@ -20,6 +20,10 @@
 
 set -euo pipefail
 
+# The body is one function called on the last line, so a script cut off
+# mid-download is a syntax error and runs nothing. trace:TASK-3954 | ai:claude
+main() {
+
 # ---- Defaults --------------------------------------------------------------
 
 VERSION="latest"
@@ -28,11 +32,12 @@ REPO="joemooney/aida"
 HOST="${AIDA_RELEASE_HOST:-github}"
 GITLAB_PROJECT_ID="${AIDA_GITLAB_PROJECT_ID:-joemooney%2Faida}"
 GITLAB_BASE_URL="${AIDA_GITLAB_BASE_URL:-https://gitlab.joemooney.com}"
+ARCHIVE=""
 
 # ---- Arg parsing -----------------------------------------------------------
 
 usage() {
-    sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
     exit "${1:-0}"
 }
 
@@ -54,6 +59,12 @@ while [ $# -gt 0 ]; do
             shift
             [ $# -gt 0 ] || { echo "error: --host requires github or gitlab" >&2; exit 1; }
             HOST=$1
+            shift
+            ;;
+        --archive)
+            shift
+            [ $# -gt 0 ] || { echo "error: --archive requires a downloaded release tarball" >&2; exit 1; }
+            ARCHIVE=$1
             shift
             ;;
         -h|--help) usage 0 ;;
@@ -103,11 +114,15 @@ case "$HOST" in
         ;;
 esac
 
-if [ "$VERSION" = "latest" ]; then
+if [ -n "$ARCHIVE" ]; then
+    # Offline install: no network lookup at all. trace:TASK-3954 | ai:claude
+    asset_url=$ARCHIVE
+elif [ "$VERSION" = "latest" ]; then
     if [ "$host" = "github" ]; then
         asset_url="https://github.com/${REPO}/releases/latest/download/aida-${target}.${archive_ext}"
     else
-        latest_json=$(curl -fsSL "${GITLAB_BASE_URL}/api/v4/projects/${GITLAB_PROJECT_ID}/releases/permalink/latest")
+        latest_url="${GITLAB_BASE_URL}/api/v4/projects/${GITLAB_PROJECT_ID}/releases/permalink/latest"
+        latest_json=$(curl -fsSL "$latest_url") || download_failed "$latest_url" "the release lookup failed"
         tag=$(printf '%s\n' "$latest_json" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
         [ -n "$tag" ] || { echo "error: could not resolve latest GitLab release tag" >&2; exit 1; }
         asset_url="${GITLAB_BASE_URL}/api/v4/projects/${GITLAB_PROJECT_ID}/packages/generic/aida/${tag}/aida-${target}.${archive_ext}"
@@ -127,11 +142,20 @@ fi
 tmpdir=$(mktemp -d -t aida-install-XXXXXX)
 trap 'rm -rf "$tmpdir"' EXIT
 
-echo "Downloading $asset_url"
-if ! curl -fSL -o "$tmpdir/$download_name" "$asset_url"; then
-    echo "error: download failed. Verify the release exists at $asset_url" >&2
-    exit 1
+if [ -n "$ARCHIVE" ]; then
+    [ -s "$ARCHIVE" ] || { echo "error: $ARCHIVE is missing or empty. Nothing was installed." >&2; exit 1; }
+    cp "$ARCHIVE" "$tmpdir/$download_name"
+else
+    echo "Downloading $asset_url"
+    # -f makes an HTTP error (403, 404) a failure instead of saving the error
+    # page; a cut-off transfer also exits non-zero. trace:TASK-3954 | ai:claude
+    curl -fSL -o "$tmpdir/$download_name" "$asset_url" || download_failed "$asset_url" "the download failed"
+    [ -s "$tmpdir/$download_name" ] || download_failed "$asset_url" "the download was empty"
 fi
+# Read the whole archive before installing anything, so a truncated or
+# corrupt file stops here. trace:TASK-3954 | ai:claude
+tar tzf "$tmpdir/$download_name" >/dev/null 2>&1 \
+    || download_failed "$asset_url" "the file is incomplete or is not a release archive"
 
 echo "Extracting..."
 if [ "$archive_ext" = "zip" ]; then
@@ -254,3 +278,19 @@ elif [ -x "$PREFIX/aida.exe" ]; then
 else
     echo "(installed; run 'aida --version' or 'aida.exe --version' to verify)"
 fi
+}
+
+# Say what failed in plain words, name the URL and the offline route, and stop
+# before anything is installed. trace:TASK-3954 | ai:claude
+download_failed() {
+    {
+        echo "error: $2: $1"
+        echo "       Nothing was installed. Check your network or proxy, and that the release exists."
+        echo "       Without direct access, download the release tarball from"
+        echo "       https://github.com/${REPO}/releases on another machine, copy it here, and run:"
+        echo "         bash install.sh --archive aida-${target:-linux-x86_64}.tar.gz"
+    } >&2
+    exit 1
+}
+
+main "$@"
