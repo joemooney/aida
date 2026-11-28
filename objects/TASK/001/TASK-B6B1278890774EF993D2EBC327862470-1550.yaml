@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: cbaddf47705827f69c721df0d82dfa12c11cc558
 
   Single waiter slot: record_waiter overwrites the file, so two manual trains for different PRs that both give up keep only the last; and manual_train_admission removes the file on any admission, so train X admitted clears train Y's waiter and the auto-train may start its next train ahead of Y's retry (admission_owner.rs manual_train_admission Ok branch). Multiplicity N>1 not covered.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-27T03:09:22.619303877Z
-modified_at: 2026-11-28T00:35:54.652197829Z
+modified_at: 2026-11-28T00:35:58.700115819Z
 req_type: Task
 tags:
 - carried-from:BUG-2771
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21f94-8c6c-7cb2-9936-db63025a1857
+  author: joe
+  timestamp: 2026-11-28T00:35:58.700112509Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: cbaddf47705827f69c721df0d82dfa12c11cc558
   branch: pr-4711
