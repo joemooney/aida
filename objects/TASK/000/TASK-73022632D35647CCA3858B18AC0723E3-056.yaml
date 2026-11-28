@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T20:27:39.429848017Z
-modified_at: 2026-11-28T02:48:29.116769339Z
+modified_at: 2026-11-28T05:26:32.667763496Z
 req_type: Task
 tags:
 - from-implementer:BUG-2777
@@ -101,6 +101,11 @@ history:
   author: dirtlab
   timestamp: 2026-11-28T02:48:31.394916002Z
   changes: []
+- id: 01a2209e-9262-7453-aa1b-24d2153374b0
+  author: joe
+  timestamp: 2026-11-28T05:26:32.802080101Z
+  changes: []
+execution_mode: drain
 filed_at:
   code_sha: 36ffea9bc51797e6a523d58c668abd4888c859e1
   branch: bug-2777-ejection-routing
