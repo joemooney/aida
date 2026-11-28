@@ -1,0 +1,31 @@
+id: 01a2207e-fa51-7ab2-81d1-42437713d8d1
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1631
+title: 'Review follow-up: `review_vendor_token_rates_per_1m` (aida-core/src/vendors/mod.rs) hard-codes per-1M token '
+description: |-
+  From STORY-3120
+  Reviewed sha: 9082645444672a4f7a21f619a8259089de36e018
+
+  `review_vendor_token_rates_per_1m` (aida-core/src/vendors/mod.rs) hard-codes per-1M token prices by model-name substring (e.g. opus 15/75, 'mini'/'flash' 0.80/4, 'o3' 10/40). These values are stale, and the substring matching misclassifies (any model containing 'mini' matches, including 'gemini'). It only drives advisory telemetry cost estimates, so this is a follow-up: source the rates from config or label them as estimates.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-28T04:52:02.257723453Z
+modified_at: 2026-11-28T04:52:02.257723453Z
+req_type: Task
+tags:
+- carried-from:STORY-3120
+- finding-hash:a055d68f
+- from-review:STORY-3120
+relationships:
+- rel_type: References
+  target_id: 01a21102-e2f1-7e62-9354-693f46b82d22
+  created_at: 2026-11-28T04:52:20.597459848Z
+filed_at:
+  code_sha: 9082645444672a4f7a21f619a8259089de36e018
+  branch: pr-4779
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c6
+  vendor: claude
+  session: 01a2207a561d

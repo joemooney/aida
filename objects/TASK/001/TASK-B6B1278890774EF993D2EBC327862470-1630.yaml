@@ -1,0 +1,31 @@
+id: 01a2207e-b09d-7943-827a-5ed0960dba30
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1630
+title: 'Review follow-up: The parallel finder in `review_batches` (aida-cli-lib/src/review_prepare.rs) runs up to 4 '
+description: |-
+  From STORY-3120
+  Reviewed sha: 9082645444672a4f7a21f619a8259089de36e018
+
+  The parallel finder in `review_batches` (aida-cli-lib/src/review_prepare.rs) runs up to 4 runner calls at once. Each call still carries its own 15-minute RUN_DEADLINE and its own STDOUT_CAP/STDERR_CAP buffers, so peak memory is 4x the caps and there is no single global deadline. The S8e scope text asked for 'one global deadline; caps not multiplied'. Wall time is no worse than before, so this is a resource-bound refinement.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-28T04:51:43.389638668Z
+modified_at: 2026-11-28T04:51:43.389638668Z
+req_type: Task
+tags:
+- carried-from:STORY-3120
+- finding-hash:70d69c02
+- from-review:STORY-3120
+relationships:
+- rel_type: References
+  target_id: 01a21102-e2f1-7e62-9354-693f46b82d22
+  created_at: 2026-11-28T04:52:01.980942171Z
+filed_at:
+  code_sha: 9082645444672a4f7a21f619a8259089de36e018
+  branch: pr-4779
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c6
+  vendor: claude
+  session: 01a2207a561d
