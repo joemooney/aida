@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T04:31:20.159152225Z
-modified_at: 2026-11-20T19:18:01.926882623Z
+modified_at: 2026-11-28T00:41:51.025270491Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -49,6 +49,11 @@ comments:
   modified_at: 2026-11-20T19:18:01.926882623Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a21f99-ecb1-7ca0-8fa5-b860feb5d9e1
+  author: joe
+  content: 'RETURNED to Approved (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Blocked-by BUG-2629 (pickup refuses until it completes); safe to return with BUG-2629.'
+  created_at: 2026-11-28T00:41:51.025270491Z
+  modified_at: 2026-11-28T00:41:51.025270491Z
 history:
 - id: 01a1e7c6-40ba-7180-99c5-2c906894848b
   author: joe
