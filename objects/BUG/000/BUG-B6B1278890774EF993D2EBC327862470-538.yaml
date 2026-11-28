@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T18:34:14.199561Z
-modified_at: 2026-11-28T01:15:15.548447871Z
+modified_at: 2026-11-28T01:15:19.433251732Z
 req_type: Bug
 tags:
 - landing
@@ -260,6 +260,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3524): [aida-cli-lib/src/pr_train.rs route_drift] Sometimes the drift comes from an earlier train member rather than from main, so the PR branch is already up to date with main. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T01:15:01.101011629Z
   modified_at: 2026-11-28T01:15:01.101011629Z
+- id: 01a21fb8-9209-7f32-bad6-e09ae34f3b89
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3526): Residual coverage on the BUG-2777 train path (aida-cli-lib/src/pr_train.rs). The handler call site in pr_train_handler_with_dispatch_ctx that builds LiveDriftRouter and calls route_drift_ejections has no test, and neither does... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:15:19.433251732Z
+  modified_at: 2026-11-28T01:15:19.433251732Z
 history:
 - id: 01a21927-2d94-78f3-965f-a43315634e36
   author: joe
