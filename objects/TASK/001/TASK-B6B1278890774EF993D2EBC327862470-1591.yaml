@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: e1925d9799108e70f0638a69d6968f57be7eb3bf
 
   p3 follow-up: record_fix_first runs a read-modify-write of .aida/train-fix-first.json without taking the train run.lock or any other lock. Two rulings on different PRs at the same moment can lose one, and the lost PR would then stay eligible. The store-writers.toml lock text on the save_at rows also says writers run under run.lock, which is not true for this caller. With a single advisor seat this is rare: take a file lock, or correct the inventory text (aida-cli-lib/src/pr_train_culprit.rs:171).
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-27T23:33:20.323748551Z
-modified_at: 2026-11-28T01:19:37.989211165Z
+modified_at: 2026-11-28T01:19:41.135643807Z
 req_type: Task
 tags:
 - carried-from:TASK-3923
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-28T00:50:52.855933809Z
   changes: []
+- id: 01a21fbc-904f-7542-8135-95b899ddcc91
+  author: joe
+  timestamp: 2026-11-28T01:19:41.135641647Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: e1925d9799108e70f0638a69d6968f57be7eb3bf
   branch: pr-4769
