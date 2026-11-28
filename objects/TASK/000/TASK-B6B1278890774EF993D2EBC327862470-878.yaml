@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321Z
-modified_at: 2026-11-19T23:10:51.937266523Z
+modified_at: 2026-11-28T00:47:48.351140492Z
 req_type: Task
 tags:
 - architecture
@@ -573,6 +573,11 @@ comments:
   modified_at: 2026-11-19T23:10:51.937266523Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a21f9f-607f-78b3-9d9d-cff6b5601f89
+  author: joe
+  content: 'AC verification vs origin/main (product-15 2026-11-27, per advisor aida-d3 17:45/17:58): NOT complete. Interactive (#3547), coordinator (#3522) and --bg (#3628) wired; RESUME is not. CLAUDE_WRAPPER_UNWIRED still on origin/main: session/containment.rs:284, :308, :746; containment/tests/launch_tests.rs:1387, :1408, :2927. Unconfirmed: whether #3628''s final head carries the r7 fixes (composed attach refusal, RegistryEnd disarm). Returned to Approved.'
+  created_at: 2026-11-28T00:47:48.351140492Z
+  modified_at: 2026-11-28T00:47:48.351140492Z
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
   author: joe
