@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T15:15:41.002272518Z
-modified_at: 2026-11-28T08:16:52.795794754Z
+modified_at: 2026-11-28T08:30:48.889614979Z
 req_type: Story
 tags:
 - landing
@@ -246,6 +246,25 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-28T08:13:00.835600747Z
   modified_at: 2026-11-28T08:13:00.835600747Z
+- id: 01a22147-4639-76f3-92a1-300529d7887b
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: ab5ccc0bde (PR #4803, S2 round 2)
+
+    Findings addressed:
+    1. Approval provenance fails closed: auto_train_decision (gate/mandate.rs) admits only a newest approval whose attestation carries a grant id, a seat that canonicalises to `reviewer`, and an authority key present in policy.verified_authority, so the seat comes from the re-validated grant and is not self-reported. Refused, each with its own test (story3181_auto_train_decision_fails_closed_on_approval_provenance): no attestation, no seat, advisor/Advisor/dialog/padded advisor, product, implementer, empty seat, no grant, human receipt, a grant verified for the advisor seat relabelled reviewer, no approval.
+    2. Pre-merge path: I restored S1's knob-on refusal (landing_policy::auto_train_supervised_refusal), so the knob stays inert until S4 lands the pre-merge recheck. That is option 1 in the finding and the sketch's own condition. review_watch's lane now keys on that refusal, so it stays closed too. DEFERRED TO S4, named explicitly: behavioural tests of recheck_train_release(auto=true) after a hold release, and of re-arming when the mandate expires or stops between release and merge. While the knob refuses, production cannot reach that path. The decision-level stop/expiry/<30m refusals are tested (story3181_auto_train_decision_refuses_a_mandate_ending_before_the_merge), and the knob-off and knob-on refusals still hold (story_3181_auto_train_knob_tests).
+    3. Red CI: mandate_ship_cover_for_ship again binds crate::gate::mandate::ship_decision, true exactly as before. The automatic train uses a separate gate-side mandate_auto_train_cover bound to auto_train_decision with no carry-over. the_ship_cover_decision_is_bound_in_the_gate passes. scripts/ratchet-set.json needs no change: no ratchet test was renamed or removed.
+    4. LiveChecks::mandate_cover returns the no-cover outcome before forge.commit_checks when no mandate is active, unless the member was released (that goes on to its recheck, which refuses).
+    5. preview_cover_deciding is #[cfg(test)] and its comment is corrected.
+
+    Validation: aida-cli-lib --lib filters story3181 story_1888 story2897_landing_policy story_2893: 82 passed, 0 failed. aida-ci-guards --lib: 51 passed. check-ci-fast: see the PR.
+    Residual risks: a reviewer-seat grant delegated by an advisor's relay parent still counts as a reviewer approval; the two-person rule catches it only when it is also the shipper. The every-check and mandate-active ordering in mandate_cover cannot be reached while the knob refuses, so it has no behavioural test until S4. The diff is about 270 production lines plus about 190 test lines, so the tests push it over the 300-line slice target.
+  created_at: 2026-11-28T08:30:48.889614979Z
+  modified_at: 2026-11-28T08:30:48.889614979Z
+  session_id: 01a2213a2b37
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21873-34ec-7e40-815b-1570489bba5e
   author: joe
