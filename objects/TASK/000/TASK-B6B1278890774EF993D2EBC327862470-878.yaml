@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-878
 agreed_id: TASK-3219
 title: Claude interactive, --bg, coordinator and resume launches on the shared contained wrapper
 description: 'Follow-up slice of TASK-2708 AC(1), after PR #3449. Under [contained.vendors] claude = "aida", interactive agent new, claude --bg, coordinators and resume currently refuse with CLAUDE_WRAPPER_UNWIRED (session.rs claude_contained_flags_for_roots). Acceptance: (1) each of those launch paths runs through the signed common wrapper with the same grants, CLI/MCP surfaces and floors as the headless path. (2) CLAUDE_WRAPPER_UNWIRED is removed. (3) With the opt-in unset, Claude stays native byte-for-byte. (4) The TASK-2708 accepted deltas (WAIT_KILLABLE_RECV signal deferral, a fail-closed 5.19+ floor, refusal of ancillary credentials and sendmmsg) apply unchanged. No new deviations without an advisor ruling. Tests: one targeted test per launch path plus the required-live bwrap count.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321Z
-modified_at: 2026-11-28T00:47:48.351140492Z
+modified_at: 2026-11-28T00:47:51.554879579Z
 req_type: Task
 tags:
 - architecture
@@ -578,6 +578,11 @@ comments:
   content: 'AC verification vs origin/main (product-15 2026-11-27, per advisor aida-d3 17:45/17:58): NOT complete. Interactive (#3547), coordinator (#3522) and --bg (#3628) wired; RESUME is not. CLAUDE_WRAPPER_UNWIRED still on origin/main: session/containment.rs:284, :308, :746; containment/tests/launch_tests.rs:1387, :1408, :2927. Unconfirmed: whether #3628''s final head carries the r7 fixes (composed attach refusal, RegistryEnd disarm). Returned to Approved.'
   created_at: 2026-11-28T00:47:48.351140492Z
   modified_at: 2026-11-28T00:47:48.351140492Z
+- id: 01a21f9f-6d02-7fe2-91b8-b76e78a89258
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: The latest triage calls for S4 explicit Claude resume from current main. PR #3628 is already merged as 48e3865999. Current origin/main 697f85f2ff contains S1-S3 and still refuses resume in session/containment.rs. Native seat was provisioned on stale HEAD 65630e9bef, 381 commits behind origin/main with 4 lane-only commits, before S2/S3 and the session module split. Git metadata is read-only. Host must create a fresh native lane from current main with the TASK-3219 lease. Codegraph doctor reports the reviewed client missing; please supply its absolute host-deployed path. No source changes or tests.. No triage reason was given.'
+  created_at: 2026-11-28T00:47:51.554873957Z
+  modified_at: 2026-11-28T00:47:51.554873957Z
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
   author: joe
@@ -927,6 +932,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a21f9f-6d02-7fe2-91b8-b75a9c92f532
+  author: joe
+  timestamp: 2026-11-28T00:47:51.554864093Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
   branch: main
@@ -935,8 +947,3 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
-attention_reason:
-  category: blocked-dependency
-  detail: 'The latest triage calls for S4 explicit Claude resume from current main. PR #3628 is already merged as 48e3865999. Current origin/main 697f85f2ff contains S1-S3 and still refuses resume in session/containment.rs. Native seat was provisioned on stale HEAD 65630e9bef, 381 commits behind origin/main with 4 lane-only commits, before S2/S3 and the session module split. Git metadata is read-only. Host must create a fresh native lane from current main with the TASK-3219 lease. Codegraph doctor reports the reviewed client missing; please supply its absolute host-deployed path. No source changes or tests.'
-  raised_by: implementer
-  raised_at: 2026-11-19T03:04:15.494449936Z
