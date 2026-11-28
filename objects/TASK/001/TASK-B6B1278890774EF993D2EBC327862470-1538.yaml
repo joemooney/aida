@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T22:14:32.609326838Z
-modified_at: 2026-11-27T03:53:52.567142386Z
+modified_at: 2026-11-28T01:15:50.327751281Z
 req_type: Task
 tags:
 - lanes
@@ -127,6 +127,11 @@ comments:
   created_at: 2026-11-27T02:22:23.409949038Z
   modified_at: 2026-11-27T02:22:23.409949038Z
   session_id: 01a21aa5f819
+- id: 01a21fb9-0ab7-7b51-87a7-4d8a5be44a2e
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3529): aida-core/src/mailbox_lifecycle/activation.rs restart_step joins the writer''s argv unquoted into a backticked `rerun ...` command: an argument containing spaces or shell metacharacters renders a command that does not reproduce the original invocation... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:15:50.327751281Z
+  modified_at: 2026-11-28T01:15:50.327751281Z
 history:
 - id: 01a21a57-57ee-7d81-8d4f-0e8ffd37afb2
   author: joe
