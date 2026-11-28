@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: a963decc80235e4a5d15b2382fd08c3dab1b58e6
 
   find_verdicts retries a full JSON parse from every '{' in the challenger output. Adversarial output with many '{' that each start a long, deep or unterminated value costs O(n^2) parse work. The output is bounded runner text, so this is a performance note, not a correctness or safety issue. A follow-up could cap the number of attempts or the output size.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T23:58:43.363006283Z
-modified_at: 2026-11-28T01:15:38.276641530Z
+modified_at: 2026-11-28T01:15:40.921808184Z
 req_type: Task
 tags:
 - carried-from:BUG-2779
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21fb8-e5f9-7530-851e-1f2477af65b9
+  author: joe
+  timestamp: 2026-11-28T01:15:40.921805639Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: a963decc80235e4a5d15b2382fd08c3dab1b58e6
   branch: pr-4698
