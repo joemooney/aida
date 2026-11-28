@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T10:47:01.862391650Z
-modified_at: 2026-11-28T02:25:57.146179428Z
+modified_at: 2026-11-28T02:32:43.057628586Z
 req_type: Task
 tags:
 - from-implementer:BUG-2770
@@ -31,6 +31,21 @@ comments:
   content: 'APPROVED (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Give anchor-level mailbox id temps an owner record or age-floor reap path; testable.'
   created_at: 2026-11-28T00:26:42.196066403Z
   modified_at: 2026-11-28T00:26:42.196066403Z
+- id: 01a21fff-6d31-71a1-870e-40e83f360764
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: ae8d56e450
+
+    Acceptance (grooming approval: 'owner record or age-floor reap path; testable'): chose the age-floor path. leftovers.rs adds ORPHAN_TEMP_AFTER (24h) and Pass::admit_with; scan_id_temps admits an Owner::Unattributed temp past max(STALE_AFTER, min_age, 24h) without the owner judge. Evidence [behavioral-test]: leftovers_tests::an_unattributed_anchor_temp_is_reaped_past_the_orphan_floor (held Unknown at +11m, kept under --older-than 7d at +24h, reaped at +24h, checkout-owned temp with a Live owner kept). Lane job: mailbox_lifecycle::leftovers 20 passed, 0 failed.
+
+    Probes: (1) consistency: only scan_id_temps opts in; tombs, staging, asides and era markers still use admit() unchanged. (3) multiplicity: per-path loop, unchanged. (5) fail-open: an incomplete liveness view (Unknown) now lets a >24h anchor temp go. Intended: a temp is never read, carries no mail, and a writer holds it for one synced write plus a rename. Refusal paths tested: live owner kept, min_age respected. Unscoped scan() unchanged (Dead judged first, 10m floor).
+
+    Residual: the second paragraph of the description (git collision-suffixed admin names such as name1 not matching a lease by worktree basename) is not addressed here; the grooming approval scoped this task to the temps. Fixes during review: none.
+  created_at: 2026-11-28T02:32:43.057628586Z
+  modified_at: 2026-11-28T02:32:43.057628586Z
+  session_id: 01a21ff8ef73
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a217a4-df51-7bd1-b679-179793d6c41c
   author: joe

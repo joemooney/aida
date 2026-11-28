@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T20:27:39.429848017Z
-modified_at: 2026-11-28T02:20:36.677269301Z
+modified_at: 2026-11-28T02:31:15.226996194Z
 req_type: Task
 tags:
 - from-implementer:BUG-2777
@@ -24,6 +24,37 @@ comments:
   content: 'APPROVED (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Bug: auto-queue-review over-links landed specs (stale base ref); reproducible.'
   created_at: 2026-11-28T00:34:00.806456580Z
   modified_at: 2026-11-28T00:34:00.806456580Z
+- id: 01a21ffe-161b-7213-b185-e1a9fb18cc4d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: ccd6efc7d6
+
+    Root cause (confirmed on origin/main f0ad200d8c): resolve_log_range (aida-cli-lib/src/review_git_evidence.rs) kept the bare local `main` whenever the head branch resolved locally. In a seat clone, `aida ship` rebases onto origin/main but never advances local main, so `main..<branch>` carried the trailers of already-landed commits. That is the PR-4685 shape: BUG-2776, BUG-2772, TASK-3912 and STORY-3120 were linked onto its review story.
+
+    Fix: new fresher_base() uses origin/<base> when the local base is strictly behind it (rev-list --left-right --count; 0 ahead, >0 behind). A level, ahead or diverged local base, and any error, keeps the existing behaviour. The same range feeds review prompt, queue work and review_commands, so they get the same correction.
+
+    Evidence (spec has no ## Acceptance section; behavioural tests, lane job, 9 passed / 0 failed, bug_035_seat_clone_log_range_tests):
+    - rebased_seat_with_stale_local_main_logs_only_its_own_commits: the range resolves to origin/main..lane-branch and only the PR's own (BUG-7002) is listed.
+    - auto_queue_from_rebased_seat_links_only_the_prs_own_spec: end to end through try_auto_queue_pr_review_unbumped. It runs exactly one `rel add STORY-900 BUG-7002 --type implements`, and the landed BUG-7001 is never linked or listed.
+    - local_base_ahead_of_origin_is_kept: a local base holding commits origin lacks is not swapped.
+    - Existing local_head_branch_is_used_as_is (level) still passes.
+
+    Probes:
+    - P1: the comparison is purely by refs, so there is no case or normalisation drift.
+    - P2: END_OF_OPTIONS guards the range. An empty base, an origin/-prefixed base or a SHA base makes origin/<base> unresolvable, so the base is kept.
+    - P3: 0, 1 and N commits are handled.
+    - P4: diverged local main (see residual risk).
+    - P5: n/a.
+
+    Residual risks:
+    (1) If a local base has diverged from origin (local commits plus landed commits), the old range is kept and can still over-link. Seat clones do not commit to main, so I judged this acceptable.
+    (2) The fix does not remove links already written on the PR-4685 story STORY-73022632d35647cca3858b18ac0723e3-371; that needs manual `aida rel` cleanup.
+    (3) I read 'specs still open' as 'specs whose commits have not landed on main'. I added no status-based filter, because one would drop legitimate follow-up PRs on Completed specs.
+  created_at: 2026-11-28T02:31:15.226996194Z
+  modified_at: 2026-11-28T02:31:15.226996194Z
+  session_id: 01a21ff4218c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a219cb-c62c-7312-905b-6b9f14b2e870
   author: joe

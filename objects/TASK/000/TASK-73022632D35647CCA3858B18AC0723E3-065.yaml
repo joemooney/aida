@@ -1,0 +1,28 @@
+id: 01a22004-7a38-7410-af5f-86141b369364
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-065
+title: 'agent gc: a pruned worktree''s era marker misses its lease when git collision-suffixed the admin name (name1)'
+description: |
+  aida-cli-lib/src/agent_registry_root.rs LeftoverOwners::judge matches Owner::Worktree(admin) to a lease by comparing the admin name to the worktree basename. When git collision-suffixes an admin name (for example `lane` becomes `lane1`), the names differ. A live lease is then missed, and the marker's owner can be judged Dead. This was the second note in TASK-3478's description. It was left out because TASK-3478's grooming approval covered only the anchor-level temps.
+
+  Raised by the implementer while working TASK-3478.
+  Branch: task-3478-gc-mailbox-temps  ·  Commit: ae8d56e450  (PR #4777)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T02:38:14.072771244Z
+modified_at: 2026-11-28T02:38:14.072771244Z
+req_type: Task
+tags:
+- from-implementer:TASK-3478
+- kind:followup-suggestion
+- severity:minor
+filed_at:
+  code_sha: ae8d56e45084226238b180b3a7d26b913e116f0c
+  branch: task-3478-gc-mailbox-temps
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c
+  vendor: claude
+  session: 01a21ff8ef73
+  harness_version: 2.1.319 (Claude Code)
