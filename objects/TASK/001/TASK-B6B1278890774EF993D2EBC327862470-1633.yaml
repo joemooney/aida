@@ -1,0 +1,31 @@
+id: 01a22088-62b8-7bb3-b3fa-a797c0efb168
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1633
+title: 'Review follow-up: repair_journal.rs release_dead_reservations: the forge PR state is read once, unlocked, an'
+description: |-
+  From TASK-3891
+  Reviewed sha: 4e6343e0f223086bdc1445e411c9397a29bc9c38
+
+  repair_journal.rs release_dead_reservations: the forge PR state is read once, unlocked, and is not re-read under the journal lock (the entry, lease and tree are). A PR reopened between the read and the locked release is still released. The lane is dead and a present tree was salvaged, so nothing is lost, but the audit line then names a stale state. Follow-up: re-read the state under the lock, or record in the audit line that it was read before the lock.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-28T05:02:18.808476358Z
+modified_at: 2026-11-28T05:02:18.808476358Z
+req_type: Task
+tags:
+- carried-from:TASK-3891
+- finding-hash:8b6b0c9b
+- from-review:TASK-3891
+relationships:
+- rel_type: References
+  target_id: 01a2104e-54cf-7e91-872e-e5e9838f396a
+  created_at: 2026-11-28T05:02:49.356096569Z
+filed_at:
+  code_sha: 4e6343e0f223086bdc1445e411c9397a29bc9c38
+  branch: pr-4784
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c6
+  vendor: claude
+  session: 01a220849c45
