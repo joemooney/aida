@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T15:17:28.841464752Z
-modified_at: 2026-11-28T00:10:00.323691532Z
+modified_at: 2026-11-28T00:23:44.536045108Z
 req_type: Bug
 comments:
 - id: 01a21e68-91e5-7d92-8eb8-cc5493ef9ccc
@@ -153,6 +153,12 @@ comments:
   modified_at: 2026-11-28T00:10:00.323691532Z
   session_id: 01a21f6d9a8f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21f89-5898-77f3-a1b3-2865df22e37a
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-2786-s1-abandoned-sweep` at head `f37d0cb96038da2b7a0c81e62e04f255d11c8ea9`.'
+  created_at: 2026-11-28T00:23:44.536041974Z
+  modified_at: 2026-11-28T00:23:44.536041974Z
+  session_id: 01a21f6d9a8f
 history:
 - id: 01a21d95-9bce-7210-a003-d78cbc07dd29
   author: joe
