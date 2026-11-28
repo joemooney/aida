@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 1b57806527742ec4fddd3979fb37f6eb5e87368d
 
   Cosmetic: the waiting-members line in pr_train_handler_with_dispatch_ctx (aida-cli-lib/src/pr_train.rs:5501) prints '(--max N)' even when the cap came from [landing] max_prs_per_train on the automatic train, which points operators at a flag they did not pass.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T16:30:22.712232077Z
-modified_at: 2026-11-28T01:12:33.539554154Z
+modified_at: 2026-11-28T01:12:35.584537842Z
 req_type: Task
 tags:
 - carried-from:TASK-3912
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21fb6-1200-7351-bbf9-160245d2086d
+  author: joe
+  timestamp: 2026-11-28T01:12:35.584535712Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 1b57806527742ec4fddd3979fb37f6eb5e87368d
   branch: pr-4668
