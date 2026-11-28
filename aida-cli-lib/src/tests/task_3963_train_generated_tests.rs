@@ -453,9 +453,7 @@ fn regen(
 fn a_generator_timeout_or_launch_failure_refuses() {
     let f = fixture(HONEST);
     let stub = f.repo.parent().unwrap().join("slow-bwrap");
-    std::fs::write(&stub, "#!/bin/sh\nexec sleep 30\n").unwrap();
-    use std::os::unix::fs::PermissionsExt as _;
-    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+    crate::test_exec::write_executable(&stub, "#!/bin/sh\nexec sleep 30\n");
     let slow = crate::pr_train::regen::Launch {
         program: stub.into(),
         timeout: std::time::Duration::from_secs(1),
