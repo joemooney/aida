@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T04:07:56.087585344Z
-modified_at: 2026-11-28T01:04:54.082136434Z
+modified_at: 2026-11-28T01:04:58.037072785Z
 req_type: Bug
 tags:
 - ci
@@ -135,6 +135,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3473): The breach kill in run_watched is incomplete. guard() returns as soon as the direct child exits after SIGTERM, so group members that survive SIGTERM (nextest''s test processes or rustc) are never sent SIGKILL. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T01:04:40.327777697Z
   modified_at: 2026-11-28T01:04:40.327777697Z
+- id: 01a21faf-16b5-78f2-ad79-0210117fa503
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3474): When the planner''s listing breaches (main: `except ValueError` then `return 1`), the script returns without printing watch.summary(). [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:04:58.037072785Z
+  modified_at: 2026-11-28T01:04:58.037072785Z
 history:
 - id: 01a2160c-52af-7011-8abf-6c6497fc6b7c
   author: joe
