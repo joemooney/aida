@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 4c6c4a8a4988f0da8b06ebf06f57066c638aa589
 
   Test gap (reporting, non-gate): the challenger-pass branch of runner_failure ('<vendor> challenger pass, challenge batch N: ...', review_prepare.rs review_batches) is not exercised by a test; bug2775_runner_errors_name_runner_pass_batch_and_cause only drives the finder pass. Also, bug2775_run_review_agent_resolves_and_states_the_default does not assert the stated 'run review: using <vendor> from <source>' stderr line or the built-in-default branch.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T20:33:11.847535897Z
-modified_at: 2026-11-28T01:14:32.050391214Z
+modified_at: 2026-11-28T01:14:34.835202978Z
 req_type: Task
 tags:
 - carried-from:BUG-2775
@@ -43,6 +43,13 @@ history:
   author: joe
   timestamp: 2026-11-28T00:32:50.347123222Z
   changes: []
+- id: 01a21fb7-e3d3-7c52-a9e3-f22521658cf6
+  author: joe
+  timestamp: 2026-11-28T01:14:34.835200723Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 4c6c4a8a4988f0da8b06ebf06f57066c638aa589
   branch: pr-4684
