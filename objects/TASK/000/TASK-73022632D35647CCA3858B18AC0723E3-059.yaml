@@ -14,12 +14,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-27T06:09:31.745784818Z
-modified_at: 2026-11-27T06:09:31.745784818Z
+modified_at: 2026-11-28T00:37:32.471347617Z
 req_type: Task
 tags:
 - from-implementer:TASK-3924
 - kind:design-choice
 - severity:minor
+comments:
+- id: 01a21f95-fab7-72b1-95cf-80c2cb444f82
+  author: joe
+  content: 'APPROVED (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Waiter keyed to parent pid; short-lived parents release at once. Needs identity rule + tests.'
+  created_at: 2026-11-28T00:37:32.471347617Z
+  modified_at: 2026-11-28T00:37:32.471347617Z
 history:
 - id: 01a21ba6-8191-77d3-960c-90dc7a8b9eba
   author: joe
