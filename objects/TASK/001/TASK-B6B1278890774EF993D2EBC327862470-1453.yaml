@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T21:56:31.367154426Z
-modified_at: 2026-11-26T07:58:02.944686948Z
+modified_at: 2026-11-28T01:03:11.323999685Z
 req_type: Task
 tags:
 - dell1
@@ -76,6 +76,11 @@ comments:
   content: 'DOC GAP (advisor-122 2026-11-26 01:01; findings-as-comments; fold into the next docs slice that touches lanes): the TASK-3911 knobs (max_compile_concurrency, cargo_build_jobs, min_job_memory_headroom_gib) are HOST config in /etc/aida/lanes.toml (root-owned, [lanes] table, deny_unknown_fields), NOT .aida/config.toml as the spec ACs said. A repo-config PR (TASK-3915) would have been a no-op. Also add an aida doctor hint that shows the effective lane-admission values and their source file (or defaults when the file is absent). dell1 now has /etc/aida/lanes.toml = 4 / 4 / 8G plus the defaults.'
   created_at: 2026-11-26T07:58:02.944686948Z
   modified_at: 2026-11-26T07:58:02.944686948Z
+- id: 01a21fad-75dc-7c53-8e11-3e1347b9e94c
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3465): Rollout hazard (lane_admission.rs:62-64): HostConfig/Settings use deny_unknown_fields, so once the new [lanes] keys are added to /etc/aida/lanes.toml, any older aida binary still running on the host (a launcher or lane runner not yet restarted) refuses... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:03:11.323999685Z
+  modified_at: 2026-11-28T01:03:11.323999685Z
 history:
 - id: 01a214b7-0985-7a31-bf46-c7f9bea6c072
   author: joe
