@@ -1,0 +1,31 @@
+id: 01a2212c-f6d3-7200-8b8e-9d61d9ded6a4
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1644
+title: 'Review follow-up: PR-4798 body describes a different change (TASK-3959: `aida --help` overview, `review prep'
+description: |-
+  From TASK-3960
+  Reviewed sha: d27e23fa707754ff014d117cfbbb418e4e8ed09e
+
+  PR-4798 body describes a different change (TASK-3959: `aida --help` overview, `review prepare --help` rewrite, golden snapshot), not this diff (getting-started first-spec/first-review steps plus tests/test_getting_started_commands.py). Update the body so the landing record matches the change.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-28T08:02:04.627639557Z
+modified_at: 2026-11-28T08:02:04.627639557Z
+req_type: Task
+tags:
+- carried-from:TASK-3960
+- finding-hash:56bb777f
+- from-review:TASK-3960
+relationships:
+- rel_type: References
+  target_id: 01a2207e-6843-7553-b394-841b7a1925e1
+  created_at: 2026-11-28T08:02:49.384456734Z
+filed_at:
+  code_sha: d27e23fa707754ff014d117cfbbb418e4e8ed09e
+  branch: pr-4798
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0039f0fc146
+  vendor: claude
+  session: 01a22127fb31
