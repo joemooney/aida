@@ -16,6 +16,15 @@ feature: Uncategorized
 created_at: 2026-11-28T03:26:56.215965481Z
 modified_at: 2026-11-28T03:26:56.215965481Z
 req_type: Task
+relationships:
+- rel_type: Child
+  target_id: 01a22014-1672-7093-9f8f-09bbbefcbf09
+  created_at: 2026-11-28T03:27:46.030901480Z
+history:
+- id: 01a22031-de1f-7b30-a729-5d2554ae7cad
+  author: joe
+  timestamp: 2026-11-28T03:27:48.767098594Z
+  changes: []
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
   branch: main
