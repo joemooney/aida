@@ -558,6 +558,8 @@ fn fixture_with(scaffolded: bool) -> Fx {
     };
     let mut init = vec![
         "init",
+        // The fixture relies on committed scaffolding. trace:TASK-3952 | ai:claude
+        "--commit",
         "--force",
         "--no-skills",
         "--no-agent-config",

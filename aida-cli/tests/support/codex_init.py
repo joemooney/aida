@@ -49,7 +49,8 @@ def exercise(root, aida):
     git("config", "user.name", "fixture")
     git("commit", "-q", "--allow-empty", "-m", "initial")
     init = ("init", "--footprint", "full", "--agent", "codex", "--node-name", "fixture",
-            "--no-hooks", "--no-skills", "--no-post-hooks", "--no-schedule")
+            "--no-hooks", "--no-skills", "--no-post-hooks", "--no-schedule",
+            "--commit")  # trace:TASK-3952 | ai:claude — relies on committed scaffolding
     explanation = "Codex native sandbox opt-in written. Codex uses its native sandbox, not AIDA containment"
     result = terminal(*init)
     assert explanation in result, result
