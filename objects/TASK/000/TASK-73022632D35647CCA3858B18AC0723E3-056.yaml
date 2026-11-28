@@ -7,12 +7,12 @@ description: |
 
   Raised by the implementer while working BUG-2777.
   Branch: bug-2777-ejection-routing  ·  Commit: 36ffea9bc5  ·  PR #4685
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T20:27:39.429848017Z
-modified_at: 2026-11-28T05:26:32.667763496Z
+modified_at: 2026-11-28T12:51:14.203164618Z
 req_type: Task
 tags:
 - from-implementer:BUG-2777
@@ -105,6 +105,22 @@ history:
   author: joe
   timestamp: 2026-11-28T05:26:32.802080101Z
   changes: []
+- id: 01a22235-b255-7f12-97b2-f8d1d4b9ce06
+  author: aida-auto-bump
+  timestamp: 2026-11-28T12:51:14.133379351Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a22235-b29b-7671-aa9d-9f8cb3cc5e7f
+  timestamp: 2026-11-28T12:51:14.203160659Z
+  agent: aida
+  commit_sha: a7974238ffd7c76106fc7f727073b4dee4a11186
+  summary: 'TASK-3518 (no ## Acceptance section; the description is the bar: a review story must not be linked to specs whose commits already landed on main after aida ship rebased a seat branch onto a newer origin/main). PASS. Root cause and fix verified in aida-cli-lib/src/review_git_evidence.rs:224 and 250-279. When the head resolves locally, fresher_base() swaps the base for origin/<base> only when rev-list --left-right --count <base>...origin/<base> reports 0 ahead and more than 0 behind. Local base is then an ancestor of origin/<base>, so origin/<base>..head is a subset of <base>..head. The commits removed are exactly the ones already on origin/<base>, so own-PR commits are never dropped. Level, ahead or diverged bases, SHA or origin/-prefixed bases and lookup errors all keep the old behaviour; the git calls use END_OF_OPTIONS plus deadline_output. Every caller (review_prompt.rs:55, queue_cmd/work.rs:2571, review_commands.rs:3967, review_gates.rs:1053) gets the fix through git_log_messages, and none uses the returned base outside the log range. Behavioural evidence: rebased_seat_with_stale_local_main_logs_only_its_own_commits (range and messages), auto_queue_from_rebased_seat_links_only_the_prs_own_spec (end to end through try_auto_queue_pr_review_unbumped: only the PR''s own spec gets a rel add and the landed spec is never mentioned) and local_base_ahead_of_origin_is_kept (no swap); the existing local_head_branch_is_used_as_is still covers the level case. The implementer declared residual risks: the diverged local base keeps the old range, and the stale links on PR-4685 are not cleaned up. Both are outside this task''s claim. Full CI is green at the head (cli-0/1, lib-0/1, gates, contracts, rest, fast gates/compile) and merge-hold-gate passes. No actionable defects.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 36ffea9bc51797e6a523d58c668abd4888c859e1
@@ -119,3 +135,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-28T02:38:55.108096076Z
   implemented_by: dirtlab
+  completed_at: 2026-11-28T12:51:14.133372683Z
+  completion_sha: a7974238ffd7c76106fc7f727073b4dee4a11186
