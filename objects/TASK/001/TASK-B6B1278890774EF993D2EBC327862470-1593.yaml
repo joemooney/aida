@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T00:07:20.208196382Z
-modified_at: 2026-11-28T03:17:41.270133296Z
+modified_at: 2026-11-28T03:25:30.207051432Z
 req_type: Task
 relationships:
 - rel_type:
@@ -68,6 +68,12 @@ comments:
   modified_at: 2026-11-28T03:05:59.603811766Z
   session_id: 01a2200f86b5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2202f-c0df-7740-b024-696b1597d54f
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3937-ratchet-only-set` at head `3ec0cbc920ef1ded84799704064ae102e2f45329`.'
+  created_at: 2026-11-28T03:25:30.207045665Z
+  modified_at: 2026-11-28T03:25:30.207045665Z
+  session_id: 01a2200f86b5
 history:
 - id: 01a2200f-c274-7b13-9095-9db5a621a6dd
   author: aida-session-start
