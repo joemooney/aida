@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:25.538710401Z
-modified_at: 2026-11-13T03:32:46.062462235Z
+modified_at: 2026-11-28T00:47:36.632223877Z
 req_type: Story
 relationships:
 - rel_type: Supersedes
@@ -325,6 +325,11 @@ comments:
   modified_at: 2026-11-13T02:57:45.311103994Z
   session_id: 01a1d240-c397-7b61-b29f-bb337c138943
   harness_version: 2.1.323 (Claude Code)
+- id: 01a21f9f-32b8-7800-a81d-358ec709c7d3
+  author: joe
+  content: 'AC verification vs origin/main (product-15 2026-11-27, per advisor aida-d3 17:45/17:58): NOT complete, only slice 1 shipped (finding/verdict envelopes, isolated transport, home processing + retry recovery). GAP: merge block on unprocessed/open blocking digests; operator-attested approval; supersession and replay rules (docs/cli/02-specs.md:558 lists them as later slices). Returned to Approved.'
+  created_at: 2026-11-28T00:47:36.632223877Z
+  modified_at: 2026-11-28T00:47:36.632223877Z
 history:
 - id: 01a1aa0a-8ae7-7523-b84e-68f1c2e158c7
   author: joe
