@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 02ed97be57e00b936cfb972411934302f69ce733
 
   TASK-3917 follow-up: the read-only pre-scan (AutomaticPrescan::admits, LiveChecks read_only=true/request_full=false, pr_train.rs ~5830) refuses a PR whose full-tier CI is Missing or Failed without the side effect the real pass has in full_tier_gate (pr_train.rs ~1818, TASK-3105: request a full-tier run). If every open PR is refused that way, train_wanted returns false, the real pass never runs, and the auto-train never requests or retries the full run. review_watch's promotion pass still makes the first request for approved PRs, but its per-head receipt stops a retry after a flaked full run, so an approved PR can stall until someone relabels it. This was partly true already under BUG-2769's legacy gate. Fix: have the pre-scan count a Missing/Failed full tier on an otherwise-admissible PR as wanted (or perform the request), and add a test.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T13:54:07.833105148Z
-modified_at: 2026-11-28T01:10:14.106644428Z
+modified_at: 2026-11-28T01:10:16.465431330Z
 req_type: Task
 tags:
 - carried-from:TASK-3917
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21fb3-f291-7982-9714-22299210b6e8
+  author: joe
+  timestamp: 2026-11-28T01:10:16.465428945Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 02ed97be57e00b936cfb972411934302f69ce733
   branch: pr-4656
