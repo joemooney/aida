@@ -1,0 +1,31 @@
+id: 01a22177-4ebf-7391-a29a-7c50d7507e05
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1657
+title: 'Review follow-up: aida-cli-lib/src/pr_train_verified.rs verify_structure checks the regen commit but does no'
+description: |-
+  From TASK-3963
+  Reviewed sha: 1df06dd6599bc217b4f072c85c494af648c96fbf
+
+  aida-cli-lib/src/pr_train_verified.rs verify_structure checks the regen commit but does not add it, or its report, to the returned proof vector. The coverage-audit proof lists the cars and the tip but has no per-commit record of the regen commit.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-28T09:23:16.799662627Z
+modified_at: 2026-11-28T09:23:16.799662627Z
+req_type: Task
+tags:
+- carried-from:TASK-3963
+- finding-hash:c34c7954
+- from-review:TASK-3963
+relationships:
+- rel_type: References
+  target_id: 01a22146-3192-7311-ba67-22c16846dd7c
+  created_at: 2026-11-28T09:23:34.861613127Z
+filed_at:
+  code_sha: 1df06dd6599bc217b4f072c85c494af648c96fbf
+  branch: pr-4808
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6d3ca942ec2
+  vendor: claude
+  session: 01a2216f6457

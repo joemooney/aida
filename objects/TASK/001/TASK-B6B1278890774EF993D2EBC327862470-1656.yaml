@@ -1,0 +1,31 @@
+id: 01a22177-06e9-7b70-b4f8-09f3ac7bd2ba
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1656
+title: 'Review follow-up: Sketch section 4 says the refusal reason is ''printed and journaled'' and that a path writte'
+description: |-
+  From TASK-3963
+  Reviewed sha: 1df06dd6599bc217b4f072c85c494af648c96fbf
+
+  Sketch section 4 says the refusal reason is 'printed and journaled' and that a path written outside the outputs triggers an advisor mail naming it. regen::regenerate only eprintln!s the refusal; neither the train journal nor the mailbox records it. That is acceptable for S1, where a refusal leaves the train as built, but it should be tracked.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-28T09:22:58.409628381Z
+modified_at: 2026-11-28T09:22:58.409628381Z
+req_type: Task
+tags:
+- carried-from:TASK-3963
+- finding-hash:3f56f343
+- from-review:TASK-3963
+relationships:
+- rel_type: References
+  target_id: 01a22146-3192-7311-ba67-22c16846dd7c
+  created_at: 2026-11-28T09:23:16.513892751Z
+filed_at:
+  code_sha: 1df06dd6599bc217b4f072c85c494af648c96fbf
+  branch: pr-4808
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6d3ca942ec2
+  vendor: claude
+  session: 01a2216f6457
