@@ -11,13 +11,21 @@ description: |-
   - AC1: root-cause it; an unknown-process holder ALWAYS blocks acquire until it is positively proven stale (fail closed); no wall-clock/mtime edge can make it look absent.
   - AC2: the test uses an isolated lock dir and no shared env; a loop-100 regression (the test repeated 100x in one run) passes.
   - AC3: if the race is real in production code, say so in the PR and add a test that reproduces it deterministically (injected clock).
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T12:11:28.956447070Z
-modified_at: 2026-11-28T12:11:28.956447070Z
+modified_at: 2026-11-28T12:15:35.615018065Z
 req_type: Bug
+history:
+- id: 01a22215-10bf-7693-82e5-1e9ec2ff8e06
+  author: aida-session-start
+  timestamp: 2026-11-28T12:15:35.615017181Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6f4bd7e2493be2ecd3d53b1b5baf26803d64abc3
   branch: main
