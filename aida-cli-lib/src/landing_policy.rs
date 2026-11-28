@@ -110,6 +110,11 @@ pub(crate) const DEFAULT_RED_MAIN_FIX_WINDOW: std::time::Duration =
 // trace:TASK-3912 | ai:claude
 pub(crate) const DEFAULT_AUTO_TRAIN_MAX: usize = 10;
 
+/// The `[landing]` key that lets the automatic train land supervised PRs
+/// under an active mandate.
+// trace:STORY-3181 | ai:claude
+pub(crate) const AUTO_TRAIN_SUPERVISED_KEY: &str = "auto_train_supervised_under_mandate";
+
 /// The resolved `[landing]` policy.
 // trace:STORY-2897 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -132,6 +137,11 @@ pub(crate) struct LandingPolicy {
     /// [`DEFAULT_AUTO_TRAIN_MAX`].
     // trace:TASK-3912 | ai:claude
     pub(crate) max_prs_per_train: Option<usize>,
+    /// `auto_train_supervised_under_mandate`: whether the automatic train
+    /// may land a supervised PR that an active mandate covers. Off (the
+    /// default), the automatic pass refuses every supervised PR.
+    // trace:STORY-3181 | ai:claude
+    pub(crate) auto_train_supervised_under_mandate: bool,
     /// Values that fell back to their default, each with its reason.
     pub(crate) warnings: Vec<String>,
     /// Keys the config sets validly (`required_checks.<mode>` for lists).
@@ -160,6 +170,7 @@ impl Default for LandingPolicy {
             review_gated_checks: owned(DEFAULT_REVIEW_GATED_CHECKS),
             red_main_fix_window: DEFAULT_RED_MAIN_FIX_WINDOW,
             max_prs_per_train: None,
+            auto_train_supervised_under_mandate: false,
             warnings: Vec::new(),
             explicit: Vec::new(),
             invalid: Vec::new(),
@@ -251,6 +262,22 @@ impl LandingPolicy {
                 }
             }
         }
+        // trace:STORY-3181 | ai:claude
+        if let Some(value) = section.get(AUTO_TRAIN_SUPERVISED_KEY) {
+            match value.as_bool() {
+                Some(on) => {
+                    policy.auto_train_supervised_under_mandate = on;
+                    policy.explicit.push(AUTO_TRAIN_SUPERVISED_KEY);
+                }
+                None => {
+                    policy.invalid.push(AUTO_TRAIN_SUPERVISED_KEY);
+                    policy.warnings.push(format!(
+                        "`[landing] {AUTO_TRAIN_SUPERVISED_KEY}` must be true or false; using \
+                         false"
+                    ));
+                }
+            }
+        }
         // trace:STORY-2897 | ai:claude
         if let Some(red_main) = section.get("red_main") {
             match red_main.get("fix_window").map(fix_window) {
@@ -321,6 +348,25 @@ impl LandingPolicy {
             }
         }
         policy
+    }
+
+    /// Why the automatic train does not land a supervised PR under this
+    /// policy, or `None` once it may. Off, the refusal names the setting.
+    /// On, the landing path is not built yet (the mandate cover and the
+    /// pre-merge recheck come in later slices), so it still refuses.
+    // trace:STORY-3181 | ai:claude
+    pub(crate) fn auto_train_supervised_refusal(&self) -> Option<String> {
+        Some(if self.auto_train_supervised_under_mandate {
+            format!(
+                "`[landing] {AUTO_TRAIN_SUPERVISED_KEY}` is on, but this build of the automatic \
+                 train does not land supervised PRs yet; a human ships it"
+            )
+        } else {
+            format!(
+                "the automatic train does not land supervised PRs (`[landing] \
+                 {AUTO_TRAIN_SUPERVISED_KEY}` is off); a human ships it"
+            )
+        })
     }
 
     /// Where a knob's effective value came from: `Explicit` when the
@@ -522,6 +568,13 @@ pub(crate) fn policy_change_refusal(
             after.merger.as_str()
         ));
     }
+    // trace:STORY-3181 | ai:claude
+    if before.auto_train_supervised_under_mandate != after.auto_train_supervised_under_mandate {
+        changed.push(format!(
+            "{AUTO_TRAIN_SUPERVISED_KEY} {} -> {}",
+            before.auto_train_supervised_under_mandate, after.auto_train_supervised_under_mandate
+        ));
+    }
     (!changed.is_empty()).then(|| {
         format!(
             "{subject} is not merged here: the landing policy changed while it waited ({}); \
@@ -679,6 +732,61 @@ mod story2897_landing_policy_tests {
         assert!(
             why.contains("mode review-gated -> ci-gated")
                 && why.contains("merger any-non-author -> advisor"),
+            "{why}"
+        );
+    }
+
+    // trace:STORY-3181 | ai:claude
+    #[test]
+    fn story3181_auto_train_supervised_knob_defaults_off_and_refuses() {
+        let p = parse("[landing]\n");
+        assert!(!p.auto_train_supervised_under_mandate);
+        assert_eq!(p.origin(AUTO_TRAIN_SUPERVISED_KEY), Origin::Default);
+        let why = p.auto_train_supervised_refusal().expect("off refuses");
+        assert!(
+            why.contains("`[landing] auto_train_supervised_under_mandate` is off"),
+            "{why}"
+        );
+        let p = parse("[landing]\nauto_train_supervised_under_mandate = true # S6\n");
+        assert!(p.auto_train_supervised_under_mandate);
+        assert_eq!(p.origin(AUTO_TRAIN_SUPERVISED_KEY), Origin::Explicit);
+        // Not yet a landing path: on still refuses, naming the setting.
+        let why = p
+            .auto_train_supervised_refusal()
+            .expect("on refuses until S2");
+        assert!(
+            why.contains("is on, but") && why.contains(AUTO_TRAIN_SUPERVISED_KEY),
+            "{why}"
+        );
+        for bad in ["\"true\"", "1", "\"yes\""] {
+            let p = parse(&format!(
+                "[landing]\nauto_train_supervised_under_mandate = {bad}\n"
+            ));
+            assert!(!p.auto_train_supervised_under_mandate, "{bad}");
+            assert_eq!(
+                p.origin(AUTO_TRAIN_SUPERVISED_KEY),
+                Origin::Invalid,
+                "{bad}"
+            );
+            assert!(p.warnings[0].contains("must be true or false"), "{bad}");
+        }
+    }
+
+    // trace:STORY-3181 | ai:claude
+    #[test]
+    fn story3181_a_knob_flip_during_the_wait_refuses_the_merge() {
+        let before = LandingPolicy::default();
+        let after = from_body(Some(
+            "[landing]\nauto_train_supervised_under_mandate = true\n",
+        ));
+        let why = policy_change_refusal(&before, &after, "PR-9").expect("refused");
+        assert!(
+            why.contains("auto_train_supervised_under_mandate false -> true"),
+            "{why}"
+        );
+        let why = policy_change_refusal(&after, &before, "PR-9").expect("refused");
+        assert!(
+            why.contains("auto_train_supervised_under_mandate true -> false"),
             "{why}"
         );
     }

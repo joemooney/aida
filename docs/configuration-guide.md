@@ -61,6 +61,9 @@ The [setup reference](cli/07-project-setup.md), [roles and sessions](cli/06-role
 <!-- trace:TASK-3912 | ai:claude -->
 `[landing] max_prs_per_train` (default `10`) caps how many PRs the automatic merge train admits into one train; the rest wait for the next train, in order. A smaller train is cheaper to bisect when one member turns it red. An explicit `aida pr train N...` is not limited by it; pass `--max` there.
 
+<!-- trace:STORY-3181 | ai:claude -->
+`[landing] auto_train_supervised_under_mandate` (default `false`) decides whether the automatic merge train may land a supervised PR that an active mandate covers. While it is `false`, the automatic train leaves every supervised PR for a human. If the setting changes on the default branch while a merge waits, that merge is refused and runs again under the new value. The landing path for `true` is not available yet, so the automatic train still leaves those PRs for a human. A manual `aida pr train` is unchanged.
+
 AIDA reads these from the default branch only, and `aida config show` lists the effective values with their source. A value AIDA does not recognise falls back to `ci-gated`, with a warning. See [Landing approved work](advanced/landing.md#landing-modes) for what each mode does, and [Who may do what](advanced/authority-and-seats.md) for who may merge.
 
 ## Unset execution mode

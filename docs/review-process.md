@@ -309,9 +309,9 @@ The optional CLI ledger check accounts for each reviewable file as reviewed or s
 
 The finder agent is chosen in this order:
 
-1. `--agent claude` or `--agent codex`.
+1. `--agent claude`, `--agent codex` or `--agent agy`. agy runs only when you name it here: it is never the default and never the automatic challenger until its tool confinement is verified.
 2. `AIDA_REVIEW_RUNNER_CMD`, when set and non-empty: your own command runs both passes, with `AIDA_REVIEW_PASS` set to `review` or `challenger`.
-3. `vendor` in `[agents]`: the project's `.aida/agents.toml`, then `.aida/config.toml`, then your `~/.aida/agents.toml` (claude or codex only).
+3. `vendor` in `[agents]`, read only from trusted config: the merge base's `.aida/agents.toml`, then the merge base's `.aida/config.toml`, then your `~/.aida/agents.toml` (claude or codex only). The checkout under review is never read, so a change cannot pick its own reviewer.
 4. claude, the built-in default.
 
 The command prints the agent it picked and where the choice came from, for example `run review: using claude from [agents] vendor`.

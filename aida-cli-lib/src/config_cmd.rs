@@ -912,6 +912,16 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
             reason: "landing policy is read from the default branch only: change it in a reviewed PR to the project config",
         },
     },
+    // trace:STORY-3181 | ai:claude
+    KnobSpec {
+        section: "landing",
+        key: "auto_train_supervised_under_mandate",
+        doc: "Whether the automatic merge train may land a supervised PR that an active mandate covers. Off (the default), the automatic train leaves every supervised PR for a human; a manual `aida pr train` is unchanged.",
+        default: "false",
+        edit: EditSafety::ReadOnly {
+            reason: "landing policy is read from the default branch only: change it in a reviewed PR to the project config",
+        },
+    },
     // trace:STORY-3038 | ai:codex
     KnobSpec {
         section: "gate.unset_mode",
@@ -3496,6 +3506,11 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
                 ),
                 // trace:TASK-3912 | ai:claude
                 row("max_prs_per_train", policy.auto_train_max().to_string()),
+                // trace:STORY-3181 | ai:claude
+                row(
+                    crate::landing_policy::AUTO_TRAIN_SUPERVISED_KEY,
+                    policy.auto_train_supervised_under_mandate.to_string(),
+                ),
             ],
         }
     });

@@ -65,6 +65,8 @@ pub const AMBIENT_AIDA_KEYS: &[&str] = &[
     "AIDA_AGENT_TYPE",
     "AIDA_AI_TOOL",
     "AIDA_AUTHOR",
+    // Operator-set path to the autobuild cron log; read-only (BUG-2787).
+    "AIDA_AUTOBUILD_LOG",
     "AIDA_BIN",
     "AIDA_BUILD_PROFILE",
     "AIDA_CACHE_LOCK_EXPECTED_SECS",
