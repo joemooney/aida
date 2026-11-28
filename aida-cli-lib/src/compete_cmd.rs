@@ -1418,12 +1418,9 @@ fn exclude_compete_logs_in_worktree(worktree_dir: &std::path::Path) {
 /// Is `name` an executable on PATH? Cheap probe via `<name> --version`, matching
 /// every other launcher's availability check in this crate.
 // trace:STORY-659
+// trace:TASK-3965 | ai:claude
 fn binary_on_path(name: &str) -> bool {
-    std::process::Command::new(name)
-        .arg("--version")
-        .output_retrying_etxtbsy()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    crate::version_probe_available(name)
 }
 
 // trace:BUG-2172 | ai:codex

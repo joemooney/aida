@@ -72,6 +72,77 @@ pub(crate) fn command_output_with_timeout_io(
     run_bounded(cmd, timeout, u64::MAX, false, false).map(|(out, _, _)| out)
 }
 
+/// How long a `<cli> --version` availability probe may run. An agent CLI
+/// that waits on a TTY, a login or the network in CI used to hold `aida init`
+/// until the CI job's 45-minute limit killed it.
+// trace:TASK-3965 | ai:claude
+pub(crate) const VERSION_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Result of [`probe_version`].
+// trace:TASK-3965 | ai:claude
+pub(crate) enum VersionProbe {
+    /// The program exited; its status may still be non-zero.
+    Answered(std::process::Output),
+    /// The program could not be started (not installed, not executable).
+    Missing,
+    /// The program was killed after not answering within the bound.
+    TimedOut,
+}
+
+impl VersionProbe {
+    /// The `--version` banner (stdout then stderr) of a successful run.
+    pub(crate) fn banner(&self) -> Option<String> {
+        match self {
+            Self::Answered(out) if out.status.success() => Some(format!(
+                "{}{}",
+                String::from_utf8_lossy(&out.stdout),
+                String::from_utf8_lossy(&out.stderr)
+            )),
+            _ => None,
+        }
+    }
+}
+
+/// The one way to run `<program> --version`: stdin is /dev/null, the run is
+/// bounded by `timeout`, and the whole process group is killed at the bound.
+// trace:TASK-3965 | ai:claude
+pub(crate) fn probe_version_within(
+    program: impl AsRef<std::ffi::OsStr>,
+    timeout: std::time::Duration,
+) -> VersionProbe {
+    let program = program.as_ref();
+    let mut cmd = std::process::Command::new(program);
+    cmd.arg("--version").stdin(std::process::Stdio::null());
+    match command_output_with_timeout_io(cmd, timeout) {
+        Ok(BoundedCommandOutput::Completed(out)) => VersionProbe::Answered(out),
+        Ok(BoundedCommandOutput::TimedOut) => {
+            eprintln!(
+                "Note: {}",
+                version_probe_timeout_message(&program.to_string_lossy(), timeout)
+            );
+            VersionProbe::TimedOut
+        }
+        Ok(BoundedCommandOutput::SpawnFailed) | Err(_) => VersionProbe::Missing,
+    }
+}
+
+/// [`probe_version_within`] at [`VERSION_PROBE_TIMEOUT`].
+pub(crate) fn probe_version(program: impl AsRef<std::ffi::OsStr>) -> VersionProbe {
+    probe_version_within(program, VERSION_PROBE_TIMEOUT)
+}
+
+/// True when `program --version` exits 0 within [`VERSION_PROBE_TIMEOUT`].
+pub(crate) fn version_probe_available(program: impl AsRef<std::ffi::OsStr>) -> bool {
+    probe_version(program).banner().is_some()
+}
+
+pub(crate) fn version_probe_timeout_message(program: &str, timeout: std::time::Duration) -> String {
+    format!(
+        "`{program}` did not answer --version within {}s; treating it as unavailable.",
+        timeout.as_secs()
+    )
+}
+
 /// Retain stderr collected after killing a scheduled child for phase diagnostics.
 // trace:BUG-2667 | ai:codex
 pub(crate) fn command_output_with_timeout_stderr(

@@ -2275,19 +2275,12 @@ pub(crate) static SCAFFOLD: crate::cmdkit::CommandReg = crate::cmdkit::CommandRe
 };
 
 pub(crate) fn installed_codex_version() -> Option<(u64, u64, u64)> {
-    let out = std::process::Command::new("codex")
-        .arg("--version")
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    let banner = format!(
-        "{}{}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
-    );
-    parse_codex_semver(&banner)
+    installed_codex_version_of("codex")
+}
+
+// trace:TASK-3965 | ai:claude
+pub(crate) fn installed_codex_version_of(program: &str) -> Option<(u64, u64, u64)> {
+    parse_codex_semver(&crate::probe_version(program).banner()?)
 }
 
 pub(crate) fn parse_codex_semver(raw: &str) -> Option<(u64, u64, u64)> {
