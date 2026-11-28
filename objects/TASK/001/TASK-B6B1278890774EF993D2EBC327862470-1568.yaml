@@ -10,12 +10,12 @@ description: |
   - AC2: agy_auth_probe classifies a Timeout by a TYPED deadline error from RunnerCall::run (as AuthRequired does), not `contains("deadline")`. Test: a failing fake agy whose stderr says "deadline" → Failed; a real deadline → Timeout.
   - AC3: the KeyringOnly fix text says "sign in once from an ssh session (`ssh -t <host> agy`), which writes ~/.gemini/antigravity-cli/antigravity-oauth-token" (agy uses FILE token storage under SSH and the keyring otherwise; the live dell1 finding), not `env -u DBUS_SESSION_BUS_ADDRESS`. Test the text.
   - AC4: docs/review-process.md lists `--agent agy` (explicit only: never a default or an automatic challenger until its confinement is verified) and states that `[agents] vendor` is read from the merge base / trusted config, never the PR checkout.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-27T10:10:23.089170025Z
-modified_at: 2026-11-28T00:47:01.787678980Z
+modified_at: 2026-11-28T00:47:25.089330096Z
 req_type: Task
 tags:
 - agy
@@ -47,6 +47,13 @@ history:
   author: joe
   timestamp: 2026-11-27T10:15:57.199047833Z
   changes: []
+- id: 01a21f9f-05a1-7231-bd87-e28f60c5a137
+  author: joe
+  timestamp: 2026-11-28T00:47:25.089327733Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 execution_mode: drain
 filed_at:
   code_sha: 2e8ddd85c03548d81f785070961c6879a2ab58be
@@ -55,3 +62,6 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 5e565715f20
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-28T00:47:25.089264405Z
