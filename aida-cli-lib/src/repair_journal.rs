@@ -150,6 +150,23 @@ pub(crate) trait DeadReservationProbe {
     fn salvage(&mut self, main: &Path, tree: &Path) -> Result<PathBuf>;
 }
 
+/// The only forge reading that may release a reservation: a settled status.
+/// A refusal (`Known(Err)`), an unsettled read or an unreachable forge is
+/// `None`, which keeps the reservation.
+// trace:TASK-3891 | ai:claude
+pub(crate) fn settled_pr_state(
+    observed: crate::forge_observed::Observed<
+        std::result::Result<crate::forge::ChangeStatus, String>,
+    >,
+) -> Option<ChangeState> {
+    match observed {
+        crate::forge_observed::Observed::Known(Ok(status)) => Some(status.state),
+        crate::forge_observed::Observed::Known(Err(_))
+        | crate::forge_observed::Observed::Pending(_)
+        | crate::forge_observed::Observed::Transient(_) => None,
+    }
+}
+
 /// The forge and the complete clone salvage (patch plus a bundle of every
 /// commit origin lacks).
 // trace:TASK-3891 | ai:claude
@@ -163,10 +180,7 @@ impl DeadReservationProbe for ForgeProbe {
             base: String::new(),
             title: None,
         };
-        match crate::forge::forge_for(main).observe_change_status(&change) {
-            crate::forge_observed::Observed::Known(Ok(status)) => Some(status.state),
-            _ => None,
-        }
+        settled_pr_state(crate::forge::forge_for(main).observe_change_status(&change))
     }
     fn salvage(&mut self, main: &Path, tree: &Path) -> Result<PathBuf> {
         crate::seat_clone::salvage_complete(main, tree)
@@ -337,13 +351,26 @@ impl RepairGuard {
             .filter(|e| e.spawn != SpawnOutcome::ProvenDead)
             .map(|e| {
                 let id = reservation_id(e);
-                let summary = format!(
+                let mut summary = format!(
                     "reserved lane {}, tree {}",
                     e.lane_id,
                     e.tree_path.display()
                 );
-                let action =
+                let attested =
                     format!("aida doctor heal repair-reservations --id {id} --attest '<reason>'");
+                // A dead lane is the local half of the unattested sweep's
+                // proof; the forge half (CLOSED or MERGED) is read at heal.
+                // trace:TASK-3891 | ai:claude
+                let action = if reservation_lease(e).is_ok() {
+                    summary.push_str(&format!(
+                        "; lane dead: `aida doctor heal repair-reservations` releases it \
+                         if PR #{} is CLOSED or MERGED, otherwise run `{attested}`",
+                        e.key.pr
+                    ));
+                    "aida doctor heal repair-reservations".to_owned()
+                } else {
+                    attested
+                };
                 crate::DoctorFinding {
                     category: "repair-reservations".into(),
                     action,
@@ -1422,6 +1449,116 @@ mod tests {
         }
         assert!(probe.salvaged.is_empty());
         assert!(RepairGuard::lock(main).unwrap().journal.releases.is_empty());
+    }
+
+    type StatusRead =
+        crate::forge_observed::Observed<std::result::Result<crate::forge::ChangeStatus, String>>;
+
+    fn status_read(state: ChangeState) -> StatusRead {
+        crate::forge_observed::Observed::Known(Ok(crate::forge::ChangeStatus {
+            state,
+            mergeable: crate::forge_observed::Observed::Known(true),
+            review: crate::forge::ReviewDecision::None,
+            head_sha: "a".repeat(40),
+        }))
+    }
+
+    fn unsettled_reads() -> [StatusRead; 3] {
+        use crate::forge_observed::Observed;
+        [
+            Observed::Known(Err("not found".into())),
+            Observed::Pending("not settled".into()),
+            Observed::Transient("timeout".into()),
+        ]
+    }
+
+    // The production mapping ForgeProbe uses: only a settled status names a
+    // PR state; a refusal, an unsettled read or an unreachable forge is None.
+    // trace:TASK-3891 | ai:claude
+    #[test]
+    fn task_3891_settled_pr_state_maps_only_known_status() {
+        for state in [ChangeState::Open, ChangeState::Closed, ChangeState::Merged] {
+            assert_eq!(settled_pr_state(status_read(state)), Some(state));
+        }
+        for read in unsettled_reads() {
+            assert_eq!(settled_pr_state(read.clone()), None, "{read:?}");
+        }
+    }
+
+    /// A probe whose PR state goes through the production mapping.
+    // trace:TASK-3891 | ai:claude
+    struct ObservedProbe {
+        reads: std::collections::HashMap<u64, StatusRead>,
+    }
+    impl DeadReservationProbe for ObservedProbe {
+        fn pr_state(&mut self, _: &Path, pr: u64) -> Option<ChangeState> {
+            settled_pr_state(self.reads[&pr].clone())
+        }
+        fn salvage(&mut self, main: &Path, tree: &Path) -> Result<PathBuf> {
+            Ok(main.join("salvage").join(tree.file_name().unwrap()))
+        }
+    }
+
+    // Invariant: an Unknown forge state (refused, pending or unreachable)
+    // always keeps the reservation; a settled CLOSED read releases it.
+    // trace:TASK-3891 | ai:claude
+    #[test]
+    fn task_3891_unsettled_forge_reads_keep_the_reservation() {
+        let temp = tempfile::tempdir().unwrap();
+        let main = temp.path();
+        let mut reads: std::collections::HashMap<u64, StatusRead> =
+            [(10, status_read(ChangeState::Closed))].into();
+        let released = reserve_pr(main, 10);
+        let mut kept = vec![];
+        for (pr, read) in (11..).zip(unsettled_reads()) {
+            kept.push(reserve_pr(main, pr));
+            reads.insert(pr, read);
+        }
+        let lines =
+            RepairGuard::release_dead_reservations(main, &mut ObservedProbe { reads }).unwrap();
+        assert_eq!(lines.len(), 4, "{lines:?}");
+        assert!(lines[0].starts_with("released "), "{}", lines[0]);
+        assert_eq!(spawn_of(main, &released), SpawnOutcome::ProvenDead);
+        for (line, entry) in lines[1..].iter().zip(&kept) {
+            assert!(line.contains("state is unknown"), "{line}");
+            assert_eq!(spawn_of(main, entry), SpawnOutcome::Started);
+        }
+        assert_eq!(RepairGuard::lock(main).unwrap().journal.releases.len(), 1);
+    }
+
+    // The doctor finding points a dead lane at the bare sweep and a live
+    // one at the attested path.
+    // trace:TASK-3891 | ai:claude
+    #[test]
+    fn task_3891_finding_advertises_bare_sweep_for_dead_lanes() {
+        let temp = tempfile::tempdir().unwrap();
+        let main = temp.path();
+        let dead = reserve_pr(main, 20);
+        let live = reserve_pr(main, 21);
+        std::fs::create_dir(&live.tree_path).unwrap();
+        std::fs::create_dir_all(crate::leases::leases_dir(main)).unwrap();
+        let lease = serde_json::json!({"id":live.lane_id,"scope":"BUG-2669","slug":"bug-2669","owner":"implementer","worktree_path":live.tree_path,"branch":live.branch,"started_at":"2026-01-01T00:00:00Z","hostname":"host","pid_namespace":aida_core::pid_observer::PidObserver::current().namespace,"active_pid":std::process::id()});
+        std::fs::write(
+            crate::leases::lease_path(main, &live.lane_id),
+            toml::to_string(&lease).unwrap(),
+        )
+        .unwrap();
+        let findings = RepairGuard::lock(main).unwrap().repair_findings();
+        assert_eq!(findings.len(), 2);
+        assert_eq!(findings[0].id, reservation_id(&dead));
+        assert_eq!(findings[0].action, "aida doctor heal repair-reservations");
+        assert!(
+            findings[0].summary.contains("PR #20 is CLOSED or MERGED")
+                && findings[0].summary.contains("--attest"),
+            "{}",
+            findings[0].summary
+        );
+        let live_id = reservation_id(&live);
+        assert_eq!(
+            findings[1].action,
+            format!("aida doctor heal repair-reservations --id {live_id} --attest '<reason>'")
+        );
+        assert!(!findings[1].summary.contains("lane dead"));
     }
 
     fn reserved(main: &Path, head: &str) -> RepairKey {
