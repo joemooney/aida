@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T21:10:54.633999802Z
-modified_at: 2026-11-28T01:08:01.632801984Z
+modified_at: 2026-11-28T01:08:14.447906343Z
 req_type: Story
 tags:
 - planning
@@ -44,6 +44,10 @@ relationships:
 - rel_type: Supersedes
   target_id: 01a21732-9b01-76b2-8e9a-0d767aafa9d5
   created_at: 2026-11-28T01:06:42.444573925Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a217b5-ed1f-71e1-9708-c07b6790f748
+  created_at: 2026-11-28T01:08:14.447847044Z
   created_by: joe
 comments:
 - id: 01a21493-b837-75d2-8ea7-8347173187bc
@@ -345,6 +349,10 @@ history:
 - id: 01a21fb0-b547-7d90-af07-ab4d6a6b98f9
   author: joe
   timestamp: 2026-11-28T01:06:44.167436731Z
+  changes: []
+- id: 01a21fb2-1ccf-7c71-bb9d-c6915f621cf8
+  author: joe
+  timestamp: 2026-11-28T01:08:16.207608382Z
   changes: []
 processing_record:
 - id: 01a21803-a7e1-7f22-af1d-278d1a19226e
