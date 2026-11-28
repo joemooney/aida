@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:23:40.514113789Z
-modified_at: 2026-11-28T01:17:24.517557527Z
+modified_at: 2026-11-28T01:17:36.531846137Z
 req_type: Task
 tags:
 - admission
@@ -25,6 +25,10 @@ relationships:
   target_id: 01a21bd3-5f3a-73c0-8675-6f128965e03a
   created_at: 2026-11-27T07:06:29.317892768Z
   created_by: dirtlab
+- rel_type: Supersedes
+  target_id: 01a21ba8-5be3-75a2-bdcf-e0f5529425b2
+  created_at: 2026-11-28T01:17:36.531792427Z
+  created_by: joe
 comments:
 - id: 01a21b44-174c-73e0-a5ad-dc8e6a3a9858
   author: joe
@@ -135,6 +139,10 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a21fba-b064-7e23-a5b9-a5f5e360b426
+  author: joe
+  timestamp: 2026-11-28T01:17:38.276235861Z
+  changes: []
 processing_record:
 - id: 01a21be7-7b1f-70f3-9734-eec83366b78b
   timestamp: 2026-11-27T07:28:04.895281270Z
