@@ -390,6 +390,16 @@ fn fixture_git(repo: &std::path::Path, args: &[&str]) -> String {
 /// A base whose `build.py` is `generator`, and a two-car train where each
 /// car edits a different guide, so the tip's search data is stale.
 fn fixture(generator: &str) -> Fixture {
+    fixture_mode(generator, false)
+}
+
+/// The base's reviewed store-writers ledger.
+const LEDGER: &str = "version = 2\nwriter = [\n  { id = \"a\", disposition = \"host_only\" },\n]\n";
+const SEARCH: &str = "docs/showcase/search-data.js";
+const STALE: &[u8] = b"a\nb\n";
+
+/// [`fixture`], with the search data tracked as 100755 when `exec`.
+fn fixture_mode(generator: &str, exec: bool) -> Fixture {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().join("repo");
     let secret = dir.path().join("secret.txt");
@@ -405,7 +415,15 @@ fn fixture(generator: &str) -> Fixture {
     for (name, body) in [("a.md", "a\n"), ("b.md", "b\n")] {
         std::fs::write(repo.join("docs").join(name), body).unwrap();
     }
-    std::fs::write(repo.join("docs/showcase/search-data.js"), "a\nb\n").unwrap();
+    std::fs::write(repo.join(SEARCH), STALE).unwrap();
+    std::fs::create_dir_all(repo.join("scripts")).unwrap();
+    std::fs::write(repo.join("scripts/store-writers.toml"), LEDGER).unwrap();
+    #[cfg(unix)]
+    if exec {
+        use std::os::unix::fs::PermissionsExt as _;
+        let mode = std::fs::Permissions::from_mode(0o755);
+        std::fs::set_permissions(repo.join(SEARCH), mode).unwrap();
+    }
     git(&["add", "."]);
     git(&["commit", "-qm", "base"]);
     let base = git(&["rev-parse", "HEAD"]);
@@ -556,4 +574,203 @@ fn task_3963_bwrap_a_generator_writing_outside_its_outputs_refuses() {
     let f = fixture("open('docs/x.md', 'w').write('x')\n");
     let refused = regen(&f, &f.train, &crate::pr_train::regen::Launch::default()).unwrap_err();
     assert!(refused.contains("unregistered outputs"), "{refused}");
+}
+
+fn sha(bytes: &[u8]) -> String {
+    use sha2::Digest as _;
+    format!("{:x}", sha2::Sha256::digest(bytes))
+}
+
+/// A canonical report for one registered entry's single output.
+fn entry_report(entry: usize, before: &[u8], after: &[u8]) -> Vec<RegenEntry> {
+    let e = &TRAIN_GENERATED[entry];
+    vec![RegenEntry {
+        name: e.name.into(),
+        argv: e.argv.iter().map(|s| s.to_string()).collect(),
+        status: 0,
+        outputs: vec![RegenOutput {
+            path: e.outputs[0].into(),
+            before: Some(sha(before)),
+            after: Some(sha(after)),
+        }],
+    }]
+}
+
+/// A commit with `parent`'s tree plus `files`, as `parent`'s child, built
+/// through a scratch index so the fixture's worktree is never touched.
+fn commit_on(f: &Fixture, parent: &str, files: &[(&str, &str)], message: &str) -> String {
+    let index = f.repo.parent().unwrap().join("scratch-index");
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .arg("-C")
+            .arg(&f.repo)
+            .args(["-c", "user.name=T", "-c", "user.email=t@e.invalid"])
+            .args(args)
+            .env("GIT_INDEX_FILE", &index)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    };
+    git(&["read-tree", parent]);
+    for (path, body) in files {
+        let blob_file = f.repo.parent().unwrap().join("scratch-blob");
+        std::fs::write(&blob_file, body).unwrap();
+        let blob = git(&["hash-object", "-w", &blob_file.to_string_lossy()]);
+        git(&[
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            &format!("100644,{blob},{path}"),
+        ]);
+    }
+    let tree = git(&["write-tree"]);
+    git(&["commit-tree", &tree, "-p", parent, "-m", message])
+}
+
+fn with_regen(f: &Fixture, commit: &str, report: &[RegenEntry]) -> crate::pr_train::Built {
+    let mut train = f.train.clone();
+    train.tip = commit.to_string();
+    train.regen = Some(RegenCommit {
+        commit: commit.to_string(),
+        report: report.to_vec(),
+    });
+    train
+}
+
+fn verify(f: &Fixture, commit: &str, report: &[RegenEntry]) -> Result<(), String> {
+    crate::pr_train::verify_structure(&f.repo, &with_regen(f, commit, report))
+        .map(|_| ())
+        .map_err(|e| format!("{e:#}"))
+}
+
+/// The merge-time landing proof of the regeneration commit, on a real train:
+/// the canonical commit passes; a hidden commit between it and the last car,
+/// an edited message, an extra touched path and an E2 ledger violation each
+/// refuse, and only through the check named for it.
+#[test]
+fn verify_structure_accepts_the_canonical_regen_commit_and_refuses_each_forgery() {
+    let f = fixture(HONEST);
+    let last = f.train.tip.clone();
+    assert!(crate::pr_train::verify_structure(&f.repo, &f.train).is_ok());
+    let report = entry_report(0, STALE, b"fresh\n");
+    let message = regen_message(&report);
+    let good = commit_on(&f, &last, &[(SEARCH, "fresh\n")], &message);
+    verify(&f, &good, &report).unwrap();
+
+    // Re-parented: an empty smuggled commit sits between the last car and the
+    // regen commit, so the touched paths and message still match.
+    let hidden = commit_on(&f, &last, &[], "smuggled");
+    let reparented = commit_on(&f, &hidden, &[(SEARCH, "fresh\n")], &message);
+    let why = verify(&f, &reparented, &report).unwrap_err();
+    assert!(why.contains("regeneration commit parent changed"), "{why}");
+
+    let edited = commit_on(
+        &f,
+        &last,
+        &[(SEARCH, "fresh\n")],
+        &format!("{message}Fixes: TASK-1\n"),
+    );
+    let why = verify(&f, &edited, &report).unwrap_err();
+    assert!(why.contains("regeneration commit message changed"), "{why}");
+
+    let extra = commit_on(
+        &f,
+        &last,
+        &[(SEARCH, "fresh\n"), ("docs/c.md", "c\n")],
+        &message,
+    );
+    let why = verify(&f, &extra, &report).unwrap_err();
+    assert!(why.contains("regeneration commit touches"), "{why}");
+
+    // E2: a new blocked row lands; a new open row refuses.
+    let ledger = |row: &str| LEDGER.replace("},\n]", &format!("}},\n  {row},\n]"));
+    for (row, refused) in [
+        (r#"{ id = "n", disposition = "blocked" }"#, false),
+        (r#"{ id = "n", disposition = "s2_typed" }"#, true),
+    ] {
+        let after = ledger(row);
+        let report = entry_report(1, LEDGER.as_bytes(), after.as_bytes());
+        let message = regen_message(&report);
+        let commit = commit_on(
+            &f,
+            &last,
+            &[("scripts/store-writers.toml", &after)],
+            &message,
+        );
+        let got = verify(&f, &commit, &report);
+        if refused {
+            let why = got.unwrap_err();
+            assert!(why.contains("added a non-blocked row n"), "{why}");
+        } else {
+            got.unwrap();
+        }
+    }
+}
+
+/// A stand-in sandbox launcher: runs `body` in the checkout (`$wt`, `$out`
+/// is the search data) and prints a canonical report claiming `after`.
+#[cfg(unix)]
+fn stub_launch(
+    f: &Fixture,
+    name: &str,
+    body: &str,
+    after: &[u8],
+) -> crate::pr_train::regen::Launch {
+    let report = serde_json::to_string(&entry_report(0, STALE, after)).unwrap();
+    let script = format!(
+        "#!/bin/sh\nwhile [ $# -gt 0 ] && [ \"$1\" != --chdir ]; do shift; done\n\
+         wt=\"$2\"\nout=\"$wt/{SEARCH}\"\n{body}\nprintf '%s' '{report}'\n"
+    );
+    let stub = f.repo.parent().unwrap().join(name);
+    crate::test_exec::write_executable(&stub, &script);
+    crate::pr_train::regen::Launch {
+        program: stub.into(),
+        timeout: std::time::Duration::from_secs(30),
+    }
+}
+
+/// The host's trust boundary against the sandbox's report, without bwrap:
+/// an honest output is committed (and passes the landing proof); a sha that
+/// differs from the report, a symlinked or directory output, an output under
+/// a symlinked parent directory leading out of the checkout, and an output
+/// the tip does not hold as a 100644 blob each refuse with no commit.
+#[test]
+#[cfg(unix)]
+fn the_host_refuses_sandbox_output_that_is_not_the_reported_regular_file() {
+    let f = fixture(HONEST);
+    let fresh = b"fresh\n";
+    let honest = stub_launch(&f, "honest", "printf 'fresh\\n' > \"$out\"", fresh);
+    let regen_c = regen(&f, &f.train, &honest).unwrap().unwrap();
+    assert_eq!(
+        f.git(&["show", &format!("{}:{SEARCH}", regen_c.commit)]),
+        "fresh"
+    );
+    verify(&f, &regen_c.commit, &regen_c.report).unwrap();
+
+    let refusal = format!("{SEARCH} is not the reported regular 100644 file");
+    let refs = f.git(&["for-each-ref"]);
+    for (name, body) in [
+        ("forged-sha", "printf 'forged\\n' > \"$out\""),
+        (
+            "symlink",
+            "printf 'fresh\\n' > \"$wt/../outside\"; rm \"$out\"; ln -s \"$wt/../outside\" \"$out\"",
+        ),
+        ("directory", "rm \"$out\"; mkdir \"$out\""),
+        (
+            "symlink-parent",
+            "mkdir \"$wt/../away\"; printf 'fresh\\n' > \"$wt/../away/search-data.js\"; \
+             rm -r \"$wt/docs/showcase\"; ln -s \"$wt/../away\" \"$wt/docs/showcase\"",
+        ),
+    ] {
+        let launch = stub_launch(&f, name, body, fresh);
+        assert_eq!(regen(&f, &f.train, &launch), Err(refusal.clone()), "{name}");
+    }
+    let exec = fixture_mode(HONEST, true);
+    assert!(exec
+        .git(&["ls-tree", &exec.train.tip, "--", SEARCH])
+        .starts_with("100755 blob "));
+    let launch = stub_launch(&exec, "mode", "printf 'fresh\\n' > \"$out\"", fresh);
+    assert_eq!(regen(&exec, &exec.train, &launch), Err(refusal));
+    assert_eq!(f.git(&["for-each-ref"]), refs, "a refusal moved a ref");
 }

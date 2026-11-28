@@ -55,6 +55,9 @@ mod store_refresh;
 #[path = "pr_train_verified.rs"]
 mod verified;
 pub(crate) use verified::VerifiedTrainMerge;
+// trace:TASK-3963 | ai:claude
+#[cfg(test)]
+pub(crate) use verified::verify_structure;
 
 use anyhow::{Context, Result};
 use std::collections::VecDeque;

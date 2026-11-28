@@ -884,7 +884,7 @@ fn wait_exact_tip_ci(
 
 /// Verify the existing objects, without rebuilding timestamped commits. Exact
 /// parent/message/tree and patch checks reject hand-edited Built/Car manifests.
-fn verify_structure(repo: &Path, train: &Built) -> Result<Vec<Value>> {
+pub(crate) fn verify_structure(repo: &Path, train: &Built) -> Result<Vec<Value>> {
     anyhow::ensure!(!train.cars.is_empty(), "empty train proof");
     let mut parent = train.base.clone();
     let mut seen = std::collections::HashSet::new();

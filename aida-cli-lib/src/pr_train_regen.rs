@@ -406,21 +406,28 @@ fn stage(
             .map(|out| String::from_utf8_lossy(&out).trim().to_string())
     };
     staged(&["read-tree", tip])?;
+    let root = wt
+        .canonicalize()
+        .map_err(|e| format!("no scratch checkout: {e}"))?;
     for (_, output) in changed {
+        let refuse = || format!("{} is not the reported regular 100644 file", output.path);
         let file = wt.join(&output.path);
-        let meta = std::fs::symlink_metadata(&file).map_err(|e| e.to_string())?;
-        let bytes = std::fs::read(&file).map_err(|e| e.to_string())?;
+        // Never read through a link the sandbox left: the output itself and
+        // every parent directory must stay inside the checkout.
+        // trace:TASK-3963 | ai:claude
+        let inside = file
+            .parent()
+            .and_then(|p| p.canonicalize().ok())
+            .is_some_and(|p| p.starts_with(&root));
+        if !inside || !std::fs::symlink_metadata(&file).is_ok_and(|m| m.is_file()) {
+            return Err(refuse());
+        }
+        let bytes = std::fs::read(&file).map_err(|_| refuse())?;
         use sha2::Digest as _;
         let sha = format!("{:x}", sha2::Sha256::digest(&bytes));
         let mode = staged(&["--literal-pathspecs", "ls-tree", tip, "--", &output.path])?;
-        if !meta.is_file()
-            || output.after.as_deref() != Some(sha.as_str())
-            || !mode.starts_with("100644 blob ")
-        {
-            return Err(format!(
-                "{} is not the reported regular 100644 file",
-                output.path
-            ));
+        if output.after.as_deref() != Some(sha.as_str()) || !mode.starts_with("100644 blob ") {
+            return Err(refuse());
         }
         let file_s = file.to_string_lossy().to_string();
         let blob = staged(&["hash-object", "-w", "--no-filters", "--", &file_s])?;
