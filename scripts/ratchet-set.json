@@ -79,6 +79,8 @@
         "bug2775_runner_errors_name_runner_pass_batch_and_cause",
         "bug2775_run_review_agent_resolves_and_states_the_default",
         "bug2779_top_level_error_keeps_its_cause",
+        "task3961_code_spans_are_unpadded_unless_needed",
+        "task3961_missing_acceptance_is_a_visible_note",
         "t3869_excluded_paths_are_classified_before_any_open",
         "t3869_non_regular_entries_skipped_with_named_reason",
         "t3869_pinned_root_survives_concurrent_symlink_swap",
