@@ -16,8 +16,31 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T12:11:28.956447070Z
-modified_at: 2026-11-28T12:15:35.615018065Z
+modified_at: 2026-11-28T12:16:50.199515435Z
 req_type: Bug
+comments:
+- id: 01a22216-3417-7351-a4b0-72768278ebb4
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    Root cause: `acquire` calls `migrate_legacy_deadline`, which arms `deadline_boottime = floor(CLOCK_BOOTTIME) + min(ttl, 600)`; `stale_at` then expires on `floor(now) >= deadline`. The test holder has ttl_secs=1, so when the second ticks between migration and the stale check (microseconds apart) the unknown holder reads Expired and is stolen. Real in production: whole-second truncation lets a deadline fire up to 1s early (release.sh truncates /proc/uptime the same way).
+
+    ### Acceptance criteria and evidence
+    - AC1 (unit): `stale_at` expires only on `now > deadline` (strict), which proves elapsed > ttl despite truncation; `boot_deadline_expires_unknown_and_refused_but_never_alive` updated so deadline==now retains.
+    - AC2 (unit): test sets ttl_secs=LEASE_SECS and runs acquire 100x on its own tempdir; no env used.
+    - AC3 (unit, injected clock): new `truncated_boot_deadline_never_expires_early` drives `stale_at` with deadline armed at (b,N)+1 and clock (b,N+1) -> retained, (b,N+2) -> Expired.
+
+    ### Expected files
+    - `aida-cli-lib/src/merge_lock.rs`
+    - `docs/cli/04-git-lifecycle.md` (one sentence)
+
+    ### Ambiguities / conflicts as questions
+    - None
+  created_at: 2026-11-28T12:16:50.199515435Z
+  modified_at: 2026-11-28T12:16:50.199515435Z
+  session_id: 01a22214d769
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a22215-10bf-7693-82e5-1e9ec2ff8e06
   author: aida-session-start
