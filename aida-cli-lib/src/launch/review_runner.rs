@@ -17,6 +17,19 @@ use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+/// The runner was killed at its deadline; typed so callers never match text.
+// trace:STORY-3202 | ai:claude
+#[derive(Debug)]
+pub(crate) struct DeadlineExceeded(pub u64);
+
+impl std::fmt::Display for DeadlineExceeded {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "review runner exceeded its {}s deadline", self.0)
+    }
+}
+
+impl std::error::Error for DeadlineExceeded {}
+
 pub(crate) const STDOUT_CAP: usize = 4 << 20;
 pub(crate) const STDERR_CAP: usize = 64 << 10;
 const RUNNER_CMD: &str = "AIDA_REVIEW_RUNNER_CMD";
@@ -263,8 +276,9 @@ impl RunnerCall<'_> {
             !tripped.load(SeqCst),
             "review runner output exceeded its cap ({out_cap} bytes stdout, {err_cap} stderr)"
         );
-        let secs = self.deadline.as_secs();
-        ensure!(finished, "review runner exceeded its {secs}s deadline");
+        if !finished {
+            return Err(DeadlineExceeded(self.deadline.as_secs()).into());
+        }
         // trace:STORY-3202 | ai:claude
         if let Some(agent) = vendor.filter(|a| !status.success() && a.auth_failed(&stderr)) {
             let (vendor, stderr) = (agent.program, stderr_tail(&stderr));

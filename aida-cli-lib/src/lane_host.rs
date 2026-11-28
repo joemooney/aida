@@ -397,7 +397,9 @@ fn inspect(root: &Path, live_store: bool) -> Vec<Check> {
     }
     // trace:STORY-3202 | ai:claude
     let names: Vec<_> = vendors.iter().map(|v| v.as_str()).collect();
-    let probe = crate::vendors::host_diagnostics::agy_lane_probe(&names, &env, home.as_deref());
+    // `live_store` is false only for `report` (aida init): no outward agy call.
+    let probe =
+        crate::vendors::host_diagnostics::agy_lane_probe(&names, &env, home.as_deref(), live_store);
     checks.extend(probe);
     if vendors.is_empty() {
         checks.push(check(
