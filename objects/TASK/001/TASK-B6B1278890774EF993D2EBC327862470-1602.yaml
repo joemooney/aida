@@ -1,0 +1,31 @@
+id: 01a21f8e-ef37-7010-b474-a2ca27dbab5f
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1602
+agreed_id: TASK-3946
+title: 'STORY-3120 S8d: collect_batch_dependency_manifests (nearest package manifests, confined, screened), infer_'
+description: |-
+  Child slice of STORY-3120 (plan comment 87; list /tmp/claude-1000/story-3120-s7-s10-slices.md). Reference: origin/story-3120-ci-review @ a1777130882, ref commits 41a11958d87, bbdb34898dd.
+  Scope: collect_batch_dependency_manifests (nearest package manifests, confined, screened), infer_doc_or_omission_anchor, consolidate_cross_batch_findings incl. shared-identifier dedup
+  Files: review_engine.rs, review_prepare.rs
+  Tier: STRICT (advisor re-tag: confined manifest reads, same class as S7e)
+  Depends on: -
+  Size: <=300 changed lines incl. tests. Track: integration.
+  Brief: to be written by the integration seat.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T00:29:50.775962131Z
+modified_at: 2026-11-28T00:29:50.775962131Z
+req_type: Task
+tags:
+- story-3120
+- strict
+filed_at:
+  code_sha: 84fe63bf7c647ba5c65d6b97d1ced29ae3be3596
+  branch: integration
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0fba3d42ee9
+  vendor: claude
+  session: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
