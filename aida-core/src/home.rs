@@ -35,6 +35,16 @@ fn home_from_env(get: &dyn Fn(&str) -> Option<PathBuf>) -> Option<PathBuf> {
     get("HOME").or_else(|| get("USERPROFILE"))
 }
 
+/// The home directory named by a captured environment snapshot (not the
+/// process environment), with the same precedence as [`home_dir`] and no
+/// platform fallback: for a launcher that resolves the operator's home from
+/// the environment it was handed. `get` returns `None` for an unset or empty
+/// key.
+// trace:BUG-2783 | ai:claude
+pub fn home_in(get: &dyn Fn(&str) -> Option<PathBuf>) -> Option<PathBuf> {
+    home_from_env(get)
+}
+
 /// Config directory from the environment alone. Windows only: elsewhere the
 /// platform lookup is already `$HOME`-derived, and overriding it here would
 /// change where `aida` reads its config on unix.
