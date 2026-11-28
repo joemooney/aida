@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T13:12:13.855583833Z
-modified_at: 2026-11-28T01:09:49.894717588Z
+modified_at: 2026-11-28T01:09:54.489602431Z
 req_type: Bug
 tags:
 - admission
@@ -260,6 +260,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3493): Multiplicity: admission_owner.rs record_waiter keeps a single manual-train.waiter file and writes/removes it outside the admission serializer. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T01:09:37.499016398Z
   modified_at: 2026-11-28T01:09:37.499016398Z
+- id: 01a21fb3-9cb9-7f63-8ed6-e47fcdfb7607
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3495): AC2 display wiring is untested: the new manual_waiter line in `aida advisor loops train-status` (advisor_loop_service.rs status_value/status_lines) and in `aida pr train --check` text/JSON (pr_train_check.rs check_report) has no test; bug2771 test only... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:09:54.489602431Z
+  modified_at: 2026-11-28T01:09:54.489602431Z
 history:
 - id: 01a217ff-2dc1-7641-9cda-5abfd4de3de4
   author: joe
