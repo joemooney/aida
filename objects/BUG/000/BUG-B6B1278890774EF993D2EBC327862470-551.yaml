@@ -11,12 +11,12 @@ description: |-
   - AC1: root-cause it; an unknown-process holder ALWAYS blocks acquire until it is positively proven stale (fail closed); no wall-clock/mtime edge can make it look absent.
   - AC2: the test uses an isolated lock dir and no shared env; a loop-100 regression (the test repeated 100x in one run) passes.
   - AC3: if the race is real in production code, say so in the PR and add a test that reproduces it deterministically (injected clock).
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T12:11:28.956447070Z
-modified_at: 2026-11-28T12:16:50.199515435Z
+modified_at: 2026-11-28T12:31:47.535438256Z
 req_type: Bug
 comments:
 - id: 01a22216-3417-7351-a4b0-72768278ebb4
@@ -41,6 +41,26 @@ comments:
   modified_at: 2026-11-28T12:16:50.199515435Z
   session_id: 01a22214d769
   harness_version: 2.1.319 (Claude Code)
+- id: 01a22223-83b3-77c3-9ad2-00a3bf1ceb36
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: be12875619
+
+    Acceptance evidence:
+    - AC1 [behavioral-test]: `stale_at` (merge_lock.rs:~359) expires only on `now > deadline`; both readings are truncated CLOCK_BOOTTIME seconds, so this proves elapsed > TTL. Alive/Dead verdicts unchanged. `boot_deadline_expires_unknown_and_refused_but_never_alive` now asserts deadline==now retains; 101/102/other-boot expire.
+    - AC2 [behavioral-test]: `train_observation_preserves_unknown_and_refusal` uses its own tempdir and no env, has ttl=LEASE_SECS, and loops acquire 100x over a fresh legacy record; each iteration is WouldBlock and the holder is not replaced.
+    - AC3 [behavioral-test]: the race is real in production (a deadline could fire up to 1s early; with the test ttl=1 that is about 1us after migration). `truncated_boot_deadline_never_expires_early` reproduces it deterministically: real migration, then injected clock (boot, deadline) -> retained, (boot, deadline+1) -> Expired.
+
+    Runs at this tree: merge_lock:: 18 passed (twice); aida-ci-guards --lib 51 passed; make check-ci-fast 47 gates passed.
+
+    Probes: (1) every staleness reader (acquire steal, live_status, observed_train_running, inspect_file) goes through stale_at, so they agree. (2) release.sh writes deadlines from truncated /proc/uptime, and the Rust judge now treats them the same way. (3) N/A. (4) deadline=0 and other-boot still expire. (5) authority: the only grant path, steal-on-Expired, is now stricter by one second. No test weakened: the boundary assertion was tightened.
+
+    Residual risk: non-Alive holders now expire up to 1s later than before (600s nominal TTL). Intended.
+  created_at: 2026-11-28T12:31:22.547205727Z
+  modified_at: 2026-11-28T12:31:22.547205727Z
+  session_id: 01a22214d769
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a22215-10bf-7693-82e5-1e9ec2ff8e06
   author: aida-session-start
@@ -49,6 +69,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a22223-e580-7a32-9bee-93eec54dea13
+  author: dirtlab
+  timestamp: 2026-11-28T12:31:47.584005502Z
+  session_id: 01a22214d769
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 6f4bd7e2493be2ecd3d53b1b5baf26803d64abc3
   branch: main
@@ -56,3 +85,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 6f4bd7e2493
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-28T12:31:47.535438256Z
+  implemented_by: dirtlab
