@@ -12,12 +12,7 @@ const CEILING: Duration = Duration::from_secs(20);
 /// stdin, so a probe that inherited a TTY would block the same way).
 fn sleeping_cli(dir: &Path) -> PathBuf {
     let path = dir.join("sleepy-agent");
-    std::fs::write(&path, "#!/bin/sh\nexec sleep 600\n").unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
-    }
+    crate::test_exec::write_executable(&path, "#!/bin/sh\nexec sleep 600\n");
     path
 }
 
@@ -59,13 +54,10 @@ fn probe_reads_the_banner_with_stdin_closed() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("answers");
     // Exits non-zero if stdin is anything but empty/closed.
-    std::fs::write(
+    crate::test_exec::write_executable(
         &path,
         "#!/bin/sh\nif read -r _; then exit 3; fi\necho 'codex-cli 0.150.2'\n",
-    )
-    .unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    );
     assert_eq!(
         crate::scaffold_cmd::installed_codex_version_of(&path.to_string_lossy()),
         Some((0, 150, 2))
