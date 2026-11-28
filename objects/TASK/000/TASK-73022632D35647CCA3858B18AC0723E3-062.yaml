@@ -7,12 +7,12 @@ description: |
 
   Raised by the implementer while working TASK-3931.
   Branch: task-3931-drought-scan-wiring  ·  Commit: f340ccd244  ·  PR #4763
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-27T22:21:17.076982012Z
-modified_at: 2026-11-28T00:39:35.647831234Z
+modified_at: 2026-11-28T00:39:37.459320460Z
 req_type: Task
 tags:
 - from-implementer:TASK-3931
@@ -29,6 +29,13 @@ history:
   author: joe
   timestamp: 2026-11-27T23:19:10.475063221Z
   changes: []
+- id: 01a21f97-e2f3-78f0-a44a-2f54d953d486
+  author: joe
+  timestamp: 2026-11-28T00:39:37.459318136Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: f340ccd2443588f82c99a002349df25de7a683bc
   branch: task-3931-drought-scan-wiring
