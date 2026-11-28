@@ -131,7 +131,7 @@ done
 if ! echo "$FIRST_LINE" | grep -qE "$CONVENTIONAL_PATTERN"; then
     ERRORS+=("Commit message must follow conventional format: [AI:tool]? type(scope): description")
     ERRORS+=("  Valid types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert")
-    ERRORS+=("  Example: [AI:claude] feat(auth): add login validation (FR-0042)")
+    ERRORS+=("  Example: [AI:claude] feat(auth): add login validation (TASK-12)")
 fi
 
 # Validation 2: Check for requirement ID on feat/fix commits
@@ -140,10 +140,10 @@ if echo "$FIRST_LINE" | grep -qE "$FEAT_FIX_PATTERN"; then
         if [ "$REQUIRE_REQ_FOR_FEAT" = "true" ]; then
             if [ "$STRICT_MODE" = "true" ]; then
                 ERRORS+=("feat/fix commits must include requirement ID: (REQ-ID)")
-                ERRORS+=("  Example: feat(auth): add login validation (FR-0042)")
+                ERRORS+=("  Example: feat(auth): add login validation (TASK-12)")
             else
                 WARNINGS+=("feat/fix commits should include requirement ID: (REQ-ID)")
-                WARNINGS+=("  Example: feat(auth): add login validation (FR-0042)")
+                WARNINGS+=("  Example: feat(auth): add login validation (TASK-12)")
             fi
         fi
     fi
@@ -233,7 +233,11 @@ if [ ${#WARNINGS[@]} -gt 0 ]; then
     echo ""
 fi
 
-if [ ${#ERRORS[@]} -gt 0 ]; then
+# Strict mode refuses the commit with the full explanation. Permissive mode
+# (the default a fresh `aida init` installs) lets the commit through, so an
+# ordinary subject gets one plain, uncoloured hint instead of a red failure.
+# trace:TASK-3957 | ai:claude
+if [ ${#ERRORS[@]} -gt 0 ] && [ "$STRICT_MODE" = "true" ]; then
     echo -e "${RED}✗ Commit message validation failed:${NC}"
     for error in "${ERRORS[@]}"; do
         echo -e "${RED}  $error${NC}"
@@ -241,15 +245,11 @@ if [ ${#ERRORS[@]} -gt 0 ]; then
     echo ""
     echo -e "${YELLOW}Your message: ${NC}$FIRST_LINE"
     echo ""
-
-    if [ "$STRICT_MODE" = "true" ]; then
-        echo -e "${RED}Commit rejected (strict mode). Fix the message and try again.${NC}"
-        echo -e "${YELLOW}To bypass: git commit --no-verify${NC}"
-        exit 1
-    else
-        echo -e "${YELLOW}Commit allowed (permissive mode). Consider fixing for consistency.${NC}"
-        echo -e "${YELLOW}Enable strict mode: export AIDA_COMMIT_STRICT=true${NC}"
-    fi
+    echo -e "${RED}Commit rejected (strict mode). Fix the message and try again.${NC}"
+    echo -e "${YELLOW}To bypass: git commit --no-verify${NC}"
+    exit 1
+elif [ ${#ERRORS[@]} -gt 0 ]; then
+    echo "hint: subjects in conventional format, like 'feat(auth): add login (TASK-12)', link commits to specs (optional)."
 fi
 
 # Success
