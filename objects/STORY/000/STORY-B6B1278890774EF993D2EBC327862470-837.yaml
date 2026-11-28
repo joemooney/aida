@@ -17,12 +17,12 @@ description: |
   - AC2: an agy implementer lane runs end to end on dell1 (claim, edit, commit, push, publish) under the chosen containment; a canary on one small standard spec.
   - AC3: `aida doctor --lane-host` checks agy auth NON-INTERACTIVELY (the way a lane will run it) and, when the token is keyring-only, names the fix (a headless-usable credential mode, or keyring unlock guidance).
   - AC4 (follow-up slice): agy as a `review prepare` runner vendor through the S3a hardened spawn helper (with STORY-3120 S9), giving a real opposite-vendor challenger when one vendor is rate-limited.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T23:26:17.322312937Z
-modified_at: 2026-11-27T10:32:46.532691821Z
+modified_at: 2026-11-28T00:50:20.976688712Z
 req_type: Story
 tags:
 - containment
@@ -435,6 +435,11 @@ comments:
   created_at: 2026-11-27T10:32:46.532688430Z
   modified_at: 2026-11-27T10:32:46.532688430Z
   session_id: 01a21c7d9374
+- id: 01a21fa1-b467-7e42-a0a2-d6aea20400e7
+  author: aida-auto-bump
+  content: 'Auto-completion warning: STORY-3202 was In Progress when merge 8eaf402cf537b81e1c23284c2ff379d7fafe396f completed it; verify that no active round remains.'
+  created_at: 2026-11-28T00:50:20.903401683Z
+  modified_at: 2026-11-28T00:50:20.903401683Z
 history:
 - id: 01a21a33-32c4-79e2-bbf0-90030b092cf3
   author: joe
@@ -525,6 +530,24 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21fa1-b467-7e42-a0a2-d6b7ec3d2c6c
+  author: aida-auto-bump
+  timestamp: 2026-11-28T00:50:20.903410514Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a21fa1-b4b0-70c1-b486-3984c0c7128b
+  timestamp: 2026-11-28T00:50:20.976684751Z
+  agent: aida
+  commit_sha: 8eaf402cf537b81e1c23284c2ff379d7fafe396f
+  summary: 'Advisor recording the independent reviewer''s UNRECORDED final draft (draft-8cb1ce8b in aida-pr-4741, reviewed_sha = current head f3cb2791, verdict approved, 0 findings; the reviewer exited before recording). Every AC verified: aida init never spawns agy (agy_lane_probe returns None when networked=false; only doctor --lane-host passes true; story3202_init_report_makes_no_agy_call), a typed timeout signal, the ssh sign-in hint, review agent docs. The PR''s title trailer completes TASK-3926.'
+  punted:
+  - 'punted: REQUEST CHANGES at 8f859ca83b (14 behind integration; no finding depends on base changes. The base''s runner commits are BUG-2775 and BUG-2779, not confinement). The head is unchanged since the integration pre-check MUST-1 and does not implement the binding advisor ruling: (a) no --sandbox in AGY argv; (c) agy is on the automatic challenger pick although the live probe shows plan+sandbox still allows reads anywhere; (b) the read-confinement residual is not recorded. AC status. AC1 sketch: not-applicable, because the advisor narrowed it to STORY-2460. AC2 lane canary: not-applicable, same reason. AC3 doctor --lane-host non-interactive agy auth probe naming the keyring-only fix: verified by story3202_agy_auth_probe_classifies_without_hanging (KeyringOnly/Rejected/Ready/Timeout/Failed plus fix text); the env -u DBUS fix itself is not verified live. AC4 agy as review runner via S3a spawn: the spawn contract is verified by s3a_runner_spawn_contract, story3202_agy_effort_mapping_and_print_timeout, story3202_agy_auth_failure_is_a_typed_cause and story3202_challenger_picks_agy_when_claude_finds, but it is unmet on the ruled confinement terms (findings 1-3). What passes: env allowlist (GEMINI_API_KEY only), empty cwd, stdin prompt via --print=, print_timeout never 0, AuthRequired only on a failed exit and only from stderr, the [AI:antigravity] alias, effort allowlist. CI: fast gates pass, fast compile pending at review time. Two p3 follow-ups are deferred.'
+  - 'punted: STORY-3202 review at 4c941fb51e4a (base: integration, 5 commits behind; the finding is in run_review_agent, which the newer integration commits do not touch). Most of AC-A, AC-B and AC-C passes. The agy vendor goes through the hardened RunnerCall spawn: empty cwd, env allowlist with only GEMINI_API_KEY added, --print= reading stdin, --sandbox, --mode=plan, deny-all --settings, and --print-timeout set inside the deadline. A failed run with agy''s sign-in stderr becomes a typed AuthRequired. The `agy models` lane-host probe returns typed Ready, KeyringOnly, Rejected, Timeout or Failed, is required only when agy is an enabled lane vendor, and is covered by fake-agy tests. The automatic challenger pick filters out agy (confinement_verified=false), and --post-comment refuses agy as finder or challenger before any runner starts. One blocking hole: confinement_verified says an unverified vendor runs only when named explicitly, but the finder is still chosen from `[agents] vendor`, which is read from the reviewed checkout. A PR under review can therefore switch the finder to agy. CI was pending at review time and is not the reason for this verdict.'
+  - 'punted: Advisor: r2 only fixed the golden snapshot; r3 must carry the 22:19 ruling.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 52825e81d1c3fbab8e5bf382ef81641956f0e559
@@ -535,12 +558,6 @@ filed_at:
   vendor: claude
 implementation_info:
   implemented: false
+  completed_at: 2026-11-28T00:50:20.903406540Z
+  completion_sha: 8eaf402cf537b81e1c23284c2ff379d7fafe396f
   reopened_at_sha: 2e8ddd85c03548d81f785070961c6879a2ab58be
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Advisor: r2 only fixed the golden snapshot; r3 must carry the 22:19 ruling.'
-  recovery_hint: address the review findings, move STORY-3202 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-27T05:35:41.510480302Z
