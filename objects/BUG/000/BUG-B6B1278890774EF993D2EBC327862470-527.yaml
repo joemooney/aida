@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T23:28:15.005813754Z
-modified_at: 2026-11-26T01:24:16.004674081Z
+modified_at: 2026-11-28T01:10:25.658401718Z
 req_type: Bug
 tags:
 - ci
@@ -103,6 +103,11 @@ comments:
   created_at: 2026-11-26T01:24:16.004662878Z
   modified_at: 2026-11-26T01:24:16.004662878Z
   session_id: 01a21533dd09
+- id: 01a21fb4-167a-7bf2-bc0d-5fcc06e653ae
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3497): The busy-lock match in promotion_pass tests format!("{e:#}").contains("review-watch lock busy"), but RuntimeLock::lock attaches that same context to every non-WouldBlock flock error (review_watch.rs lock(), generic Err branch), so a real lock I/O... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:10:25.658401718Z
+  modified_at: 2026-11-28T01:10:25.658401718Z
 history:
 - id: 01a2150a-c5ca-7f63-8878-e8a8add13a31
   author: joe
