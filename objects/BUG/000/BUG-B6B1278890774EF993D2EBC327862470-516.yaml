@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T19:17:00.047109161Z
-modified_at: 2026-11-26T09:15:06.097800079Z
+modified_at: 2026-11-28T00:59:15.845609467Z
 req_type: Bug
 tags:
 - leases
@@ -456,6 +456,11 @@ comments:
   created_at: 2026-11-26T07:48:53.481548011Z
   modified_at: 2026-11-26T07:48:53.481548011Z
   session_id: 01a21692038f
+- id: 01a21fa9-de05-7120-b34a-03785eb3466d
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3444): aida-cli-lib/src/doctor/worktrees.rs:1530-1540 — The write-ahead attestation event records outcome ''salvage destination <dest>'' before rename_noreplace runs. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T00:59:15.845609467Z
+  modified_at: 2026-11-28T00:59:15.845609467Z
 history:
 - id: 01a20efd-bc95-7810-90d0-db01c6d370ad
   author: joe
