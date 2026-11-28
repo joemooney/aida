@@ -10,12 +10,12 @@ description: |-
   - AC4: tests pin the shortened output (no FAIL wall in a fresh repo).
 
   Source: docs/plans/2026-11-27-fresh-user-walkthrough.md, sections F4, F7, F15 (on main after #4782). Advisor aida-d3 2026-11-27 20:30 priority (g); grouped by area by product-15 for laning now.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T04:52:28.064803Z
-modified_at: 2026-11-28T06:36:08.245734965Z
+modified_at: 2026-11-28T06:46:33.512672851Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -109,6 +109,12 @@ comments:
   modified_at: 2026-11-28T06:36:08.245734965Z
   session_id: 01a220d4214e
   harness_version: 2.1.319 (Claude Code)
+- id: 01a220e7-d328-7413-8b81-08b9fe128145
+  author: aida-publication-done
+  content: Implementer push df175ced76d5 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-28T06:46:33.512672296Z
+  modified_at: 2026-11-28T06:46:33.512672296Z
+  session_id: 01a220d4214e
 history:
 - id: 01a22080-0acd-7123-bb30-50e7fe96392e
   author: joe
@@ -160,6 +166,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a220e7-d328-7413-8b81-08af3404db62
+  author: aida-publication-done
+  timestamp: 2026-11-28T06:46:33.512666169Z
+  session_id: 01a220d4214e
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 4b06a37b464472f759637aecf25042f98a4e33c2
