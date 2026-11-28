@@ -36,6 +36,7 @@ CLI = {
     "test_precompact_handoff_hook.py", "test_grant_expiry_notice_hook.py",
     "test_cache_refresh_outputs.py", "test_pr_ship_preflight.py", "test_seat_takeover_lifecycle.py",
     "test_gitlab_review_handoff.py", "test_skill_discovery.py",
+    "test_getting_started_commands.py",  # trace:TASK-3960 | ai:claude
 }
 
 
