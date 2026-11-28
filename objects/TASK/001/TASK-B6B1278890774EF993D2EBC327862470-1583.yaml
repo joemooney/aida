@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   - AC1: a test drives pr_train_handler_with_dispatch_ctx under a low core budget (below 20%) with a stale retained journal and asserts no recovery/resume happens.
   - AC2: mutation-checked: the two rewirings named above each make the test FAIL (report it).
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T21:42:56.745961954Z
-modified_at: 2026-11-27T22:28:41.594474473Z
+modified_at: 2026-11-28T00:15:03.089927833Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -89,6 +89,20 @@ history:
   author: dirtlab
   timestamp: 2026-11-27T22:28:43.773872470Z
   changes: []
+- id: 01a21f81-636c-7002-b008-998b34334914
+  author: aida-auto-bump
+  timestamp: 2026-11-28T00:15:03.020276852Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21f81-63b1-70e0-88a3-93df6765a4e8
+  timestamp: 2026-11-28T00:15:03.089924654Z
+  agent: aida
+  commit_sha: 838ea2441100f4656d88a129b675e5ddff075a9f
+  summary: 'Test-only PR (+94 lines, story_1690_train_tests.rs) completing TASK-3930. AC1 verified by task3930_low_budget_handler_never_resumes_a_stale_retained_journal: it drives pr_train_handler_with_dispatch_ctx (ADVISOR_LOOP + all_ready) in a path-isolated child, with a fake gh reporting core 1/5000 and a stale retained Open journal. It asserts the back-off line, no ''Skipping retained train journal'' line, no run.lock (journal::lock opens run.lock with create and never removes it, pr_train_journal.rs:357, so a recovery pass leaves it behind), the journal entry unchanged, and gh called only for the rate_limit probe. AC2 [manual-inspection]: the PR body reports both compilable mutations (requested=Some(&candidates); else-arm dropped so recovery always runs) FAIL at the run.lock assertion. Source inspection agrees: either mutation makes the handler reach journal::lock at pr_train.rs:5636 because recovery_needed is true, so run.lock is created. The fixture is hermetic and no existing test was weakened. No defects found. CI pending at review time (fast gates green, full shards running).'
+  review_verdict: approved
 filed_at:
   code_sha: b90f128a0821d45db1f24420e64de1516fc18698
   branch: main
@@ -100,3 +114,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-27T22:19:02.248617683Z
   implemented_by: dirtlab
+  completed_at: 2026-11-28T00:15:03.020270323Z
+  completion_sha: 838ea2441100f4656d88a129b675e5ddff075a9f
