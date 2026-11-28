@@ -14,12 +14,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T10:47:01.862391650Z
-modified_at: 2026-11-28T00:27:18.579866409Z
+modified_at: 2026-11-28T00:27:27.274751910Z
 req_type: Task
 tags:
 - from-implementer:BUG-2770
 - kind:design-choice
 - severity:minor
+relationships:
+- rel_type: Supersedes
+  target_id: 01a21788-5844-7983-b20d-094815b58438
+  created_at: 2026-11-28T00:27:27.274686470Z
+  created_by: joe
 comments:
 - id: 01a21f8c-0e94-7450-9ffc-816aff45e886
   author: joe
@@ -40,6 +45,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a21f8c-c692-7422-b4a1-8f1a62a560f3
+  author: joe
+  timestamp: 2026-11-28T00:27:29.298511828Z
+  changes: []
 filed_at:
   code_sha: 820435a1f67ddeb186c7d21b0615ceaefe079160
   branch: bug-2770-gc-scope
