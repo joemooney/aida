@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T02:39:43.224402332Z
-modified_at: 2026-11-28T01:17:04.553457844Z
+modified_at: 2026-11-28T01:17:08.379572092Z
 req_type: Bug
 tags:
 - ci
@@ -118,6 +118,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3538): docs/internal/testing/ci-test-shards.md:192 is now stale: it says `make check-ci-fast` runs source gates and the ratchet set, so the host lane''s Make invocation blocks publication on a ratchet failure. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T01:16:53.799814183Z
   modified_at: 2026-11-28T01:16:53.799814183Z
+- id: 01a21fba-3b9b-7071-bb43-fc31f58c5e69
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3540): scripts/check-ratchets.py MANUAL_SURFACE (lines ~30-33) misses CLI-surface files: clap derives (#[derive(Args/Subcommand/Parser)]) also live in aida-cli-lib/src/*_cmd.rs and other modules (e.g. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:17:08.379572092Z
+  modified_at: 2026-11-28T01:17:08.379572092Z
 history:
 - id: 01a21ae3-eb20-7df1-9d88-cb4b0d85885c
   author: joe
