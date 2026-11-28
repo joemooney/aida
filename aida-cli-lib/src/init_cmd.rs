@@ -645,12 +645,24 @@ pub(crate) fn parse_agent_selection(agent: &str) -> Result<AgentSelection> {
     Ok(sel)
 }
 
+/// Whether `program --version` succeeds within a few seconds, so a hung
+/// CLI cannot hang init. A spawn failure (ETXTBSY on a just-written test
+/// shim) is retried briefly. trace:STORY-2838 | ai:claude
 fn agent_cli_detected(program: &str) -> bool {
-    std::process::Command::new(program)
-        .arg("--version")
-        .output_retrying_etxtbsy()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    use crate::bounded_process::{command_output_with_timeout_detail, BoundedCommandOutput};
+    for attempt in 0..3 {
+        let mut cmd = std::process::Command::new(program);
+        cmd.arg("--version");
+        match command_output_with_timeout_detail(cmd, std::time::Duration::from_secs(5)) {
+            BoundedCommandOutput::Completed(o) => return o.status.success(),
+            BoundedCommandOutput::TimedOut => return false,
+            BoundedCommandOutput::SpawnFailed if attempt < 2 => {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            BoundedCommandOutput::SpawnFailed => return false,
+        }
+    }
+    false
 }
 
 pub(crate) const ANTIGRAVITY_AIDA_MCP_JSON: &str =
@@ -5125,11 +5137,18 @@ pub(crate) struct InitArgs {
 
     /// Report the sandbox allowlist and permission entries init would set
     /// for each enabled agent (from `--agent` or PATH detection), using the
-    /// forge hosts your git remotes name. Writes nothing. Honors the global
-    /// `--format json`.
+    /// forge hosts your git remotes name. Writes nothing unless you pass
+    /// `--write` or confirm when asked. Honors the global `--format json`.
     // trace:STORY-2838 | ai:claude
     #[clap(long)]
     pub report_allowlists: bool,
+
+    /// With `--report-allowlists`, add the reported entries to each file
+    /// after showing them. Additive: entries already there are kept, and a
+    /// second run changes nothing. Without it, an interactive run asks first.
+    // trace:STORY-2838 | ai:claude
+    #[clap(long, requires = "report_allowlists")]
+    pub write: bool,
 }
 
 /// Record `[ids] seq_width` and/or `node_seq_width` in
@@ -5203,6 +5222,7 @@ fn run_init(matches: &clap::ArgMatches, ctx: &crate::cmdkit::DispatchCtx) -> any
         gitlab_runner_tags,
         id_width,
         report_allowlists,
+        write,
     } = &args;
     // Read-only report; short-circuits before any init path writes.
     // trace:STORY-2838 | ai:claude
@@ -5213,7 +5233,7 @@ fn run_init(matches: &clap::ArgMatches, ctx: &crate::cmdkit::DispatchCtx) -> any
             Some(d) => std::path::PathBuf::from(d),
             None => std::env::current_dir()?,
         };
-        return init_allowlist_report::run_report_allowlists(&root, agent.as_deref(), json);
+        return init_allowlist_report::run_report_allowlists(&root, agent.as_deref(), json, *write);
     }
     // STORY-757: the markdown-only first run — scaffold just a `specs/`
     // folder + a runnable `aida why` demo, none of the orphan-branch / cache

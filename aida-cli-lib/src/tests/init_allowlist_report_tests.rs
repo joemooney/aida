@@ -117,7 +117,7 @@ fn github_remote_with_claude_and_codex_names_github_hosts_per_agent() {
 
     let human = render_allowlist_report(&report);
     assert!(human.contains("github.com  (origin)"), "{human}");
-    assert!(human.contains("nothing was written"), "{human}");
+    assert!(human.contains("would set"), "{human}");
     assert!(!has_spec_id(&human), "internal ID in user text: {human}");
 }
 
@@ -171,4 +171,127 @@ fn spec_id_detector_flags_ids_only() {
     assert!(!has_spec_id(
         "sandbox.network.allowedDomains api.github.com"
     ));
+}
+
+const USER_CONFIG: &str = "# my config\n[contained]\nallowed_hosts = [\"crates.io\"] # mine\n";
+const USER_SETTINGS: &str =
+    "{\"model\": \"x\", \"sandbox\": {\"network\": {\"allowedDomains\": [\"example.org\"]}}}\n";
+
+/// A github-remote repo with a user's own config and Claude settings.
+fn seeded_repo() -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    git(dir.path(), &["init", "-q"]);
+    git(
+        dir.path(),
+        &["remote", "add", "origin", "git@github.com:acme/widget.git"],
+    );
+    std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+    std::fs::create_dir_all(dir.path().join(".claude")).unwrap();
+    std::fs::write(dir.path().join(".aida/config.toml"), USER_CONFIG).unwrap();
+    std::fs::write(dir.path().join(".claude/settings.json"), USER_SETTINGS).unwrap();
+    dir
+}
+
+fn read(dir: &Path, file: &str) -> String {
+    std::fs::read_to_string(dir.join(file)).unwrap()
+}
+
+#[test]
+fn write_adds_reported_entries_keeps_user_entries_and_is_idempotent() {
+    let dir = seeded_repo();
+    let root = dir.path();
+    run_report_allowlists(root, Some("claude,codex"), false, true).unwrap();
+
+    let settings: serde_json::Value =
+        serde_json::from_str(&read(root, ".claude/settings.json")).unwrap();
+    let domains = settings["sandbox"]["network"]["allowedDomains"]
+        .as_array()
+        .unwrap();
+    assert_eq!(domains[0], "example.org", "user domain kept first");
+    assert_eq!(settings["model"], "x", "other keys kept");
+    let config = read(root, ".aida/config.toml");
+    assert!(config.contains("# my config") && config.contains("# mine"));
+    let parsed: toml::Value = toml::from_str(&config).unwrap();
+    let hosts = parsed["contained"]["allowed_hosts"].as_array().unwrap();
+    assert_eq!(hosts[0].as_str(), Some("crates.io"), "user host kept first");
+    for host in GITHUB_HOSTS {
+        assert!(domains.iter().any(|d| d == host), "claude lacks {host}");
+        assert!(hosts.iter().any(|h| h.as_str() == Some(host)), "no {host}");
+    }
+    assert_eq!(hosts.len(), 1 + GITHUB_HOSTS.len(), "no duplicates");
+    assert_eq!(
+        parsed["contained"]["vendors"]["codex"].as_str(),
+        Some("native")
+    );
+
+    // A second run plans nothing and leaves both files byte-identical.
+    let (before_cfg, before_json) = (config, read(root, ".claude/settings.json"));
+    let report = build_allowlist_report(
+        claude_and_codex(),
+        forge_hosts_from_remotes(&read_git_remotes(root)),
+    );
+    assert!(plan_allowlist_writes(root, &report).unwrap().is_empty());
+    run_report_allowlists(root, Some("claude,codex"), false, true).unwrap();
+    assert_eq!(read(root, ".aida/config.toml"), before_cfg);
+    assert_eq!(read(root, ".claude/settings.json"), before_json);
+}
+
+#[test]
+fn without_write_no_file_changes() {
+    let dir = seeded_repo();
+    let root = dir.path();
+    let report = build_allowlist_report(
+        claude_and_codex(),
+        forge_hosts_from_remotes(&read_git_remotes(root)),
+    );
+    let edits = plan_allowlist_writes(root, &report).unwrap();
+    assert!(!edits.is_empty(), "there is something to write");
+    let diff = render_planned_edits(&edits);
+    assert!(diff.contains("+ api.github.com"), "{diff}");
+    assert!(!has_spec_id(&diff), "internal ID in user text: {diff}");
+    // JSON output never prompts, so this is the non-interactive report path.
+    run_report_allowlists(root, Some("claude,codex"), true, false).unwrap();
+    assert_eq!(read(root, ".aida/config.toml"), USER_CONFIG);
+    assert_eq!(read(root, ".claude/settings.json"), USER_SETTINGS);
+}
+
+#[test]
+fn write_keeps_a_user_set_vendor_posture_and_skips_unselected_agents() {
+    let dir = seeded_repo();
+    let root = dir.path();
+    let cfg = format!("{USER_CONFIG}\n[contained.vendors]\ncodex = \"aida\"\n");
+    std::fs::write(root.join(".aida/config.toml"), &cfg).unwrap();
+    run_report_allowlists(root, Some("antigravity,codex"), false, true).unwrap();
+    let parsed: toml::Value = toml::from_str(&read(root, ".aida/config.toml")).unwrap();
+    assert_eq!(
+        parsed["contained"]["vendors"]["codex"].as_str(),
+        Some("aida")
+    );
+    assert!(parsed["contained"]["allowed_hosts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|h| h.as_str() == Some("github.com")));
+    // Claude is not selected: its settings file is untouched.
+    assert_eq!(read(root, ".claude/settings.json"), USER_SETTINGS);
+}
+
+#[test]
+fn a_dir_nested_in_an_enclosing_repo_reports_no_remotes() {
+    let dir = seeded_repo();
+    let nested = dir.path().join("sub");
+    std::fs::create_dir_all(&nested).unwrap();
+    assert!(read_git_remotes(&nested).is_empty());
+    assert!(!read_git_remotes(dir.path()).is_empty());
+}
+
+#[test]
+fn write_refuses_before_any_change_when_a_target_is_unusable() {
+    let dir = seeded_repo();
+    let root = dir.path();
+    std::fs::remove_file(root.join(".aida/config.toml")).unwrap();
+    let err = run_report_allowlists(root, Some("claude"), false, true).unwrap_err();
+    assert!(err.to_string().contains("aida init"), "{err}");
+    assert_eq!(read(root, ".claude/settings.json"), USER_SETTINGS);
+    assert!(!root.join(".aida/config.toml").exists());
 }
