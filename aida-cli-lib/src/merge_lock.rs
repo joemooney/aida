@@ -356,7 +356,11 @@ fn stale_at(h: &Holder, clock: Option<(&str, u64)>) -> Option<String> {
     let (boot, now) = clock?;
     let deadline_boot = h.deadline_boot.as_deref()?;
     let deadline = h.deadline_boottime?;
-    (boot != deadline_boot || now >= deadline).then(|| "Expired: lease expired (boot clock)".into())
+    // Both readings are whole seconds truncated from CLOCK_BOOTTIME, so
+    // `now == deadline` can be up to a second before the real deadline: only
+    // `now > deadline` proves the full TTL elapsed. Fail closed on the edge.
+    // trace:BUG-2790 | ai:claude
+    (boot != deadline_boot || now > deadline).then(|| "Expired: lease expired (boot clock)".into())
 }
 
 pub(crate) fn stale_reason(h: &Holder, _our_host: &str) -> Option<String> {
@@ -852,8 +856,11 @@ mod tests {
         for process in [None, Some(HolderRecord::refused(HolderRefusal::Subreaper))] {
             h.process = process;
             assert!(stale_at(&h, Some(("boot-a", 99))).is_none());
+            // Truncated seconds: equal to the deadline is not proven past it.
+            // trace:BUG-2790 | ai:claude
+            assert!(stale_at(&h, Some(("boot-a", 100))).is_none());
             assert!(stale_at(&h, None).is_none());
-            for clock in [("boot-a", 100), ("boot-a", 101), ("boot-b", 1)] {
+            for clock in [("boot-a", 101), ("boot-a", 102), ("boot-b", 1)] {
                 assert!(stale_at(&h, Some(clock)).unwrap().starts_with("Expired"));
             }
         }
@@ -1024,15 +1031,50 @@ mod tests {
         assert_eq!(observed_train_running(dir.path()), Some(false));
         assert!(live_status(dir.path()).is_empty());
         h.process = None;
-        std::fs::write(&path, serialize(&h)).unwrap();
+        // A full TTL, so a loaded runner cannot legitimately expire the
+        // migrated deadline mid-loop. trace:BUG-2790 | ai:claude
+        h.ttl_secs = LEASE_SECS;
+        let legacy = serialize(&h);
+        std::fs::write(&path, &legacy).unwrap();
         assert_eq!(observed_train_running(dir.path()), None);
         assert_eq!(live_status(dir.path()).len(), 1);
-        assert_eq!(
-            acquire(dir.path(), "main", None, "blocked", Duration::ZERO)
-                .unwrap_err()
-                .kind(),
-            std::io::ErrorKind::WouldBlock
-        );
+        // Loop-100: every acquire re-arms the deadline from a fresh legacy
+        // record and must still refuse. trace:BUG-2790 | ai:claude
+        for i in 0..100 {
+            std::fs::write(&path, &legacy).unwrap();
+            let err = acquire(dir.path(), "main", None, "blocked", Duration::ZERO)
+                .expect_err("an unknown holder must block acquire");
+            assert_eq!(err.kind(), std::io::ErrorKind::WouldBlock, "iteration {i}");
+            assert!(parse(&std::fs::read_to_string(&path).unwrap())
+                .process
+                .is_none());
+        }
+    }
+    /// BUG-2790 reproduction with an injected clock: the migration arms
+    /// `floor(now) + ttl`, so the next whole second can arrive microseconds
+    /// later. That reading must retain the unknown holder; one more second
+    /// proves the TTL elapsed.
+    // trace:BUG-2790 | ai:claude
+    #[test]
+    fn truncated_boot_deadline_never_expires_early() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(locks_dir(dir.path())).unwrap();
+        let path = lock_path(dir.path(), "main");
+        let mut h = current_holder();
+        h.process = None;
+        h.ttl_secs = 1;
+        std::fs::write(&path, serialize(&h)).unwrap();
+        assert!(migrate_legacy_deadline(&path).unwrap());
+        let armed = parse(&std::fs::read_to_string(&path).unwrap());
+        let boot = armed.deadline_boot.clone().unwrap();
+        let deadline = armed.deadline_boottime.unwrap();
+        let (_, now) = boot_clock().unwrap();
+        assert!(deadline <= now + 1, "deadline armed from the boot clock");
+        // The second ticked over right after migration: not yet proven stale.
+        assert!(stale_at(&armed, Some((boot.as_str(), deadline))).is_none());
+        assert!(stale_at(&armed, Some((boot.as_str(), deadline + 1)))
+            .unwrap()
+            .starts_with("Expired"));
     }
     #[test]
     fn acquire_serializes_and_bounded_wait_refuses() {
