@@ -12,12 +12,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-27T22:21:17.076982012Z
-modified_at: 2026-11-28T00:39:37.459320460Z
+modified_at: 2026-11-28T00:39:39.926435151Z
 req_type: Task
 tags:
 - from-implementer:TASK-3931
 - kind:design-choice
 - severity:cosmetic
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a21f18-981c-75c3-8026-681a94ac6044
+  created_at: 2026-11-28T00:39:39.926384890Z
+  created_by: joe
 comments:
 - id: 01a21f97-dbdf-7be2-8b08-57da14a2c39c
   author: joe
@@ -36,6 +41,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Superseded
+- id: 01a21f97-f398-7b32-879a-1da506f6ed9d
+  author: joe
+  timestamp: 2026-11-28T00:39:41.720545318Z
+  changes: []
 filed_at:
   code_sha: f340ccd2443588f82c99a002349df25de7a683bc
   branch: task-3931-drought-scan-wiring
