@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 9b9aa8a69391fe68e5054a0d8d26e45b27800b4b
 
   advisor_loop_train.rs bug2769 tests: TEST_HOLD_WARN_MS is set to 100 and never reset. That leaks a 100ms threshold into other tests of the same process that run run_passes, such as the task_1993 BUG-2703 fixture. It is harmless today, causing only extra eprintln and hold-file writes in their temp roots, but it is test-order coupling. Use a reset guard.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T11:42:14.220242454Z
-modified_at: 2026-11-28T01:08:22.122503903Z
+modified_at: 2026-11-28T01:08:24.138987031Z
 req_type: Task
 tags:
 - carried-from:BUG-2769
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21fb2-3bca-7cf3-bc64-d9179aebecee
+  author: joe
+  timestamp: 2026-11-28T01:08:24.138984237Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 9b9aa8a69391fe68e5054a0d8d26e45b27800b4b
   branch: pr-4640
