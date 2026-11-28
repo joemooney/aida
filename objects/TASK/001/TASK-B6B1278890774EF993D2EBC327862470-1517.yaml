@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T14:52:03.382993271Z
-modified_at: 2026-11-26T14:52:03.382993271Z
+modified_at: 2026-11-28T00:28:38.676880729Z
 req_type: Task
 tags:
 - carried-from:BUG-2766
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a21509-d29d-75f2-9eb0-fdf1204a9fd0
   created_at: 2026-11-26T14:52:03.383029911Z
+comments:
+- id: 01a21f8d-d594-7181-99e7-28cde5c6d6c4
+  author: joe
+  content: 'REJECT-STALE (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Reviewer says train/ head_branch prefix equals ci.yml signal; no behavior gap, only AC wording.'
+  created_at: 2026-11-28T00:28:38.676880729Z
+  modified_at: 2026-11-28T00:28:38.676880729Z
 history:
 - id: 01a2186f-e133-7e23-b4f6-202476fa6372
   author: joe
