@@ -9,16 +9,16 @@ note: single 5152ms outlier vs 5000ms ceiling, 1.8% over budget (tol 10%); noted
 due_since: 2026-11-22T04:54:03.435113622Z
 due_reason: on CronJobFailed:performance-guard
 due_failure:
-  trip_id: performance-guard@2026-11-25T07:18:39.577768705Z
+  trip_id: performance-guard@2026-11-28T03:24:27.945513141Z
   performance:
   - command: show
     budget_ms: 2000
-    over_budget: 7
-    denominator: 313
-    proportion_millipercent: 2236
+    over_budget: 4
+    denominator: 94
+    proportion_millipercent: 4255
     tolerated_millipercent: 10000
     window_hours: 24
-    worst_ms: 128442
+    worst_ms: 33208
     excluded_samples: 0
     lineage_scoped: true
     ceiling_ms: 5000
