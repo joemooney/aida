@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-27T02:18:04.493233841Z
-modified_at: 2026-11-27T02:18:04.493233841Z
+modified_at: 2026-11-28T00:37:12.873925136Z
 req_type: Task
 tags:
 - carried-from:BUG-2759
@@ -22,12 +22,20 @@ relationships:
 - rel_type: References
   target_id: 01a2103b-bf79-7b72-9290-da137ec1563d
   created_at: 2026-11-27T02:18:21.356812105Z
+- rel_type: Supersedes
+  target_id: 01a21b12-ce0a-7090-b1fe-80fc00522167
+  created_at: 2026-11-28T00:37:12.873863328Z
+  created_by: joe
 history:
 - id: 01a21ad5-d197-7bd1-bb88-0533cb1ef292
   author: joe
   timestamp: 2026-11-27T02:29:10.167786088Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+  changes: []
+- id: 01a21f95-b503-7ea3-96bd-f5f2698f2c64
+  author: joe
+  timestamp: 2026-11-28T00:37:14.627481058Z
   changes: []
 filed_at:
   code_sha: 2b87920bb9e1b2aa9ddfe671bf8a9c765f9de551
