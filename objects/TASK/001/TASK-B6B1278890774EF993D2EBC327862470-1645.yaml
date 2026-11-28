@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T08:29:38.066956Z
-modified_at: 2026-11-28T12:28:42.234723109Z
+modified_at: 2026-11-28T12:52:54.677946397Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -224,6 +224,21 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-28T12:25:58.082874769Z
   modified_at: 2026-11-28T12:25:58.082874769Z
+- id: 01a22237-3b15-7e70-afdd-bdd92568b1f5
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: d778cf03a6 (round 4 on #4808).
+    Acceptance evidence: [behavioral-test] gate::train_generated::tests::verify_structure_accepts_the_canonical_regen_commit_and_refuses_each_forgery (real-git train; canonical regen passes; hidden commit between it and the last car, edited message, extra touched path, non-blocked new ledger row each refuse; blocked new row passes). [behavioral-test] the_host_refuses_sandbox_output_that_is_not_the_reported_regular_file (stub launcher, no bwrap; honest output commits and passes verify_structure; forged sha, symlinked output, directory output, symlinked parent dir pointing outside, 100755 tip blob each refuse with '<path> is not the reported regular 100644 file'; no ref moves).
+    Fix: stage() canonicalizes each output's parent and requires it under the canonical checkout (previously a symlinked parent was followed and committed — the test proved that); file type is checked before read so a directory gets the same refusal.
+    Mutation checks (each killed its test): A delete regen parent ensure; B delete verify_regen call; C delete ledger_check call; D disable touched-path comparison in verify_regen; E disable the parent-containment check in stage (symlink-parent case was then committed).
+    Results: cargo test -p aida-cli-lib --lib train_generated story_1888 bug2406: 154 passed. aida-ci-guards --lib: 51 passed.
+    Deferred per brief: E2 operation/mediated_route/version re-check (review finding 3) stays on STORY-2894.
+    Residual: the stub tests run only on unix (cfg(unix)).
+  created_at: 2026-11-28T12:52:54.677946397Z
+  modified_at: 2026-11-28T12:52:54.677946397Z
+  session_id: 01a22220d306
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a22146-948a-7032-ad96-95a74d9a14d6
   author: joe
