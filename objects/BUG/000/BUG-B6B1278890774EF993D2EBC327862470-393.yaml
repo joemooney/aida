@@ -9,12 +9,12 @@ description: |-
   1. aida queue rework finishes in under 10s on this repo's current gate ledger (658 PR ledgers), or prints progress and names the slow phase.
   2. A track refusal (other-track) is decided before any gate-ledger scan.
   3. A regression test or bench with a ledger of more than 1000 entries bounds the scan (no quadratic per-spec rescans).
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-28T00:41:46.031601575Z
+modified_at: 2026-11-28T00:41:48.264398100Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -1103,6 +1103,11 @@ comments:
   content: 'RETURNED to Approved (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Comment 11-25: #4380 closed oversized; back to Approved: reproduce on main, fresh <=300-line slice.'
   created_at: 2026-11-28T00:41:46.031601575Z
   modified_at: 2026-11-28T00:41:46.031601575Z
+- id: 01a21f99-e1e8-7d82-971f-64ba61736769
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: missing-context: Current origin/main and installed aida both 45206d90a1. /usr/bin/time timeout 12 aida queue rework BUG-2593 --for implementer exited 1 in 0.12 s (0.06 user, 0.04 sys), dispatch authority refused before discovery. BUG-2593 is now Completed. No incident gate-ledger directory found under /home/dirtlab. No measured discovery timing or basis for closure. Candidate mitigations: 6bb1cf106c bindings, bec84e3afd8 single review resolution. Need authorized fixture or replay on product host. Lane HEAD e4a1ff2469 already contains 554 added lines vs main. No publication.. No triage reason was given.'
+  created_at: 2026-11-28T00:41:48.264394686Z
+  modified_at: 2026-11-28T00:41:48.264394686Z
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
@@ -1496,6 +1501,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a21f99-e1e8-7d82-971f-64af07d0c87f
+  author: joe
+  timestamp: 2026-11-28T00:41:48.264385703Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
@@ -1509,8 +1521,3 @@ filed_at:
 implementation_info:
   implemented: false
   reopened_at_sha: 260a82ae939faf34a8e6505a6f765f2151655610
-attention_reason:
-  category: missing-context
-  detail: 'Current origin/main and installed aida both 45206d90a1. /usr/bin/time timeout 12 aida queue rework BUG-2593 --for implementer exited 1 in 0.12 s (0.06 user, 0.04 sys), dispatch authority refused before discovery. BUG-2593 is now Completed. No incident gate-ledger directory found under /home/dirtlab. No measured discovery timing or basis for closure. Candidate mitigations: 6bb1cf106c bindings, bec84e3afd8 single review resolution. Need authorized fixture or replay on product host. Lane HEAD e4a1ff2469 already contains 554 added lines vs main. No publication.'
-  raised_by: implementer
-  raised_at: 2026-11-25T04:32:43.621277217Z
