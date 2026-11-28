@@ -37,9 +37,10 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/agent_codex_background.rs", 8, "slice C: STORY-2254 detached Codex worker (landed on main after slice A)"),
     ("aida-cli-lib/src/agent_launch.rs", 6, "slice C: Codex grant/finalize writes; slice D: the harness version probe"),
     ("aida-cli-lib/src/agent_registry.rs", 2, "not a vendor child: terminal title restore and probe"),
+    ("aida-cli-lib/src/bounded_process.rs", 1, "TASK-3965: the one bounded `--version` probe of vendor and forge CLIs"),
     ("aida-cli-lib/src/claude_agents.rs", 1, "slice D: vendor query (agents list)"),
     ("aida-cli-lib/src/codex_tool_env.rs", 2, "Codex probe and cfg(test) tool shell constructor; finalization moved into vendors/profile.rs"),
-    ("aida-cli-lib/src/compete_cmd.rs", 2, "slice C: remaining compete grant/finalize markers (vendor construction migrated in B)"),
+    ("aida-cli-lib/src/compete_cmd.rs", 1, "slice C: remaining compete grant/finalize markers (vendor construction migrated in B)"),
     ("aida-cli-lib/src/containment/supervisor.rs", 3, "STORY-2238: the containment supervisor, a permitted constructor module"),
     ("aida-cli-lib/src/criteria_red_run.rs", 1, "generic helper: runs a criteria command"),
     ("aida-cli-lib/src/deputy/worker.rs", 3, "generic helper: deputy job argv; pre_exec process group"),
@@ -47,14 +48,13 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/deputy_shell/supervisor.rs", 1, "not a vendor child: BUG-2654 deputy supervisor restarts the promoted live AIDA runner"),
     ("aida-cli-lib/src/dev_build.rs", 2, "not a vendor child: the built aida binary smoke test"),
     ("aida-cli-lib/src/dev_cmd.rs", 1, "not a vendor child: resolved dev tool"),
-    ("aida-cli-lib/src/scaffold_cmd.rs", 1, "slice D: vendor query (codex version)"),
     ("aida-cli-lib/src/external_cmd.rs", 1, "not a vendor child: exec of an external aida-* subcommand"),
     ("aida-cli-lib/src/forge.rs", 1, "not a vendor child: forge CLI (gh/glab)"),
     ("aida-cli-lib/src/gate/rework_hold_release.rs", 1, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/human.rs", 1, "not a vendor child: terminal send-keys"),
     ("aida-cli-lib/src/implementer_preflight.rs", 2, "not a vendor child: version probe; pre_exec process group"),
     ("aida-cli-lib/src/init_bootstrap.rs", 1, "generic helper: init runs git/forge tools"),
-    ("aida-cli-lib/src/init_cmd.rs", 6, "slice D: vendor queries (MCP list/add)"),
+    ("aida-cli-lib/src/init_cmd.rs", 4, "slice D: vendor queries (MCP list/add)"),
     ("aida-cli-lib/src/kernel.rs", 2, "not a vendor child: gh binary probe"),
     ("aida-cli-lib/src/lane_env.rs", 1, "the in-process lane seat correction (Q2), not a spawn"),
     ("aida-cli-lib/src/lane_job.rs", 1, "not a vendor child: BUG-2383's sandboxed lane job runner (a cargo job, from main)"),
@@ -71,7 +71,6 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/pr_cmd/cleanup.rs", 2, "not a vendor child: pre_exec process group; bounded post-ship sweep child"),
     ("aida-cli-lib/src/regen/score.rs", 2, "not a vendor child: scoring sandbox (argv, pre_exec)"),
     ("aida-cli-lib/src/relay_mail.rs", 1, "not a vendor child: pre_exec process group"),
-    ("aida-cli-lib/src/remote_create.rs", 1, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/review_watch.rs", 1, "not a vendor child: the watch command"),
     ("aida-cli-lib/src/review_watch_forge.rs", 4, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/seat_target_overlay.rs", 1, "not a vendor child: the overlay probe runs the lane-job bwrap on `true` under unshare (from main)"),
@@ -112,7 +111,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
 // scanner (TASK-3787); this records evidence, not a new launch site.
 // BUG-2654 advisor ruling (2026-11-17): allow the non-vendor live AIDA runner restart.
 // trace:BUG-2654 | ai:codex
-const CEILING: usize = 136;
+const CEILING: usize = 131;
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
