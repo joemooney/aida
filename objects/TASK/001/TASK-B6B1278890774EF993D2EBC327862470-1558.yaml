@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: a4f7da7206450b57610db4aa4bdd76a78aa0cad3
 
   AC1 says a recycled pid releases the waiter. The new tests cover only an exited child (Dead). The case of the same pid with a different start time is left to aida_core::proc_identity::observe with no TASK-3924 test (admission_owner.rs ManualWaiter::live). Follow-up: add a forged-start-time owner case.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-27T06:19:08.131520124Z
-modified_at: 2026-11-28T01:17:28.193390902Z
+modified_at: 2026-11-28T01:17:30.299150463Z
 req_type: Task
 tags:
 - carried-from:TASK-3924
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21fba-913b-79f0-900f-f8297c8a7a5e
+  author: joe
+  timestamp: 2026-11-28T01:17:30.299148594Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: a4f7da7206450b57610db4aa4bdd76a78aa0cad3
   branch: pr-4728
