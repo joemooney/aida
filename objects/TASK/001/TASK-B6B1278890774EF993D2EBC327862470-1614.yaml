@@ -12,7 +12,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:31:21.556365075Z
-modified_at: 2026-11-28T04:31:05.228055652Z
+modified_at: 2026-11-28T04:47:39.092065668Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -36,6 +36,25 @@ comments:
     - Making `aida add` issue short IDs for local-only clones is an ID-allocation architecture change; I take the other AC branch (text matches real format). F7's advisor line is out of scope.
   created_at: 2026-11-28T04:31:05.228055652Z
   modified_at: 2026-11-28T04:31:05.228055652Z
+  session_id: 01a220669ee1
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a2207a-f654-7d71-828a-5128545538e3
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 47cad2ff17
+
+    **Acceptance evidence.** AC1 [behavioral-test]: `aida-cli/tests/task_3956_init_first_id.rs` drives the real binary. `local_only_init_names_the_long_id_add_really_issues` runs init with no upstream, parses the ID init promises, runs `aida add`, and asserts they are equal (a node-local `TASK-<node>-001`). It also checks that `aida done`, `aida show` and the commit hint all use that ID and that `TASK-1` no longer appears. `block_allocating_init_promises_no_id_it_cannot_predict` covers an enrolled clone: there add claims an ID block at add time, so init promises no ID and prints an `<ID>` placeholder. Lane run: 2 passed.
+
+    **Probe findings.**
+    - Case: peek returns the store's spelling and Added prints upper case, so the ID is upper-cased (IDs compare case-insensitively).
+    - Multiplicity: on re-init or a bootstrap clone that already has tasks, peek gives the next free number, so the wording is "AIDA will give it the ID" rather than "first".
+    - Fail path: any store or policy read error falls back to the placeholder, never to a fabricated ID.
+    - Found while testing: the first draft predicted TASK-017 where block-mode add issues TASK-1. Fixed by skipping prediction whenever `effective_policy_for(..TASK)` uses blocks. This is the same policy check add runs.
+
+    **Residual risks.** Prediction can go stale if another writer adds a task between init and the first add. The stray advisor line (F7) is untouched and out of scope. docs/first-project.md keeps its short example IDs but gains a note explaining the long form.
+  created_at: 2026-11-28T04:47:39.092065668Z
+  modified_at: 2026-11-28T04:47:39.092065668Z
   session_id: 01a220669ee1
   harness_version: 2.1.319 (Claude Code)
 history:
