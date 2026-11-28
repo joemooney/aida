@@ -82,6 +82,25 @@ comments:
   modified_at: 2026-11-28T03:34:41.775896166Z
   session_id: 01a220272d08
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2203f-18ed-7942-88d5-1749be27ed19
+  author: joe
+  content: |-
+    INTEGRATION PRE-CHECK #4785 @ f350b9edd45 (S1, detect-and-report). Verdict: PASS (STANDARD). No blocking findings.
+    - Read-only: --report-allowlists returns from run_init before any init path writes. dry_run is always true, and no file is created.
+    - Credentials: only remote NAMES and validated hostnames are printed. forge_host_of strips user@ and user:token@, validate_allowed_host rejects junk, and no URL is echoed. JSON and human output carry the same fields.
+    - Probes: agent detection reuses init's existing `<cli> --version` PATH probe. It makes no auth call and has no shell.
+    - Prose: no internal spec IDs in the user-facing text, which the tests check.
+    - ACs: the brief's three cases (github remote + agents, no remote, no spec IDs) are covered in init_allowlist_report_tests.rs.
+    NITS (S2 or later):
+    (1) read_git_remotes uses bare Command::new("git") rather than host_git_command. `git remote -v` doesn't read the index, so no fsmonitor or hooks run, but use the shared builder for consistency.
+    (2) For `aida init DIR` where DIR isn't a repo yet but sits inside one, `git -C DIR remote -v` reports the ENCLOSING repo's remotes. Either guard with rev-parse --show-toplevel == DIR or label the output.
+    (3) The existing agent_cli_detected probe has no timeout, so a hung `--version` would hang init. That's pre-existing.
+    (4) The diff is 454 lines against the brief's 250. The overage is mostly the 174 lines of tests, so it's acceptable.
+    CI: ci:full is running. I'll send FAST done and build p56 once it's green.
+  created_at: 2026-11-28T03:41:56.774097505Z
+  modified_at: 2026-11-28T03:41:56.774097505Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 - id: 01a22043-2d75-78e0-bfbd-c864710b2039
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `story-2838-s1-init-detect` at head `f350b9edd45dafa77fca6dc9e3faf27ded7226fb`.'
