@@ -295,3 +295,56 @@ fn write_refuses_before_any_change_when_a_target_is_unusable() {
     assert_eq!(read(root, ".claude/settings.json"), USER_SETTINGS);
     assert!(!root.join(".aida/config.toml").exists());
 }
+
+#[cfg(unix)]
+#[test]
+fn write_refuses_a_linked_settings_folder_that_leads_outside() {
+    let dir = seeded_repo();
+    let root = dir.path();
+    let outside = tempfile::tempdir().unwrap();
+    std::fs::write(outside.path().join("settings.json"), USER_SETTINGS).unwrap();
+    std::fs::remove_dir_all(root.join(".claude")).unwrap();
+    std::os::unix::fs::symlink(outside.path(), root.join(".claude")).unwrap();
+    let err = run_report_allowlists(root, Some("claude"), false, true).unwrap_err();
+    assert!(err.to_string().contains("linked folder"), "{err}");
+    assert!(
+        !has_spec_id(&err.to_string()),
+        "internal ID in user text: {err}"
+    );
+    assert_eq!(read(outside.path(), "settings.json"), USER_SETTINGS);
+    assert_eq!(
+        read(root, ".aida/config.toml"),
+        USER_CONFIG,
+        "refused before any change"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn write_keeps_the_users_key_order_and_replaces_the_file_atomically() {
+    use std::os::unix::fs::MetadataExt;
+    let dir = seeded_repo();
+    let root = dir.path();
+    let body = "{\"zeta\": 1, \"sandbox\": {\"network\": {\"allowedDomains\": []}, \
+                \"enabled\": true}, \"alpha\": [{\"z\": 1, \"a\": 2}]}\n";
+    std::fs::write(root.join(".claude/settings.json"), body).unwrap();
+    let before = std::fs::metadata(root.join(".claude/settings.json"))
+        .unwrap()
+        .ino();
+    run_report_allowlists(root, Some("claude"), false, true).unwrap();
+    let after = read(root, ".claude/settings.json");
+    let pos = |needle: &str| {
+        after
+            .find(needle)
+            .unwrap_or_else(|| panic!("{needle}: {after}"))
+    };
+    assert!(pos("\"zeta\"") < pos("\"sandbox\"") && pos("\"sandbox\"") < pos("\"alpha\""));
+    assert!(pos("\"network\"") < pos("\"enabled\"") && pos("\"z\"") < pos("\"a\""));
+    assert!(after.contains("api.github.com"), "{after}");
+    let ino = std::fs::metadata(root.join(".claude/settings.json"))
+        .unwrap()
+        .ino();
+    assert_ne!(before, ino, "replaced by rename, not rewritten in place");
+    let names: Vec<_> = std::fs::read_dir(root.join(".claude")).unwrap().collect();
+    assert_eq!(names.len(), 1, "no staging file left behind");
+}

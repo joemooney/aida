@@ -293,13 +293,120 @@ pub(crate) fn render_planned_edits(edits: &[PlannedEdit]) -> String {
     out
 }
 
+/// A JSON value whose objects keep their keys in file order, so rewriting a
+/// user's settings file does not re-sort it. trace:STORY-2838 | ai:claude
+#[derive(Debug)]
+enum Ordered {
+    Obj(Vec<(String, Ordered)>),
+    Arr(Vec<Ordered>),
+    Leaf(serde_json::Value),
+}
+
+impl Ordered {
+    /// The value under `name` in this object, inserting `empty` when absent;
+    /// `None` when this is not an object.
+    fn child(&mut self, name: &str, empty: Ordered) -> Option<&mut Ordered> {
+        let Ordered::Obj(entries) = self else {
+            return None;
+        };
+        let i = match entries.iter().position(|(k, _)| k == name) {
+            Some(i) => i,
+            None => {
+                entries.push((name.to_string(), empty));
+                entries.len() - 1
+            }
+        };
+        Some(&mut entries[i].1)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Ordered {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        use serde::de::{Error, MapAccess, SeqAccess, Visitor};
+        struct V;
+        impl<'de> Visitor<'de> for V {
+            type Value = Ordered;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("a JSON value")
+            }
+            fn visit_map<A: MapAccess<'de>>(self, mut m: A) -> Result<Ordered, A::Error> {
+                let mut entries = Vec::new();
+                while let Some(kv) = m.next_entry()? {
+                    entries.push(kv);
+                }
+                Ok(Ordered::Obj(entries))
+            }
+            fn visit_seq<A: SeqAccess<'de>>(self, mut s: A) -> Result<Ordered, A::Error> {
+                let mut items = Vec::new();
+                while let Some(item) = s.next_element()? {
+                    items.push(item);
+                }
+                Ok(Ordered::Arr(items))
+            }
+            fn visit_bool<E: Error>(self, b: bool) -> Result<Ordered, E> {
+                Ok(Ordered::Leaf(b.into()))
+            }
+            fn visit_i64<E: Error>(self, n: i64) -> Result<Ordered, E> {
+                Ok(Ordered::Leaf(n.into()))
+            }
+            fn visit_u64<E: Error>(self, n: u64) -> Result<Ordered, E> {
+                Ok(Ordered::Leaf(n.into()))
+            }
+            fn visit_f64<E: Error>(self, n: f64) -> Result<Ordered, E> {
+                Ok(Ordered::Leaf(n.into()))
+            }
+            fn visit_str<E: Error>(self, s: &str) -> Result<Ordered, E> {
+                Ok(Ordered::Leaf(s.into()))
+            }
+            fn visit_unit<E: Error>(self) -> Result<Ordered, E> {
+                Ok(Ordered::Leaf(serde_json::Value::Null))
+            }
+        }
+        d.deserialize_any(V)
+    }
+}
+
+impl Serialize for Ordered {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        match self {
+            Ordered::Obj(entries) => {
+                let mut m = s.serialize_map(Some(entries.len()))?;
+                for (k, v) in entries {
+                    m.serialize_entry(k, v)?;
+                }
+                m.end()
+            }
+            Ordered::Arr(items) => items.serialize(s),
+            Ordered::Leaf(v) => v.serialize(s),
+        }
+    }
+}
+
 /// Apply `edits`, keeping every other key, entry and comment. Checked before
 /// anything is written: a symlinked file (a link to a shared master) is
 /// refused rather than written through, and a missing project config means
 /// the project is not set up yet.
 pub(crate) fn apply_allowlist_writes(root: &Path, edits: &[PlannedEdit]) -> Result<()> {
+    let real_root = std::fs::canonicalize(root)
+        .with_context(|| format!("failed to resolve {}", root.display()))?;
     for e in edits {
         let path = root.join(e.file);
+        // A linked folder on the way (`.claude/` -> elsewhere) would carry the
+        // write outside the project, so it is refused like a linked file.
+        // trace:STORY-2838 | ai:claude
+        let mut dir = root.to_path_buf();
+        for part in Path::new(e.file).parent().into_iter().flat_map(Path::iter) {
+            dir.push(part);
+            let linked = std::fs::symlink_metadata(&dir).is_ok_and(|m| m.file_type().is_symlink());
+            let outside = std::fs::canonicalize(&dir).is_ok_and(|d| !d.starts_with(&real_root));
+            if linked || outside {
+                anyhow::bail!(
+                    "{} is a linked folder or leads outside this project; edit the file by hand (nothing was written)",
+                    dir.display()
+                );
+            }
+        }
         let meta = std::fs::symlink_metadata(&path);
         if meta.as_ref().is_ok_and(|m| m.file_type().is_symlink()) {
             anyhow::bail!(
@@ -319,30 +426,27 @@ pub(crate) fn apply_allowlist_writes(root: &Path, edits: &[PlannedEdit]) -> Resu
         let (tables, key) = e.key.rsplit_once('.').context("setting key has no table")?;
         let tables: Vec<&str> = tables.split('.').collect();
         if e.file.ends_with(".json") {
-            let mut doc: serde_json::Value = match std::fs::read_to_string(&path) {
+            let mut doc: Ordered = match std::fs::read_to_string(&path) {
                 Ok(body) => serde_json::from_str(&body)?,
-                Err(_) => serde_json::json!({}),
+                Err(_) => Ordered::Obj(Vec::new()),
             };
             let mut node = &mut doc;
             for t in &tables {
                 node = node
-                    .as_object_mut()
-                    .with_context(|| format!("{} `{t}` is not an object", path.display()))?
-                    .entry(*t)
-                    .or_insert_with(|| serde_json::json!({}));
+                    .child(t, Ordered::Obj(Vec::new()))
+                    .with_context(|| format!("{} `{t}` is not an object", path.display()))?;
             }
-            let list = node
-                .as_object_mut()
-                .with_context(|| format!("{} `{}` is not an object", path.display(), e.key))?
-                .entry(key)
-                .or_insert_with(|| serde_json::json!([]))
-                .as_array_mut()
-                .with_context(|| format!("{} `{}` is not a list", path.display(), e.key))?;
-            list.extend(e.add.iter().cloned().map(serde_json::Value::from));
+            let Some(Ordered::Arr(list)) = node.child(key, Ordered::Arr(Vec::new())) else {
+                anyhow::bail!("{} `{}` is not a list", path.display(), e.key);
+            };
+            list.extend(e.add.iter().map(|a| Ordered::Leaf(a.as_str().into())));
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            std::fs::write(&path, serde_json::to_string_pretty(&doc)? + "\n")?;
+            // Staged beside the file and renamed over it, so a reader never
+            // sees a half-written settings file. trace:STORY-2838 | ai:claude
+            aida_core::write_atomic(&path, serde_json::to_string_pretty(&doc)? + "\n")
+                .with_context(|| format!("failed to write {}", path.display()))?;
         } else if e.scalar {
             crate::config_edit::set_nested(&path, &tables, key, e.add[0].as_str().into())?;
         } else {
