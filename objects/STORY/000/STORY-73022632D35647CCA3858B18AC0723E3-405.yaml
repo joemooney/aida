@@ -17,12 +17,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 4758` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-27T20:33:56.530477854Z
-modified_at: 2026-11-28T00:40:50.773291526Z
+modified_at: 2026-11-28T01:41:39.064142134Z
 req_type: Story
 relationships:
 - rel_type:
@@ -42,6 +42,12 @@ relationships:
   target_id: 01a21ec1-ba05-7be2-8fa4-1d14fc0d24d0
   created_at: 2026-11-28T00:40:50.773239479Z
   created_by: joe
+comments:
+- id: 01a21fd0-ac78-7a02-a530-29780170b6b0
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #4758 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-11-28T01:41:39.064282971Z
+  modified_at: 2026-11-28T01:41:39.064282971Z
 history:
 - id: 01a21eb7-0cf1-7733-8218-0dea53402909
   author: dirtlab
@@ -65,6 +71,13 @@ history:
   author: joe
   timestamp: 2026-11-28T00:40:52.719984614Z
   changes: []
+- id: 01a21fd0-ac78-7a02-a530-298c83036131
+  author: aida-auto-bump
+  timestamp: 2026-11-28T01:41:39.064286430Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: c8a4fbf642a1ab06385225ce78bbf5def9d3bb24
   branch: bug-2787-autobuild-skip-visible
@@ -74,3 +87,6 @@ filed_at:
   vendor: claude
   session: 01a21e9d26a1
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-28T01:41:39.064281876Z
