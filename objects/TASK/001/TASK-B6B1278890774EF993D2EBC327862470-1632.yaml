@@ -1,0 +1,26 @@
+id: 01a2207f-5f20-71a1-8d19-0582794b1c30
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1632
+agreed_id: TASK-3961
+title: 'First-run: aida init output is short and jargon-free (F4, F7, F15)'
+description: |-
+  ## Acceptance
+  - AC1 (F4): host-readiness checks that are irrelevant to a first run do not print a wall of FAILs; init shows at most a short summary with one line on how to see details.
+  - AC2 (F7): init's first-run guide avoids role/advisor/seat jargon or explains it in one plain sentence.
+  - AC3 (F15): the prepare report rough edges listed in F15 are fixed.
+  - AC4: tests pin the shortened output (no FAIL wall in a fresh repo).
+
+  Source: docs/plans/2026-11-27-fresh-user-walkthrough.md, sections F4, F7, F15 (on main after #4782). Advisor aida-d3 2026-11-27 20:30 priority (g); grouped by area by product-15 for laning now.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T04:52:28.064803162Z
+modified_at: 2026-11-28T04:52:28.064803162Z
+req_type: Task
+filed_at:
+  code_sha: 4b06a37b464472f759637aecf25042f98a4e33c2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c6
+  vendor: claude
