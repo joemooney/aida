@@ -136,7 +136,9 @@ impl RunnerCall<'_> {
         let checkout = self.checkout.canonicalize()?;
         let inside = bwrap.canonicalize()?.starts_with(&checkout);
         ensure!(!inside, "bwrap must live outside the checkout");
-        let home = (self.var("HOME").map(PathBuf::from))
+        // The operator's home from the captured environment, via the shared
+        // resolver. trace:BUG-2783 | ai:claude
+        let home = aida_core::home::home_in(&|key| self.var(key).map(PathBuf::from))
             .filter(|h| h.is_absolute() && h.parent().is_some())
             .with_context(|| {
                 format!("the confined {label} review runner needs an absolute HOME")
