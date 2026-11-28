@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-27T23:51:44.101001877Z
+modified_at: 2026-11-28T02:44:56.005528171Z
 req_type: Story
 tags:
 - integration
@@ -1986,6 +1986,33 @@ comments:
     - S10 (COMPLETING SLICE): 6-Language ReviewBench Evaluation Report (docs/showcase/reviewbench-report.html), Clean-Room Methodology (docs/showcase/about.html), and Slide 08 of docs/showcase/code-review.html (ref commits 6483f05a533, a1777130882).
   created_at: 2026-11-27T23:51:44.101001877Z
   modified_at: 2026-11-27T23:51:44.101001877Z
+- id: 01a2200a-e9d3-7191-802e-9769796f8788
+  author: joe
+  content: |-
+    INTEGRATION PRE-CHECK #4779 @ 743cd5cc38f (S7-S10 rebased, agy). Non-blocking, per Joe's 11-27 17:17 override. Verdict: hardening intact; 1 MUST, 2 SHOULD, 2 nits.
+
+    REGRESSION DIFF vs main (scripts at /tmp/claude-1000/regress-check.sh): identical bodies for handle_review_prepare (BUG-2779 pass-through, exit 4), run_review_agent, locate_confined/open_confined, git_text (--literal-pathspecs, --no-textconv, env scrub), ensure_postable, classify_compiled, classify_exclusion, is_credential_path. No main-side test removed. No invariant marker dropped. The only changes to hardened functions are additive:
+    - trusted_default_vendor ignores base config/agents when standalone (zero-init), so it falls back to ~/.aida only;
+    - review_vendor adds opencode/pi.
+
+    LENS:
+    - OK CodeGraph (S8b): resolve_trusted_codegraph_db accepts only the primary worktree's db (when primary != checkout) or ~/.aida/config.toml [codegraph] db. It requires an absolute regular file, lstat, canonicalized outside the checkout, opened SQLITE_OPEN_READ_ONLY. There's a test for a db planted in the checkout or in a linked worktree.
+    - OK body slices (S8c): is_credential_path + classify_path_exclusion before the read; content comes from read_file_at_revision (git blob), not the FS.
+    - OK D1: suppressed findings stay in `reported`/fail-on; dismissed rows go to SARIF suppressions.
+    - OK opencode/pi: confinement_verified=false, no_read=false. So they're never auto-picked, and --post-comment is refused (ensure_postable is unchanged). pi runs with --no-tools.
+    - OK effort step-up: capped at xhigh and validated against the vendor allowlist.
+    - OK JSON inner-quote repair: always re-parsed by serde; it never defaults to empty on failure, so a parse failure is still an error (fail closed).
+
+    MUST (security): `opencode run` gets NO tool restriction. argv is just ["run"], and opencode's default permissions allow edit and bash. A prompt-injected diff reviewed with `--agent opencode` can run shell commands as the operator. The empty cwd doesn't stop that. XDG_CONFIG_HOME in its env allowlist also hands it the operator's own opencode config. Compare agy: --sandbox + deny-all settings + plan mode. Fix: deny every tool for the run, e.g. OPENCODE_CONFIG_CONTENT='{"permission":{"edit":"deny","bash":"deny","webfetch":"deny"},"tools":{"*":false}}' set by the runner (not inherited), or use opencode's read-only plan agent if it's verified. Drop XDG_CONFIG_HOME from `auth`, and add an argv/env snapshot test. Also verify that `opencode run` reads the prompt from stdin; the runner sends it there. Neither binary is installed on this host or on dell1, so argv is unverified.
+    SHOULD: .aida/review-telemetry/ (reviews.jsonl + sarif/<id>.sarif.json) is NOT in .gitignore. In this repo it's ignored only through the local .git/info/exclude `/.aida/`. In a community repo the SARIF archive holds finding messages, which can quote code, and a `git add .` would commit it. The advisor asked for a gitignore entry + test (and 0600). write_output uses default permissions.
+    SHOULD: the reviews.jsonl "append" is a read-modify-write of the whole file through write_output, so two concurrent reviews lose a row. Use an O_APPEND open with the same confinement.
+    NIT: step_up maps finder "max" to xhigh, which is a downgrade for the challenger. Fine, but document it.
+    NIT: standalone_without_aida is derived from the checkout FS (.aida-store / requirements.*). Both outcomes pick a trusted source (base blobs or ~/.aida), so it's not exploitable. Just noting it.
+    CI: ci:full is labelled; fast gates are green; full is pending. Base 69868788f6c is 4 commits behind main and mergeable.
+  created_at: 2026-11-28T02:44:56.005528171Z
+  modified_at: 2026-11-28T02:44:56.005528171Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
