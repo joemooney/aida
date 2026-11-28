@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T08:29:38.066956Z
-modified_at: 2026-11-28T12:52:54.677946397Z
+modified_at: 2026-11-28T13:08:10.492616503Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -237,6 +237,13 @@ comments:
     Residual: the stub tests run only on unix (cfg(unix)).
   created_at: 2026-11-28T12:52:54.677946397Z
   modified_at: 2026-11-28T12:52:54.677946397Z
+  session_id: 01a22220d306
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a22245-347c-7341-8607-2427283e6c3e
+  author: dirtlab
+  content: 'Self-review addendum: HEAD now dd85481f49. make check-ci-fast first failed on the Executable fixture ratchet (my 100755 fixture set the mode directly); fixed by writing it through test_exec::write_executable. Re-ran train_generated (16 passed) and make check-ci-fast: exit 0.'
+  created_at: 2026-11-28T13:08:10.492616503Z
+  modified_at: 2026-11-28T13:08:10.492616503Z
   session_id: 01a22220d306
   harness_version: 2.1.319 (Claude Code)
 history:
