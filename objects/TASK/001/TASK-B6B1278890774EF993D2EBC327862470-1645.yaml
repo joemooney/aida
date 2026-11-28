@@ -11,12 +11,12 @@ description: |-
   - AC3: the advisor's 01:16 requirements hold: deterministic regeneration (run twice → identical bytes), only registered paths may change, and the PR's own non-generated diff is re-verified unchanged (patch-id over non-generated paths).
   - AC4: tests: regeneration on a clean tree is a no-op; each section-4 failure mode refuses.
   - Touches gate/: needs a human merge.
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T08:29:38.066956Z
-modified_at: 2026-11-28T12:05:55.777462618Z
+modified_at: 2026-11-28T12:25:19.848182280Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -198,6 +198,12 @@ comments:
   created_at: 2026-11-28T12:05:55.777458357Z
   modified_at: 2026-11-28T12:05:55.777458357Z
   session_id: 01a221f80acd
+- id: 01a2221d-fbc8-75b2-9669-df9d66c13e71
+  author: aida-orchestrator
+  content: 'Shelved by leases::shelve_spec_on_failure during reviewer: verdict:request-changes'
+  created_at: 2026-11-28T12:25:20.072248804Z
+  modified_at: 2026-11-28T12:25:20.072248804Z
+  session_id: 01a22219d358
 history:
 - id: 01a22146-948a-7032-ad96-95a74d9a14d6
   author: joe
@@ -268,6 +274,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a2221d-fbc8-75b2-9669-df80f7f72b81
+  author: aida-orchestrator
+  timestamp: 2026-11-28T12:25:20.072244073Z
+  session_id: 01a22219d358
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6d3ca942ec2e4a042f45c48bc90773576e06ffdc
   branch: main
@@ -279,3 +293,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-28T09:07:45.179724Z
   implemented_by: dirtlab
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'STORY-2894 S1 / TASK-3963 train tip regeneration. Design follows the signed sketch and is sound: a host-compiled table that ratchets against REGISTRY and the protected floor; generators pinned from base and disabled when a car edits them; an offline bwrap sandbox with only the toolchain and a scratch checkout (no home, no read_allowlist, PYTHONSAFEPATH); host git never runs in the sandbox-writable checkout; check_report, verify_regen and the E2 writer-row rule run on the host; refusal leaves the train as built (fail-closed to today''s behaviour); and the PR body refusal line is sanitised. Approval coverage (add_car, patch-ids) is untouched. The docs change matches the behaviour. Blocking under ADR-76: two refusal paths in train landing and sandbox code have no test. They are verify_structure''s regen-commit proof and stage()''s host re-check of sandbox output against the report. Two p3 hardening follow-ups: the E2 check covers only writer rows, and stage() follows a symlinked parent directory. CI pending at review time.'
+  recovery_hint: address the review findings, move TASK-3963 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-28T12:25:19.848182280Z
