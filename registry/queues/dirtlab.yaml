@@ -346,3 +346,11 @@
   added_by: dirtlab
   added_at: 2026-11-28T05:03:39.445633025Z
   for_role: implementer
+- user_id: dirtlab
+  requirement_id: 01a2208c-0484-7b90-aad2-a7039cb4ef08
+  position: 1626000
+  added_by: dirtlab
+  note: auto-queued by `session end` (01a22073); covers 1 spec
+  added_at: 2026-11-28T05:06:31.885425437Z
+  for_role: reviewer
+  added_by_machine: disrad-dvp98b3puw
