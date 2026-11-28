@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 6657fe56512ef5c5774381433b10bfe2c18168d9
 
   PassClaim::decide's staleness recheck (aida-cli-lib/src/review_watch.rs, decide) compares only current.head and current.base, and forge::Change.base is the base branch name, not a SHA. The base probe (repo.probe: overlap/behind/conflict) now runs without the claim, so a land can move main between the probe and the dispatch decision, and decide() does not notice. Before this PR the pass held admission, so no land could happen between probe and decision. Effect: Notify/Dispatch can rest on stale base evidence for up to the snapshot TTL. This is self-correcting: the next pass re-probes, and the launched reviewer pins the protected base at launch. Follow-up: carry the probed base SHA in the snapshot and compare it in decide(), or re-probe when the protected base tip has moved.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T23:57:54.063571937Z
-modified_at: 2026-11-28T00:58:26.625805863Z
+modified_at: 2026-11-28T00:58:30.317813192Z
 req_type: Task
 tags:
 - carried-from:BUG-2765
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-26T00:12:49.089842794Z
   changes: []
+- id: 01a21fa9-2c2d-7f43-82a6-df2e1fc614cd
+  author: joe
+  timestamp: 2026-11-28T00:58:30.317810784Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 6657fe56512ef5c5774381433b10bfe2c18168d9
   branch: pr-4597
