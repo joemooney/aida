@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 4cbdf727160da85e30e54b7a37db8b4a9a0c9ed3
 
   [aida-cli-lib/src/pr_train.rs route_drift] Sometimes the drift comes from an earlier train member rather than from main, so the PR branch is already up to date with main. Then update_change_branch fails as a no-op, and route_drift reports 'the branch does not update cleanly ... conflict repair' and escalates to the advisor, which misdiagnoses a train-ordering drift as a merge conflict. The implementer listed this as a residual risk. Suggested follow-up: tell an already-up-to-date refusal apart from a real conflict, and route it to a re-train without the earlier member (or a re-review).
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T22:18:15.365235440Z
-modified_at: 2026-11-28T01:15:04.705314015Z
+modified_at: 2026-11-28T01:15:08.662636478Z
 req_type: Task
 tags:
 - carried-from:BUG-2777
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21fb8-67f6-7d71-af31-e6148d9223a8
+  author: joe
+  timestamp: 2026-11-28T01:15:08.662634314Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 4cbdf727160da85e30e54b7a37db8b4a9a0c9ed3
   branch: pr-4685
