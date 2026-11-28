@@ -9,12 +9,12 @@ description: |-
   - AC3: golden help snapshots updated; no internal SPEC IDs in help text.
 
   Source: docs/plans/2026-11-27-fresh-user-walkthrough.md, sections F3, F9 (on main after #4782). Advisor aida-d3 2026-11-27 20:30 priority (g); grouped by area by product-15 for laning now.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T04:51:06.569070472Z
-modified_at: 2026-11-28T05:45:23.194380661Z
+modified_at: 2026-11-28T07:04:06.656409725Z
 req_type: Task
 tags:
 - docs:impacted
@@ -78,6 +78,13 @@ comments:
   created_at: 2026-11-28T05:42:13.580211711Z
   modified_at: 2026-11-28T05:42:13.580211711Z
   session_id: 01a2208aaf73
+- id: 01a220f7-e57a-77b0-bc29-315e72eab393
+  author: aida-orchestrator
+  content: 'Shelved by leases::shelve_spec_on_failure during reviewer: verdict:request-changes'
+  created_at: 2026-11-28T07:04:06.778856151Z
+  modified_at: 2026-11-28T07:04:06.778856151Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a2207e-45f1-7260-9bf3-397ff3a53977
   author: joe
@@ -116,6 +123,15 @@ history:
   author: dirtlab
   timestamp: 2026-11-28T05:45:26.118520740Z
   changes: []
+- id: 01a220f7-e57a-77b0-bc29-314853a0670c
+  author: aida-orchestrator
+  timestamp: 2026-11-28T07:04:06.778853235Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 4b06a37b464472f759637aecf25042f98a4e33c2
@@ -128,3 +144,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-28T05:35:12.269648129Z
   implemented_by: dirtlab
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Advisor FIX-FIRST: conflicts with main after the first-run batch landed; a merge round is needed.'
+  recovery_hint: address the review findings, move TASK-3959 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-28T07:04:06.656409725Z
