@@ -14,7 +14,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T23:18:00.049566692Z
-modified_at: 2026-11-28T02:14:00.849634082Z
+modified_at: 2026-11-28T02:15:00.163537509Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -126,6 +126,12 @@ comments:
   content: Implementer push b209dd272981 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-28T02:14:00.849633600Z
   modified_at: 2026-11-28T02:14:00.849633600Z
+  session_id: 01a21fd2b6f1
+- id: 01a21fef-3543-70b2-94e9-5a07e0b2ff75
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3936-deputy-finding-tests` at head `b209dd272981b286792f9d147a39c28328e7b4a3`.'
+  created_at: 2026-11-28T02:15:00.163534194Z
+  modified_at: 2026-11-28T02:15:00.163534194Z
   session_id: 01a21fd2b6f1
 history:
 - id: 01a21f4d-52bb-7912-beea-868359f153f8
