@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-28T02:55:34.661490947Z
+modified_at: 2026-11-28T02:58:44.958434424Z
 req_type: Story
 tags:
 - integration
@@ -2013,6 +2013,13 @@ comments:
   modified_at: 2026-11-28T02:44:56.005528171Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a22017-af81-7052-87ed-10822c613f6a
+  author: joe
+  content: 'ADVISOR MUST-FIX for #4779 (agy S7-S10, 2026-11-27 20:10; Joe''s bypass applies, but these block landing): (1) OPENCODE runs `opencode run` with all tools enabled (prompt-injection RCE on a hostile diff): remove it from REVIEW_VENDORS, OR add a runner-set deny-all permissions config + drop XDG_CONFIG_HOME from its env + a snapshot test. (2) CI red: the ''Ratchet set'' step (check-ratchets.py) + `make check-ci-source`. (3) docs/showcase about.html + code-review.html: remove the legal-conclusion claims (''17 U.S.C. § 102(b) Compliant'' badge, ''100% original, non-derivative''); keep factual clean-room methodology text and plain statute links. (4) Title completes STORY-3120 but the AC for a pure unit-tested format_forge_review_markdown is unmet: add it OR retitle to (Refs STORY-3120). Advised follow-ups (non-blocking): fabricated anchors, the same-line finding merge, concurrent reviews.jsonl writes (use O_APPEND), --ab-arm non-adversarial enabling the challenger, ambiguity detection in the JSON quote repair, .aida/review-telemetry/ in .gitignore. Workspace/--scan trusting HEAD for the base is Joe-approved (ocr-parity), so it''s intended.'
+  created_at: 2026-11-28T02:58:44.958434424Z
+  modified_at: 2026-11-28T02:58:44.958434424Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
