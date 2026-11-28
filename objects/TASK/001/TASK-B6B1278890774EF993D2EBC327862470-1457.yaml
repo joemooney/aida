@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 5f2421b51c8220f2ba2035bb3bf7140b1e493b03
 
   SNAPSHOT_TTL is measured from pass discovery (claim.observed), not from the per-change head re-read that supersede() already performs via repo.change. In a pass longer than 60s, every later change pays an extra `gh pr view` in decide(). That adds load on the shared GitHub rate budget. Consider stamping observed per change after the supersede re-read.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T22:31:04.030627581Z
-modified_at: 2026-11-28T01:00:14.148139202Z
+modified_at: 2026-11-28T01:00:16.769207375Z
 req_type: Task
 tags:
 - carried-from:BUG-2765
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-26T00:12:49.690098367Z
   changes: []
+- id: 01a21faa-cc01-7423-8625-28280fdb9435
+  author: joe
+  timestamp: 2026-11-28T01:00:16.769205030Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 5f2421b51c8220f2ba2035bb3bf7140b1e493b03
   branch: pr-4597
