@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 9a05bbe93970190e13a9f010fd8e9d0d78128a91
 
   The CI-cache finding is wired only into the light `aida doctor check disk-headroom` path; the full doctor path (doctor_cmd.rs ~846, scan_disk_headroom) does not include it, so `aida doctor` with all categories omits the alert. The docs only promise the check/scheduled-guard path, so this is a consistency nit.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T22:33:02.579658951Z
-modified_at: 2026-11-28T00:59:02.437790575Z
+modified_at: 2026-11-28T00:59:04.716974771Z
 req_type: Task
 tags:
 - carried-from:TASK-3910
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-26T00:12:49.194044439Z
   changes: []
+- id: 01a21fa9-b28c-7491-a1eb-7caea79f9bc8
+  author: joe
+  timestamp: 2026-11-28T00:59:04.716969420Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 9a05bbe93970190e13a9f010fd8e9d0d78128a91
   branch: pr-4596
