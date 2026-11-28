@@ -10,12 +10,12 @@ description: |-
   Depends on: S9a
   Size: <=300 changed lines incl. tests. Track: integration.
   Brief: to be written by the integration seat.
-status: Draft
+status: Rejected
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-28T00:34:29.357732585Z
-modified_at: 2026-11-28T00:34:29.357732585Z
+modified_at: 2026-11-28T00:46:03.364373012Z
 req_type: Task
 tags:
 - standard
@@ -31,6 +31,15 @@ history:
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21f9d-c664-7400-9aed-c087ef42b720
+  author: joe
+  timestamp: 2026-11-28T00:46:03.364369818Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 84fe63bf7c647ba5c65d6b97d1ced29ae3be3596
   branch: integration
