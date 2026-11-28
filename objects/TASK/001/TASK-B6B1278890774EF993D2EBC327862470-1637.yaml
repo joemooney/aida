@@ -1,0 +1,31 @@
+id: 01a22093-fb85-7de0-8e8e-a84fe6a89b70
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1637
+title: 'Review follow-up: docs/first-project.md:112 says `aida init` prints the exact ID your first task will get, b'
+description: |-
+  From TASK-3956
+  Reviewed sha: 47cad2ff17262896f5ad25dc03bb5e1abd88b05c
+
+  docs/first-project.md:112 says `aida init` prints the exact ID your first task will get, but on a block-allocating (enrolled/team) clone init deliberately prints a placeholder instead (first_task_id_example returns None when policy.uses_blocks()). Reword to 'usually prints' or mention the placeholder case.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-28T05:14:58.821117439Z
+modified_at: 2026-11-28T05:14:58.821117439Z
+req_type: Task
+tags:
+- carried-from:TASK-3956
+- finding-hash:5d3d90ad
+- from-review:TASK-3956
+relationships:
+- rel_type: References
+  target_id: 01a22035-1d54-7a50-9f94-e4cceb1fc836
+  created_at: 2026-11-28T05:15:20.454203031Z
+filed_at:
+  code_sha: 47cad2ff17262896f5ad25dc03bb5e1abd88b05c
+  branch: pr-4793
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c6
+  vendor: claude
+  session: 01a2209248f7
