@@ -21,8 +21,10 @@
 //! A scoped scan ([`scan_scoped`]) also attributes each candidate to the
 //! checkout that owns it and asks the caller whether that owner is live:
 //! only a provably dead owner's leftovers are reaped, and an optional age
-//! floor applies to every candidate, era markers included.
-//! trace:BUG-2770 | ai:claude
+//! floor applies to every candidate, era markers included. The one
+//! exception is an id temp no checkout owns: it is reaped once older than
+//! [`ORPHAN_TEMP_AFTER`], since no writer holds a temp that long.
+//! trace:BUG-2770 trace:TASK-3478 | ai:claude
 //!
 //! trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
 
@@ -34,6 +36,13 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Age below which a tomb or staging directory is never reaped.
 pub const STALE_AFTER: Duration = Duration::from_secs(10 * 60);
+
+/// Age past which a [`write_source_id`](super::write_source_id) temp that no
+/// checkout owns (one under the anchor, left while writing an era marker) is
+/// reaped whatever its owner judge says. A writer holds its temp only for one
+/// synced write and a rename, so none is still using one this old.
+// trace:TASK-3478 | ai:claude
+pub const ORPHAN_TEMP_AFTER: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// Prefix of a retired mailbox renamed aside by a reuse.
 pub(crate) const TOMB_PREFIX: &str = ".mailbox-tomb-";
@@ -112,13 +121,32 @@ impl Pass<'_> {
     /// May `path` be removed? Too young: silently not a candidate. Owner not
     /// provably dead: held and reported. `floor` is the kind's own minimum age.
     fn admit(&mut self, path: &Path, floor: Duration, owner: impl FnOnce() -> Owner) -> bool {
+        self.admit_with(path, floor, None, owner)
+    }
+
+    /// [`Pass::admit`], but an unattributed candidate at least `orphan_after`
+    /// old (and past `min_age`) is admitted without its owner being judged.
+    // trace:TASK-3478 | ai:claude
+    fn admit_with(
+        &mut self,
+        path: &Path,
+        floor: Duration,
+        orphan_after: Option<Duration>,
+        owner: impl FnOnce() -> Owner,
+    ) -> bool {
         let floor = self.scope.min_age.map_or(floor, |age| age.max(floor));
         if !is_older(path, self.now, floor) {
             return false;
         }
-        let liveness = (self.scope.owner)(&owner());
+        let owner = owner();
+        let liveness = (self.scope.owner)(&owner);
         if liveness == OwnerLiveness::Dead {
             return true;
+        }
+        if let Some(orphan) = orphan_after {
+            if owner == Owner::Unattributed && is_older(path, self.now, floor.max(orphan)) {
+                return true;
+            }
         }
         self.out.held.push(HeldLeftover {
             path: path.to_path_buf(),
@@ -344,8 +372,10 @@ fn bare_admin_name(bytes: &[u8]) -> Option<&str> {
 
 /// Remove [`write_source_id`](super::write_source_id) temp files in `dir`
 /// older than [`STALE_AFTER`], left by a writer that crashed before placing
-/// them.
+/// them. An unattributed one (under the anchor) whose owner cannot be
+/// judged goes once older than [`ORPHAN_TEMP_AFTER`] instead of staying.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-075 | ai:claude
+// trace:TASK-3478 | ai:claude
 fn scan_id_temps(dir: &Path, owner: &Owner, pass: &mut Pass<'_>) {
     let reap = pass.reap;
     let Ok(entries) = std::fs::read_dir(dir) else {
@@ -363,7 +393,9 @@ fn scan_id_temps(dir: &Path, owner: &Owner, pass: &mut Pass<'_>) {
     for path in paths {
         let file = std::fs::symlink_metadata(&path).is_ok_and(|m| m.file_type().is_file());
         if file
-            && pass.admit(&path, STALE_AFTER, || owner.clone())
+            && pass.admit_with(&path, STALE_AFTER, Some(ORPHAN_TEMP_AFTER), || {
+                owner.clone()
+            })
             && (!reap || std::fs::remove_file(&path).is_ok())
         {
             pass.out.reapable.push(path);
