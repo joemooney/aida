@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T08:25:33.453173985Z
-modified_at: 2026-11-28T01:07:41.878348476Z
+modified_at: 2026-11-28T01:07:45.877193035Z
 req_type: Bug
 tags:
 - admission
@@ -185,6 +185,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3484): AC4 phase coverage: bug2769_a_long_hold_is_reported_while_it_is_held covers only ''phase assembly''. The ''running train'' branch (admission_train_running reads the run.lock) and the ''recovery'' branch (automatic_recovery_needed) of watch_hold have no test. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T01:07:28.492465854Z
   modified_at: 2026-11-28T01:07:28.492465854Z
+- id: 01a21fb1-a655-7091-ac7f-5e63bb0b28b3
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3485): advisor_loop_train.rs train_wanted: the unclaimed pre-scan judges PRs with the legacy `eligible` gate. That gate had no callers before this PR. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:07:45.877193035Z
+  modified_at: 2026-11-28T01:07:45.877193035Z
 history:
 - id: 01a216f9-22fb-70e0-8a0d-85c17cff229f
   author: joe
