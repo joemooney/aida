@@ -32,7 +32,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T00:40:24.997836173Z
-modified_at: 2026-11-28T08:34:02.235120761Z
+modified_at: 2026-11-28T09:24:13.166410490Z
 req_type: Story
 tags:
 - architecture
@@ -103,6 +103,13 @@ comments:
   created_at: 2026-11-28T08:31:02.622781646Z
   modified_at: 2026-11-28T08:31:02.622781646Z
   session_id: 01a22136b669
+- id: 01a22178-7138-72c1-bdc2-24ba59a344a1
+  author: joe
+  content: 'ADVISOR SKETCH AMENDMENT (2026-11-28 02:28, from the #4808 r0 review): GENERATOR CODE IS ALWAYS BASE-TRUSTED. The train runs registered generators only at the trusted base (origin/main when the train starts), never from the train tip or a member''s head. An entry whose generator a member changes is not regenerated in that train (the strict check stays). The regen sandbox binds only the temp worktree + a minimal read-only toolchain, with an empty HOME and no network (never --ro-bind / /). Any error reading the protected-path config disables regeneration for the train (fail closed).'
+  created_at: 2026-11-28T09:24:13.166410490Z
+  modified_at: 2026-11-28T09:24:13.166410490Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a1ec19-7b04-7850-af52-2ebbc7e873d2
   author: joe
