@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T16:12:46.878986729Z
-modified_at: 2026-11-28T01:12:56.171630623Z
+modified_at: 2026-11-28T01:13:30.995923064Z
 req_type: Bug
 tags:
 - STORY-3120
@@ -240,6 +240,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3515): run_review_agent hard-errors when [agents] vendor names a vendor with no review runner (e.g. agy): `agy has no review runner; use claude or codex`, so a project whose default lane vendor is agy cannot use --run-review without --agent. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T01:12:44.563657927Z
   modified_at: 2026-11-28T01:12:44.563657927Z
+- id: 01a21fb6-ea73-7bd0-a3d4-44653e39342b
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3519): Style: run_review_agent (review_prepare.rs) matches the literal "AIDA_REVIEW_RUNNER_CMD" rather than sharing the RUNNER_CMD constant or RunnerCall''s var()/runner_cmd_set() logic, so the two ''is the runner command set'' checks could drift. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:13:30.995923064Z
+  modified_at: 2026-11-28T01:13:30.995923064Z
 history:
 - id: 01a218a4-b5f7-77d3-a614-5ab6c5382917
   author: joe
