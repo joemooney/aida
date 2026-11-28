@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-B6B1278890774EF993D2EBC327862470-1589",
+  "publishes": [
+    {
+      "at": "2026-11-28T09:11:52.072258903Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-28T05:26:40.663690278Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-1589",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drain"
+      }
+    },
+    {
+      "ts": "2026-11-28T09:11:51.834192611Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-1589",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "fec9ba5c8e025cf07543b32bf294bd40b80b09d7",
+        "pr": 4772,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
