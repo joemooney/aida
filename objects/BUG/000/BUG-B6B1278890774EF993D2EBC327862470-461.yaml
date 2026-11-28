@@ -14,12 +14,12 @@ description: |
   4. `aida doctor check leases` reports, and `aida doctor heal stale-leases --id shared-<claim> --yes` heals, an expired shared claim (heartbeat + ttl in the past, process_backed=false, holder pid not running) whose recorded host is a sandbox UTS name of THIS node, as well as one recorded with the node identity. Regression test reproducing the 01a1f4f93790 record shape.
   5. Existing leases and claims with a sandbox hostname are shown with a note in `aida session leases --all` (no data rewrite needed).
   6. Until this lands, the manual release procedure in the advisor-121 ruling (comment of 2026-11-19 13:38) stays the documented stopgap; remove that note from the lane-host checklist when this ships.
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T02:52:03.863423755Z
-modified_at: 2026-11-28T00:42:02.067626286Z
+modified_at: 2026-11-28T00:42:04.625586762Z
 req_type: Bug
 comments:
 - id: 01a1f483-36ae-75c1-9778-2b3579c8306c
@@ -328,6 +328,11 @@ comments:
   content: 'COMPLETED as shipped (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): #4344 861eb515765 shipped AC3/AC4; advisor-121 completion call 11-20 withdrew AC1/AC2/AC5 (no target; hostname is dell1 own).'
   created_at: 2026-11-28T00:42:02.067626286Z
   modified_at: 2026-11-28T00:42:02.067626286Z
+- id: 01a21f9a-21d1-7c72-bf46-aac6b58a948d
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was punted on: design-fork: AC1/AC2/AC5 have no target on this lane host, re-verified 2026-11-20 from this lane (same result as the 2026-11-20 01:34 implementer finding, which the 09:48 completion call did not address). disrad-dvp98b3puw is dell1''s own kernel hostname, not a sandbox UTS name: /proc/self/ns/uts = uts:[4026531838] (initial UTS namespace), /etc/hostname = disrad-dvp98b3puw, all 57 local session leases and all 79 shared claims from this machine record it, and every claim records pid_namespace 4026531836 (initial PID namespace = host-side launcher). AIDA''s bwrap launches (launch/contained.rs:305, seat_clone.rs:1282) pass --unshare-all with no --hostname, so a contained seat reports the same name as the host. No code path writes a sandbox name into a lease or claim, so there is nothing to move to a sandbox_hostname field (AC2) and no way to tell a legacy ''sandbox'' record from a normal one (AC5). ''dell1'' is an operator label that no node registry entry carries. AC3 and AC4 are on main via #4344 (861eb51576): the two unhealable claims (01a1f4f93790, 01a1f5182ee1) were unhealable because their admission never spawned a worker (no lease, no lane record), not because of a host mismatch; regression coordination.rs bug2697_doctor_reports_and_heals_a_claim_whose_admission_never_spawned reproduces that shape with host == this node, plus bug2697_never_spawned_heal_refuses_without_complete_evidence for the refusal paths. No code change made in this lane. Decision needed: close AC1/AC2/AC5 as not reproducible, or restate them.. No triage reason was given.'
+  created_at: 2026-11-28T00:42:04.625582927Z
+  modified_at: 2026-11-28T00:42:04.625582927Z
 history:
 - id: 01a1f676-eff9-7152-bfe5-42179e6d0a8b
   author: joe
@@ -442,6 +447,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a21f9a-21d1-7c72-bf46-aab5787499d3
+  author: joe
+  timestamp: 2026-11-28T00:42:04.625572191Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 9f2f93cc432277dadb7781e7ddefe397bdc65b81
@@ -452,9 +464,3 @@ filed_at:
   vendor: claude
   session: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
-attention_reason:
-  category: design-fork
-  detail: 'AC1/AC2/AC5 have no target on this lane host, re-verified 2026-11-20 from this lane (same result as the 2026-11-20 01:34 implementer finding, which the 09:48 completion call did not address). disrad-dvp98b3puw is dell1''s own kernel hostname, not a sandbox UTS name: /proc/self/ns/uts = uts:[4026531838] (initial UTS namespace), /etc/hostname = disrad-dvp98b3puw, all 57 local session leases and all 79 shared claims from this machine record it, and every claim records pid_namespace 4026531836 (initial PID namespace = host-side launcher). AIDA''s bwrap launches (launch/contained.rs:305, seat_clone.rs:1282) pass --unshare-all with no --hostname, so a contained seat reports the same name as the host. No code path writes a sandbox name into a lease or claim, so there is nothing to move to a sandbox_hostname field (AC2) and no way to tell a legacy ''sandbox'' record from a normal one (AC5). ''dell1'' is an operator label that no node registry entry carries. AC3 and AC4 are on main via #4344 (861eb51576): the two unhealable claims (01a1f4f93790, 01a1f5182ee1) were unhealable because their admission never spawned a worker (no lease, no lane record), not because of a host mismatch; regression coordination.rs bug2697_doctor_reports_and_heals_a_claim_whose_admission_never_spawned reproduces that shape with host == this node, plus bug2697_never_spawned_heal_refuses_without_complete_evidence for the refusal paths. No code change made in this lane. Decision needed: close AC1/AC2/AC5 as not reproducible, or restate them.'
-  lean: 'Close AC1/AC2/AC5 as not reproducible and complete the spec once the product seat drops the AC6 stopgap note. If the real need is that operators misread the host name as another machine, file a small follow-up: show an operator node label (e.g. dell1) beside host in ''aida session leases --all'' and doctor output, display-only, leaving the recorded host and every same-host comparison untouched.'
-  raised_by: implementer
-  raised_at: 2026-11-20T18:39:10.076142338Z
