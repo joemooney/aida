@@ -16,12 +16,33 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T08:29:38.066956221Z
-modified_at: 2026-11-28T08:35:35.675954253Z
+modified_at: 2026-11-28T08:38:52.440680624Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a1ec19-04a5-7a73-b69c-876cd6cd48e4
   created_at: 2026-11-28T08:30:01.299156873Z
+comments:
+- id: 01a2214e-a718-7040-a04e-7c7e7a5fff79
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - AC1 [behavioral]: unit tests in a new gate/train_generated.rs: the TRAIN_GENERATED table cross-checks the embedded REGISTRY (name, outputs, argv), and a floor ratchet checks that no train path matches the protected floor. The canonical regen message, the trailers and the PR-body block are tested. The regen commit is checked in verify_structure (parent = last car, canonical message, touches only G). The journal record comes from Built.regen (Built is already journaled). Python driver 'train' phase and the store-writers --baseline handling in the conflict lane: fixture tests run the embedded driver in temp git repos.
+    - AC2 [behavioral]: add_car and the patch-id checks are not changed; existing story_1690 train tests stay green.
+    - AC3 [behavioral]: the driver test reruns the cheap generators and refuses when the output changes; it refuses when a generator writes any unregistered path. Rust re-checks that the regen tree differs from the tip only in the selected outputs. The cars' patch-ids are not touched.
+    - AC4 [behavioral]: driver tests: clean-tree regen is a no-op (report shows no change, so no commit); a non-zero exit, a write outside the outputs, non-determinism, and an E2 violation (changed reviewed row, or a new non-blocked row) each refuse. Rust tests: a protected-set match disables the entry, and the regen-commit check refuses paths outside G or a non-canonical message.
+
+    ### Expected files
+    - scripts/repair-generated.py, aida-cli-lib/src/gate/train_generated.rs (+ gate/mod.rs), aida-cli-lib/src/pr_train.rs (Built.regen, regen step in the live build, PR body), pr_train_verified.rs (verify_structure), seat_clone.rs (inventory paths + pinned generators), Built literals in tests.
+
+    ### Ambiguities / conflicts as questions
+    - cli-help regeneration runs cargo (a cold build took 12m42s) and S1 changes no coverage, so a tip regen almost always does nothing. I plan to list cli-help in TRAIN_GENERATED as Derived but not train-run in S1 (train_eligible=false) until S3 needs it. I will file this as a design-choice finding.
+  created_at: 2026-11-28T08:38:52.440680624Z
+  modified_at: 2026-11-28T08:38:52.440680624Z
+  session_id: 01a2214b4de1
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a22146-948a-7032-ad96-95a74d9a14d6
   author: joe
