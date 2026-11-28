@@ -137,6 +137,131 @@ fn local_head_branch_is_used_as_is() {
     );
 }
 
+/// TASK-3518: `aida ship` rebases the seat's branch onto a newer
+/// `origin/main` but leaves the seat's local `main` behind. Lands
+/// `(BUG-7001)` on origin, then rebases the seat's `(BUG-7002)` branch onto it.
+fn rebased_seat_with_stale_local_main(primary: &std::path::Path, seat: &std::path::Path) {
+    let commit = |dir: &std::path::Path, msg: &str| {
+        git(
+            dir,
+            &["commit", "-q", "--allow-empty", "--no-verify", "-m", msg],
+        );
+    };
+    commit(primary, "[AI:claude] fix(x): landed work (BUG-7001) (#1)");
+    git(primary, &["push", "-q", "origin", "main"]);
+    git(seat, &["checkout", "-q", "-b", "lane-branch"]);
+    commit(seat, "[AI:claude] fix(x): lane work (BUG-7002)");
+    git(seat, &["fetch", "-q", "origin"]);
+    git(seat, &["rebase", "-q", "origin/main"]);
+}
+
+// trace:TASK-3518 | ai:claude
+#[test]
+fn rebased_seat_with_stale_local_main_logs_only_its_own_commits() {
+    let (_tmp, _origin, primary, seat) = fixture();
+    rebased_seat_with_stale_local_main(&primary, &seat);
+
+    assert_eq!(
+        resolve_log_range(&seat, "main", "lane-branch"),
+        ("origin/main".to_string(), "lane-branch".to_string())
+    );
+    let messages = git_log_messages(&seat, "main", "lane-branch").expect("resolves");
+    assert_eq!(messages.len(), 1, "{messages:?}");
+    assert!(messages[0].contains("(BUG-7002)"), "{messages:?}");
+}
+
+/// A local base with commits origin lacks is kept, so those commits stay
+/// outside the range rather than being pulled into it.
+// trace:TASK-3518 | ai:claude
+#[test]
+fn local_base_ahead_of_origin_is_kept() {
+    let (_tmp, _origin, primary, _seat) = fixture();
+    git(
+        &primary,
+        &[
+            "commit",
+            "-q",
+            "--allow-empty",
+            "--no-verify",
+            "-m",
+            "local-only main work (BUG-7003)",
+        ],
+    );
+    git(&primary, &["checkout", "-q", "-b", "topic"]);
+    assert_eq!(
+        resolve_log_range(&primary, "main", "topic"),
+        ("main".to_string(), "topic".to_string())
+    );
+    assert!(git_log_messages(&primary, "main", "topic")
+        .expect("resolves")
+        .is_empty());
+}
+
+/// The PR-4685 shape end to end: the review story filed from a rebased seat
+/// links only the PR's own spec, never one whose commit already landed.
+// trace:TASK-3518 | ai:claude
+#[test]
+fn auto_queue_from_rebased_seat_links_only_the_prs_own_spec() {
+    let (tmp, _origin, primary, seat) = fixture();
+    rebased_seat_with_stale_local_main(&primary, &seat);
+    std::fs::create_dir_all(seat.join(".aida")).unwrap();
+    std::fs::write(
+        seat.join(".aida/config.toml"),
+        "store_path = \".aida-store\"\n\n[forge]\nprovider = \"github\"\n",
+    )
+    .unwrap();
+    crate::test_env::home_fixture_backend(&seat.join(".aida-store"))
+        .unwrap()
+        .save(&aida_core::RequirementsStore::default())
+        .unwrap();
+    let gh = tmp.path().join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        "#!/bin/sh\n\
+         case \"$1 $2\" in\n\
+         'pr list') printf '42\\tlane\\thttps://github.com/acme/widget/pull/42\\tlane-branch\\n' ;;\n\
+         'pr view') printf '{\"state\":\"OPEN\",\"title\":\"lane\",\"baseRefName\":\"main\",\"headRefName\":\"lane-branch\"}\\n' ;;\n\
+         *) exit 1 ;;\n\
+         esac\n",
+    );
+    let log = tmp.path().join("aida.log");
+    let aida = tmp.path().join("aida");
+    crate::test_exec::write_executable(
+        &aida,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\n\
+             if [ \"$1\" = add ]; then echo 'Added: STORY-900 - review'; fi\n",
+            log.display()
+        ),
+    );
+    let _gh = crate::test_env::EnvVarGuard::set("AIDA_TEST_GH_BINARY", &gh);
+    let _aida = crate::kernel::test_aida_exe::set(aida);
+
+    let outcome = crate::review_gates::try_auto_queue_pr_review_unbumped(
+        &seat,
+        "lane-branch",
+        "session-task-3518",
+        crate::review_gates::AutoQueueOrigin::PrSkill,
+    );
+    let calls = std::fs::read_to_string(&log).unwrap_or_default();
+    assert_eq!(
+        outcome.review_spec.as_deref(),
+        Some("STORY-900"),
+        "{}\n{calls}",
+        outcome.summary
+    );
+    assert!(
+        calls
+            .lines()
+            .any(|l| l == "rel add STORY-900 BUG-7002 --type implements"),
+        "{calls}"
+    );
+    assert!(
+        !calls.contains("BUG-7001"),
+        "a spec that already landed must not be linked or listed:\n{calls}"
+    );
+}
+
 // trace:BUG-B6B1278890774EF993D2EBC327862470-035.acbcb0eb | ai:claude
 #[test]
 fn unresolvable_head_is_an_error_naming_the_range() {
