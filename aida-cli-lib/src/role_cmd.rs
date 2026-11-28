@@ -1073,7 +1073,7 @@ fn handle_role_seat_probe(
             "seat_grant_valid=false cause=RoleInstanceMismatch"
         );
     }
-    use crate::gate::seat_authority::{grant_check, GrantCheck};
+    use crate::gate::seat_authority::{grant_check, seat_probe_refusal, GrantCheck};
     match grant_check(&statusline_project_root()) {
         GrantCheck::Valid(grant)
             if grant.seat == expected
@@ -1090,27 +1090,6 @@ fn handle_role_seat_probe(
             &mut std::io::stderr(),
         )),
     }
-}
-
-/// The seat probe's refusal for a rejected grant. A subject mismatch first
-/// writes both subjects, redacted, on their own line to `diagnostics`, so the
-/// returned exact cause line stays machine-matchable. Debug's discriminant
-/// name gives a cause without the record's subject, binding, timestamps or
-/// selector values.
-// trace:TASK-3933 | ai:claude
-fn seat_probe_refusal(
-    reason: &crate::gate::seat_authority::GrantRejection,
-    env: &aida_core::exec_context::Environment,
-    diagnostics: &mut dyn std::io::Write,
-) -> anyhow::Error {
-    use std::io::Write as _;
-    if let Some(evidence) = reason.subject_mismatch_evidence(env) {
-        // Best effort: a closed stderr must not mask the refusal itself.
-        let _ = writeln!(diagnostics, "{evidence}");
-    }
-    let detail = format!("{reason:?}");
-    let cause = detail.split([' ', '{', '(']).next().unwrap_or("Rejected");
-    anyhow::anyhow!("seat_grant_valid=false cause={cause}")
 }
 
 fn handle_role_current(check: bool) -> Result<()> {
@@ -1677,7 +1656,7 @@ mod tests {
             "{reason:?}"
         );
         let mut stderr = Vec::new();
-        let error = super::seat_probe_refusal(
+        let error = crate::gate::seat_authority::seat_probe_refusal(
             &reason,
             &aida_core::exec_context::Environment::from_pairs([]),
             &mut stderr,
@@ -1700,7 +1679,7 @@ mod tests {
 
         // A non-subject rejection keeps only the cause line.
         let mut stderr = Vec::new();
-        let error = super::seat_probe_refusal(
+        let error = crate::gate::seat_authority::seat_probe_refusal(
             &GrantRejection::Parent(Box::new(reason)),
             &aida_core::exec_context::Environment::from_pairs([]),
             &mut stderr,

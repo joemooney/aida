@@ -738,6 +738,28 @@ impl GrantRejection {
     }
 }
 
+/// The seat probe's refusal for a rejected grant. A subject mismatch first
+/// writes both subjects, redacted, on their own line to `diagnostics`, so the
+/// returned exact cause line stays machine-matchable. Debug's discriminant
+/// name gives a cause without the record's subject, binding, timestamps or
+/// selector values.
+// Lives on the gate floor (STORY-1888): it decides the probe's refusal text.
+// trace:TASK-3933 | ai:claude
+pub(crate) fn seat_probe_refusal(
+    reason: &GrantRejection,
+    env: &aida_core::exec_context::Environment,
+    diagnostics: &mut dyn std::io::Write,
+) -> anyhow::Error {
+    use std::io::Write as _;
+    if let Some(evidence) = reason.subject_mismatch_evidence(env) {
+        // Best effort: a closed stderr must not mask the refusal itself.
+        let _ = writeln!(diagnostics, "{evidence}");
+    }
+    let detail = format!("{reason:?}");
+    let cause = detail.split([' ', '{', '(']).next().unwrap_or("Rejected");
+    anyhow::anyhow!("seat_grant_valid=false cause={cause}")
+}
+
 // Keep the verdict alongside the existing launch diagnostic.
 // trace:BUG-2653 | ai:codex
 #[derive(Debug)]
