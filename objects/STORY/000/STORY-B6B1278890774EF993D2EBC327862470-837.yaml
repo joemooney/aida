@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T23:26:17.322312937Z
-modified_at: 2026-11-28T00:50:20.976688712Z
+modified_at: 2026-11-28T01:17:40.823789072Z
 req_type: Story
 tags:
 - containment
@@ -440,6 +440,11 @@ comments:
   content: 'Auto-completion warning: STORY-3202 was In Progress when merge 8eaf402cf537b81e1c23284c2ff379d7fafe396f completed it; verify that no active round remains.'
   created_at: 2026-11-28T00:50:20.903401683Z
   modified_at: 2026-11-28T00:50:20.903401683Z
+- id: 01a21fba-ba57-7991-bb29-b5d433781854
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3548): docs/review-process.md ''Running the review with an agent'': the finder order lists only `--agent claude` or `--agent codex`, and step 3 says `[agents] vendor` comes from ''the project''s .aida/agents.toml, then .aida/config.toml'' without saying these are... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:17:40.823789072Z
+  modified_at: 2026-11-28T01:17:40.823789072Z
 history:
 - id: 01a21a33-32c4-79e2-bbf0-90030b092cf3
   author: joe
