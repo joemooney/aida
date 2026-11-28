@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 3d7f80b08c8bb1c37284131b4705a0ec06decbac
 
   Reconciler admission mismatch: forge_head treats a change as blocked only when the forge reports mergeable=Known(false) or the head commit's CI aggregate is Failed, while land.rs decides Conflict by a local `git merge-tree` against the pinned base and CiFailed from the ci_base rollup. When GitHub's mergeable is still Unknown (lazily computed after a base move) the reconciler's conflict rework of an approved PR is refused at launch; it self-heals on a later pass but burns lane launches. forge_head's blocked mapping is also untested. Consider passing the reconciler's reason through or treating Unknown mergeability as not-proven-landable.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-27T20:07:22.848420477Z
-modified_at: 2026-11-28T01:18:48.599947322Z
+modified_at: 2026-11-28T01:18:50.518697571Z
 req_type: Task
 tags:
 - carried-from:BUG-2785
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-27T23:19:10.671010084Z
   changes: []
+- id: 01a21fbb-ca96-7b41-9e14-4e4b87b51c42
+  author: joe
+  timestamp: 2026-11-28T01:18:50.518695658Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 3d7f80b08c8bb1c37284131b4705a0ec06decbac
   branch: pr-4753
