@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T20:33:29.715934363Z
-modified_at: 2026-11-26T20:33:29.715934363Z
+modified_at: 2026-11-28T01:13:34.517344525Z
 req_type: Task
 tags:
 - carried-from:BUG-2775
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a218a1-7f9e-7fd0-b7e4-e96e3921122f
   created_at: 2026-11-26T20:33:46.213896843Z
+comments:
+- id: 01a21fb6-f835-79d2-914c-5224f2e84389
+  author: joe
+  content: Recorded as a finding on BUG-2775 (STORY-3118 AC3; Joe sign-off 2026-11-27 17:58). Closed.
+  created_at: 2026-11-28T01:13:34.517344525Z
+  modified_at: 2026-11-28T01:13:34.517344525Z
 history:
 - id: 01a219cc-0a8d-7543-b7c2-038d6e338ea5
   author: joe
