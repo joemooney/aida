@@ -1,0 +1,26 @@
+id: 01a22250-4639-7030-9da2-7083dd1ccc7b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1671
+agreed_id: TASK-3966
+title: 'STORY-2894 S2: keyed-ledger (E2) coverage for store-writers.toml, plus the S1 deferrals'
+description: |-
+  Slice 2 of the signed STORY-2894 sketch (docs/plans/2026-11-28-story-2894-generated-file-regen-sketch.md §6 S2; advisor aida-d3 2026-11-28 06:25). LAUNCH ONLY AFTER S1 (TASK-3963, #4808) LANDS; one STORY-2894 slice in flight at a time.
+
+  ## Acceptance
+  - AC1 (sketch S2): store-writers.toml coverage becomes a keyed row delta (E2): two disjoint row additions from different members land in one train; a same-id policy conflict ejects. This is the slice that would have prevented #4339.
+  - AC2 (S1 deferral 1): E2 compares not just the writer column but the operation / mediated_route / version tables too.
+  - AC3 (S1 deferral 2): the recorded before-sha of each regenerated file is checked against the tip blob (today audit-only).
+  - AC4: tests for AC1-AC3; the base-trusted generator and fail-closed invariants from S1 are unchanged. Touches gate/: human merge.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T13:20:15.929568329Z
+modified_at: 2026-11-28T13:20:15.929568329Z
+req_type: Task
+filed_at:
+  code_sha: 117d2c3cd3aebd1db20d5f0acd81394eadb84e60
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6f4bd7e2493
+  vendor: claude
