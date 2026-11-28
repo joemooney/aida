@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T09:24:37.843959609Z
-modified_at: 2026-11-28T01:08:40.439277440Z
+modified_at: 2026-11-28T01:08:42.557871319Z
 req_type: Task
 tags:
 - carried-from:BUG-2769
@@ -22,6 +22,10 @@ relationships:
 - rel_type: References
   target_id: 01a216f5-be0d-7222-9523-9e270c9b9e46
   created_at: 2026-11-26T09:24:53.567372159Z
+- rel_type: SupersededBy
+  target_id: 01a216f5-be0d-7222-9523-9e270c9b9e46
+  created_at: 2026-11-28T01:08:42.557819890Z
+  created_by: joe
 comments:
 - id: 01a21fb2-7390-7332-91d5-4a25f641cd01
   author: joe
@@ -42,6 +46,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Superseded
+- id: 01a21fb2-8a93-70c3-a4ce-c02e41e9edd8
+  author: joe
+  timestamp: 2026-11-28T01:08:44.307815157Z
+  changes: []
 filed_at:
   code_sha: 0f9abd22eab158ed35fc58e668c10ddc5f5c96c0
   branch: pr-4640
