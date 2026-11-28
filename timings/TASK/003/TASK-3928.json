@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3928",
+  "publishes": [
+    {
+      "at": "2026-11-28T00:15:37.870164884Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-27T20:50:28.578015368Z",
+      "spec": "TASK-3928",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4756,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "7ba7fc3512b200ca1bfed3d6a56f31b75e78d42e"
+      }
+    },
+    {
+      "ts": "2026-11-27T20:50:42.748017982Z",
+      "spec": "TASK-3928",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "TASK-3928: AC1 verified by bug_3928_red_fast_gate_receipt_salvages_to_the_salvage_ref (a red receipt leaves the PR branch at its head, pushes to salvage/<id>, and the note and PR comment name the receipt path). AC2 verified by that test plus bug_3928_green_or_absent_receipt_fast_forwards_the_pr_branch (pass and absent receipts fast-forward the PR branch, no salvage ref). The veto sits before the PR-head guard in guarded_push, and require_publication_branch still runs before the push. failed_receipt matches refuse_failed_gate's semantics: fail-closed on a read error, disk-full fails reclassified as skipped. The one blocking finding is that the fail-closed unreadable-receipt path in the gate has no test (ADR-76 untested-path); there is also a wording nit. The head is 1 commit behind main, and that base commit (python tests, store mutation) does not touch the reviewed code. CI was pending at review time.",
+        "recovery_hint": "address the review findings, move TASK-3928 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-27T20:51:14.990071250Z",
+      "spec": "TASK-3928",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-27T21:34:34.146628665Z",
+      "spec": "TASK-3928",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4756,
+        "verdict": "APPROVED",
+        "reviewed_sha": "fcca407a9066fdbd0e995fd6c04d25a028807190"
+      }
+    },
+    {
+      "ts": "2026-11-28T00:10:40.105269578Z",
+      "spec": "TASK-3928",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4756
+      }
+    },
+    {
+      "ts": "2026-11-28T00:15:37.601345885Z",
+      "spec": "TASK-3928",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "c0959d17a1789fc48cd49cbe3e17adce9fc005b0",
+        "pr": 4756,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
