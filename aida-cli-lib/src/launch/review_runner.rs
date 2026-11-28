@@ -204,7 +204,9 @@ impl RunnerCall<'_> {
     /// inconclusive check, which only warns.
     // trace:TASK-3955 | ai:claude
     pub(crate) fn sign_in_check(&self, limit: Duration) -> Result<()> {
-        let codex = self.vendor().is_some_and(|v| v.program == "codex");
+        let codex = self
+            .vendor()
+            .is_some_and(|v| v.program == CODEX_SIGN_IN_PROBE.program);
         if !codex || self.var("OPENAI_API_KEY").is_some() {
             return Ok(());
         }
