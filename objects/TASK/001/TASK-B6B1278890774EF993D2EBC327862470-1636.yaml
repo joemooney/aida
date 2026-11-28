@@ -1,0 +1,31 @@
+id: 01a22092-0ceb-7c53-8c3a-9301733b14f2
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1636
+title: 'Review follow-up: Test gap: the review_prepare wiring is untested. task3955_signed_out_codex_fails_fast_with'
+description: |-
+  From TASK-3955
+  Reviewed sha: c4a52a471c729ceea007a17fc56a3c26ebf178be
+
+  Test gap: the review_prepare wiring is untested. task3955_signed_out_codex_fails_fast_with_the_sign_in_hint exercises RunnerCall::sign_in_check directly. No test drives handle_review_prepare --run-review --agent codex with a signed-out fake codex and asserts that the run fails before any batch runs, with the `codex login` message. Removing the call at review_prepare.rs:392 would pass every test.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-28T05:12:52.203979775Z
+modified_at: 2026-11-28T05:12:52.203979775Z
+req_type: Task
+tags:
+- carried-from:TASK-3955
+- finding-hash:51c89d58
+- from-review:TASK-3955
+relationships:
+- rel_type: References
+  target_id: 01a22034-b4f5-7082-b5b6-0805f7b1c1f7
+  created_at: 2026-11-28T05:13:11.102694036Z
+filed_at:
+  code_sha: c4a52a471c729ceea007a17fc56a3c26ebf178be
+  branch: pr-4792
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c6
+  vendor: claude
+  session: 01a2208d0409
