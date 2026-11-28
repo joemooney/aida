@@ -53,7 +53,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T03:41:07.856444Z
-modified_at: 2026-11-28T10:08:54.706384439Z
+modified_at: 2026-11-28T10:40:08.258472769Z
 req_type: Story
 tags:
 - containment
@@ -270,6 +270,19 @@ comments:
   created_at: 2026-11-28T10:08:54.706381400Z
   modified_at: 2026-11-28T10:08:54.706381400Z
   session_id: 01a221896359
+- id: 01a221be-539a-7f92-9bb2-361754c92e32
+  author: joe
+  content: |-
+    INTEGRATION PRE-CHECK #4805 r3/r4 @ 082b3e57187: PASS.
+    - Only NotFound starts an empty settings.json; any other read error aborts with 'nothing was written', so the user's file is never clobbered.
+    - The atomic replace keeps the existing mode and owner, and a new file is created 0600.
+    - A settings file owned by another uid is refused unless running as root (root chowns it back after the rename).
+    - Both are tested.
+    Nit: mode & 0o7777 also carries setuid/setgid/sticky bits onto a data file. That's harmless, but 0o777 would be the tidier mask.
+  created_at: 2026-11-28T10:40:08.258472769Z
+  modified_at: 2026-11-28T10:40:08.258472769Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1e0f7-c069-77f2-b73d-5d3a4f0f8d52
   author: joe
