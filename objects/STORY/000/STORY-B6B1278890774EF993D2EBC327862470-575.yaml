@@ -122,7 +122,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:35:39.542243859Z
-modified_at: 2026-11-19T02:57:51.551474160Z
+modified_at: 2026-11-28T00:47:43.633687438Z
 req_type: Story
 comments:
 - id: 01a1b895-7815-78d0-ba38-bbf9fe9f1533
@@ -218,6 +218,11 @@ comments:
   modified_at: 2026-11-19T02:57:45.432895533Z
   session_id: 01a1f1bc1dca
   harness_version: codex-cli 0.167.0
+- id: 01a21f9f-4e11-7921-830d-9e63227f8161
+  author: joe
+  content: 'AC verification vs origin/main (product-15 2026-11-27, per advisor aida-d3 17:45/17:58): NOT complete, only slice 1 shipped (#3653, #3664): ACs 1-5, 7 and AC10''s backward-compat half met. GAP: AC6 receipt identity/status; AC8 processing authority + duplicate scope; AC9 (branch protection reported unverified); AC10 migration procedure. Note: branches are aida-feedback-*, not aida-intent/* as titled. Returned to Approved.'
+  created_at: 2026-11-28T00:47:43.633687438Z
+  modified_at: 2026-11-28T00:47:43.633687438Z
 history:
 - id: 01a1b92a-7413-7ed3-b4ef-34036b0ecfba
   author: aida-session-start
