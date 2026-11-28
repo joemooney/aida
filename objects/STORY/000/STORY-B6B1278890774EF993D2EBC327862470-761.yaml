@@ -2,58 +2,18 @@ id: 01a1dd4b-6390-7523-9611-3fc54414ac35
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-761
 agreed_id: STORY-2838
 title: Tailor aida init sandbox allowlists and permission configs to enabled agents and detected forge hosts
-description: |-
-  ### Problem
-
-  Forensic analysis of interactive advisor and operator sessions revealed four configuration gaps in `aida init`, `aida scaffold`, and `aida config permissions`:
-
-  1. **Interactive Claude sessions lack `sandbox.network.allowedDomains` in `.claude/settings.json`:**
-     - Today `aida init` scaffolds `[contained] allowed_hosts` in `.aida/config.toml` (`aida-cli-lib/src/config_init.rs:653-685`), but only injects those hosts into Claude via an ephemeral `--settings <json>` flag during `aida agent new --contained` (`aida-cli-lib/src/session.rs:5410-5425`).
-     - When a user runs `claude` interactively in the repo with Claude's native sandbox enabled (e.g., via `/sandbox` or `.claude/settings.local.json`), `.claude/settings.json` has no `sandbox.network.allowedDomains` list. Every sandboxed `git fetch`, `git push`, or `gh` call fails with `CONNECT tunnel failed, response 403`, and agent attempts to pass `allowed_domains` on unsandboxed `Bash` calls fail with `InputValidationError`.
-
-  2. **`write_permission_posture` unconditionally writes agent configs even when an agent is not used/selected:**
-     - A user may only have a subset of `{claude, codex, antigravity}` installed or enabled via `aida init --agent <list>` (`AgentSelection` in `aida-cli-lib/src/init_cmd.rs:538`).
-     - Today `write_permission_posture()` (`aida-cli-lib/src/config_cmd.rs:1352-1377`) unconditionally creates and writes `.codex/config.toml` and sets `[agents.codex]` in `.aida/agents.toml` even in a Claude-only or Antigravity-only repository.
-
-  3. **Fresh repos initialized via `aida init` cannot auto-populate custom/self-hosted forge hosts before `git remote add`:**
-     - `aida-core/templates/contained.toml` hardcodes `github.com` and tells users in a comment to manually add self-hosted forges (e.g., self-hosted GitLab or GitHub Enterprise).
-     - Because `aida init` is often run to create or bootstrap a repo before `origin` is added (or alongside a secondary mirror remote), relying solely on `origin` misses the user's actual forge.
-
-  4. **Missing `[contained.vendors]` and Claude `autoMode` guidance:**
-     - When Codex is enabled and contained posture is selected, `[contained.vendors] codex = "native"` (`TASK-2631`) is required on the default branch to avoid launch refusal (`config_cmd.rs:1730-1741`), but `templates/contained.toml` neither documents nor seeds it for Codex-enabled repos.
-
-  ### Proposed Solution
-
-  1. **Respect `AgentSelection` and installed-agent detection across `init`, `scaffold`, and `config permissions`:**
-     - Gate `.claude/settings.json` sandbox network seeding on `selection.claude`.
-     - Gate `.codex/config.toml` and `[agents.codex]` writes in `write_permission_posture()` (`config_cmd.rs:1352`) on `selection.codex` (or detected `codex` usage) so Claude-only / AGY-only users do not get stray `.codex/` directories.
-     - Only prompt or configure settings for agents that are enabled in the project (`read_enabled_agent_selection`) or detected on `PATH`.
-
-  2. **Detect likely forge host(s) during `aida init` and `aida scaffold upgrade/refresh` (without network calls):**
-     - Discover candidate forge DNS hostnames (validated as exact lowercase DNS names per `launch/contained.rs:456`) from a layered local probe:
-       1. Configured Git remotes in the repo (`git remote -v` — all remotes, not just `origin`).
-       2. Environment variables: `GH_HOST`, `GITHUB_SERVER_URL`, `GITHUB_API_URL`, `GITLAB_HOST`, `GITLAB_URI`, `CI_SERVER_HOST`.
-       3. Git config URL rules and forge keys: `url.<base>.insteadOf`, `hub.host`, `gitlab.host`.
-       4. Local forge CLI host configs (if present and readable): `~/.config/gh/hosts.yml` and `~/.config/glab-cli/config.yml`.
-       5. Default fallback to `github.com`, `api.github.com`, `objects.githubusercontent.com`, `codeload.github.com`.
-     - Populate discovered forge hosts into `[contained] allowed_hosts` in `.aida/config.toml`.
-
-  3. **Mirror `allowed_hosts` into `.claude/settings.json` (`sandbox.network.allowedDomains`) when Claude is enabled:**
-     - In `generate_claude_settings_json()` (`aida-core/src/scaffolding/settings.rs:337`) and `ensure_contained_reviewer_config()` (`aida-cli-lib/src/config_init.rs:722`), merge `sandbox.network.allowedDomains` from the project's `[contained] allowed_hosts` (via additive `slot_merge` so user-added domains are preserved).
-     - Do not force `sandbox.enabled = true` in `.claude/settings.json` by default, so interactive users who keep the sandbox off are unaffected while users who enable `/sandbox` get working forge/crate egress immediately.
-
-  ### Acceptance Criteria
-
-  - [ ] `aida init --agent claude` scaffolds `sandbox.network.allowedDomains` in `.claude/settings.json` matching `[contained] allowed_hosts` and does not create `.codex/config.toml` when contained posture is applied.
-  - [ ] `aida init --agent codex` does not create `.claude/settings.json` and documents/configures `[contained.vendors] codex = "native"` when contained posture is chosen.
-  - [ ] `aida init` on a brand-new repo (no `origin` remote yet) detects custom forge hosts from `GH_HOST` / `GITLAB_HOST`, `git config` `insteadOf`, or `~/.config/gh/hosts.yml` / `~/.config/glab-cli/config.yml` and includes them in `[contained] allowed_hosts` (and `.claude/settings.json` when Claude is enabled).
-  - [ ] `aida scaffold upgrade` and `aida scaffold refresh` additively merge missing `[contained] allowed_hosts` into `.claude/settings.json`'s `sandbox.network.allowedDomains` without clobbering existing user domains.
+description: "### Problem\n\nForensic analysis of interactive advisor and operator sessions revealed four configuration gaps in `aida init`, `aida scaffold`, and `aida config permissions`:\n\n1. **Interactive Claude sessions lack `sandbox.network.allowedDomains` in `.claude/settings.json`:**\n   - Today `aida init` scaffolds `[contained] allowed_hosts` in `.aida/config.toml` (`aida-cli-lib/src/config_init.rs:653-685`), but only injects those hosts into Claude via an ephemeral `--settings <json>` flag during `aida agent new --contained` (`aida-cli-lib/src/session.rs:5410-5425`).\n   - When a user runs `claude` interactively in the repo with Claude's native sandbox enabled (e.g., via `/sandbox` or `.claude/settings.local.json`), `.claude/settings.json` has no `sandbox.network.allowedDomains` list. Every sandboxed `git fetch`, `git push`, or `gh` call fails with `CONNECT tunnel failed, response 403`, and agent attempts to pass `allowed_domains` on unsandboxed `Bash` calls fail with `InputValidationError`.\n\
+  \n2. **`write_permission_posture` unconditionally writes agent configs even when an agent is not used/selected:**\n   - A user may only have a subset of `{claude, codex, antigravity}` installed or enabled via `aida init --agent <list>` (`AgentSelection` in `aida-cli-lib/src/init_cmd.rs:538`).\n   - Today `write_permission_posture()` (`aida-cli-lib/src/config_cmd.rs:1352-1377`) unconditionally creates and writes `.codex/config.toml` and sets `[agents.codex]` in `.aida/agents.toml` even in a Claude-only or Antigravity-only repository.\n\n3. **Fresh repos initialized via `aida init` cannot auto-populate custom/self-hosted forge hosts before `git remote add`:**\n   - `aida-core/templates/contained.toml` hardcodes `github.com` and tells users in a comment to manually add self-hosted forges (e.g., self-hosted GitLab or GitHub Enterprise).\n   - Because `aida init` is often run to create or bootstrap a repo before `origin` is added (or alongside a secondary mirror remote), relying solely on `origin`\
+  \ misses the user's actual forge.\n\n4. **Missing `[contained.vendors]` and Claude `autoMode` guidance:**\n   - When Codex is enabled and contained posture is selected, `[contained.vendors] codex = \"native\"` (`TASK-2631`) is required on the default branch to avoid launch refusal (`config_cmd.rs:1730-1741`), but `templates/contained.toml` neither documents nor seeds it for Codex-enabled repos.\n\n### Proposed Solution\n\n1. **Respect `AgentSelection` and installed-agent detection across `init`, `scaffold`, and `config permissions`:**\n   - Gate `.claude/settings.json` sandbox network seeding on `selection.claude`.\n   - Gate `.codex/config.toml` and `[agents.codex]` writes in `write_permission_posture()` (`config_cmd.rs:1352`) on `selection.codex` (or detected `codex` usage) so Claude-only / AGY-only users do not get stray `.codex/` directories.\n   - Only prompt or configure settings for agents that are enabled in the project (`read_enabled_agent_selection`) or detected on `PATH`.\n\n\
+  2. **Detect likely forge host(s) during `aida init` and `aida scaffold upgrade/refresh` (without network calls):**\n   - Discover candidate forge DNS hostnames (validated as exact lowercase DNS names per `launch/contained.rs:456`) from a layered local probe:\n     1. Configured Git remotes in the repo (`git remote -v` — all remotes, not just `origin`).\n     2. Environment variables: `GH_HOST`, `GITHUB_SERVER_URL`, `GITHUB_API_URL`, `GITLAB_HOST`, `GITLAB_URI`, `CI_SERVER_HOST`.\n     3. Git config URL rules and forge keys: `url.<base>.insteadOf`, `hub.host`, `gitlab.host`.\n     4. Local forge CLI host configs (if present and readable): `~/.config/gh/hosts.yml` and `~/.config/glab-cli/config.yml`.\n     5. Default fallback to `github.com`, `api.github.com`, `objects.githubusercontent.com`, `codeload.github.com`.\n   - Populate discovered forge hosts into `[contained] allowed_hosts` in `.aida/config.toml`.\n\n3. **Mirror `allowed_hosts` into `.claude/settings.json` (`sandbox.network.allowedDomains`)\
+  \ when Claude is enabled:**\n   - In `generate_claude_settings_json()` (`aida-core/src/scaffolding/settings.rs:337`) and `ensure_contained_reviewer_config()` (`aida-cli-lib/src/config_init.rs:722`), merge `sandbox.network.allowedDomains` from the project's `[contained] allowed_hosts` (via additive `slot_merge` so user-added domains are preserved).\n   - Do not force `sandbox.enabled = true` in `.claude/settings.json` by default, so interactive users who keep the sandbox off are unaffected while users who enable `/sandbox` get working forge/crate egress immediately.\n\n### Acceptance Criteria\n\n- [ ] `aida init --agent claude` scaffolds `sandbox.network.allowedDomains` in `.claude/settings.json` matching `[contained] allowed_hosts` and does not create `.codex/config.toml` when contained posture is applied.\n- [ ] `aida init --agent codex` does not create `.claude/settings.json` and documents/configures `[contained.vendors] codex = \"native\"` when contained posture is chosen.\n- [ ] `aida\
+  \ init` on a brand-new repo (no `origin` remote yet) detects custom forge hosts from `GH_HOST` / `GITLAB_HOST`, `git config` `insteadOf`, or `~/.config/gh/hosts.yml` / `~/.config/glab-cli/config.yml` and includes them in `[contained] allowed_hosts` (and `.claude/settings.json` when Claude is enabled).\n- [ ] `aida scaffold upgrade` and `aida scaffold refresh` additively merge missing `[contained] allowed_hosts` into `.claude/settings.json`'s `sandbox.network.allowedDomains` without clobbering existing user domains."
 status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-15T03:41:07.856444039Z
-modified_at: 2026-11-28T07:29:16.997670741Z
+created_at: 2026-11-15 03:41:07.856444+00:00
+modified_at: 2026-11-28 07:29:16.997670+00:00
 req_type: Story
 tags:
 - containment
@@ -65,116 +25,171 @@ comments:
 - id: 01a1e0f7-b657-7e92-8815-ffd0552cebf0
   author: joe
   content: 'Advisor 13:50: APPROVED (product seat burndown batch, rank 17: aida init allowlist tailoring; track integration).'
-  created_at: 2026-11-15T20:48:12.887094282Z
-  modified_at: 2026-11-15T20:48:12.887094282Z
+  created_at: 2026-11-15 20:48:12.887094+00:00
+  modified_at: 2026-11-15 20:48:12.887094+00:00
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
 - id: 01a22038-2b6f-7950-a646-08f5649b1bfb
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: f350b9edd4 (branch story-2838-s1-init-detect, base origin/integration). Slice 1 only (Refs): read-only `aida init --report-allowlists` (human + global --format json).
 
+
     Acceptance evidence (S1 brief): [behavioral-test] github remote + claude/codex selection names github.com/api.github.com/objects.githubusercontent.com/codeload.github.com in claude sandbox.network.allowedDomains and in codex contained.allowed_hosts (github_remote_with_claude_and_codex_names_github_hosts_per_agent); no remote leaves forge hosts and entries empty (no_remote_reports_no_forge_hosts); the human text has no spec-ID-shaped tokens (asserted in both). Lane run: 5 passed (4 new + help golden).
+
     Probes: (1) host case: remotes lowercased before validation; uppercase scp remote covered. (2) URL forms: scp, ssh with port, https, file://, local paths, IP literals and single-label hosts are dropped (local_and_malformed_remotes_contribute_no_hosts). (3) multiplicity: 0 remotes, N remotes, fetch/push duplicates deduped, a host shared by several remotes lists each once. (4) fix: `aida init DIR --report-allowlists` ignored DIR; it now reports on DIR.
-    Residual risks: a DIR that exists inside a parent repo without its own .git reports the parent's remotes. Only git remotes are probed (env vars, insteadOf and gh/glab host configs are later slices). S2 writes the configs. Diff is ~450 lines (about 175 tests, 10 golden), over the 250-line budget.
-  created_at: 2026-11-28T03:34:41.775896166Z
-  modified_at: 2026-11-28T03:34:41.775896166Z
+
+    Residual risks: a DIR that exists inside a parent repo without its own .git reports the parent''s remotes. Only git remotes are probed (env vars, insteadOf and gh/glab host configs are later slices). S2 writes the configs. Diff is ~450 lines (about 175 tests, 10 golden), over the 250-line budget.'
+  created_at: 2026-11-28 03:34:41.775896+00:00
+  modified_at: 2026-11-28 03:34:41.775896+00:00
   session_id: 01a220272d08
   harness_version: 2.1.319 (Claude Code)
 - id: 01a2203f-18ed-7942-88d5-1749be27ed19
   author: joe
-  content: |-
-    INTEGRATION PRE-CHECK #4785 @ f350b9edd45 (S1, detect-and-report). Verdict: PASS (STANDARD). No blocking findings.
+  content: 'INTEGRATION PRE-CHECK #4785 @ f350b9edd45 (S1, detect-and-report). Verdict: PASS (STANDARD). No blocking findings.
+
     - Read-only: --report-allowlists returns from run_init before any init path writes. dry_run is always true, and no file is created.
+
     - Credentials: only remote NAMES and validated hostnames are printed. forge_host_of strips user@ and user:token@, validate_allowed_host rejects junk, and no URL is echoed. JSON and human output carry the same fields.
-    - Probes: agent detection reuses init's existing `<cli> --version` PATH probe. It makes no auth call and has no shell.
+
+    - Probes: agent detection reuses init''s existing `<cli> --version` PATH probe. It makes no auth call and has no shell.
+
     - Prose: no internal spec IDs in the user-facing text, which the tests check.
-    - ACs: the brief's three cases (github remote + agents, no remote, no spec IDs) are covered in init_allowlist_report_tests.rs.
+
+    - ACs: the brief''s three cases (github remote + agents, no remote, no spec IDs) are covered in init_allowlist_report_tests.rs.
+
     NITS (S2 or later):
-    (1) read_git_remotes uses bare Command::new("git") rather than host_git_command. `git remote -v` doesn't read the index, so no fsmonitor or hooks run, but use the shared builder for consistency.
-    (2) For `aida init DIR` where DIR isn't a repo yet but sits inside one, `git -C DIR remote -v` reports the ENCLOSING repo's remotes. Either guard with rev-parse --show-toplevel == DIR or label the output.
-    (3) The existing agent_cli_detected probe has no timeout, so a hung `--version` would hang init. That's pre-existing.
-    (4) The diff is 454 lines against the brief's 250. The overage is mostly the 174 lines of tests, so it's acceptable.
-    CI: ci:full is running. I'll send FAST done and build p56 once it's green.
-  created_at: 2026-11-28T03:41:56.774097505Z
-  modified_at: 2026-11-28T03:41:56.774097505Z
+
+    (1) read_git_remotes uses bare Command::new("git") rather than host_git_command. `git remote -v` doesn''t read the index, so no fsmonitor or hooks run, but use the shared builder for consistency.
+
+    (2) For `aida init DIR` where DIR isn''t a repo yet but sits inside one, `git -C DIR remote -v` reports the ENCLOSING repo''s remotes. Either guard with rev-parse --show-toplevel == DIR or label the output.
+
+    (3) The existing agent_cli_detected probe has no timeout, so a hung `--version` would hang init. That''s pre-existing.
+
+    (4) The diff is 454 lines against the brief''s 250. The overage is mostly the 174 lines of tests, so it''s acceptable.
+
+    CI: ci:full is running. I''ll send FAST done and build p56 once it''s green.'
+  created_at: 2026-11-28 03:41:56.774097+00:00
+  modified_at: 2026-11-28 03:41:56.774097+00:00
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 - id: 01a22043-2d75-78e0-bfbd-c864710b2039
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `story-2838-s1-init-detect` at head `f350b9edd45dafa77fca6dc9e3faf27ded7226fb`.'
-  created_at: 2026-11-28T03:46:43.189179808Z
-  modified_at: 2026-11-28T03:46:43.189179808Z
+  created_at: 2026-11-28 03:46:43.189179+00:00
+  modified_at: 2026-11-28 03:46:43.189179+00:00
   session_id: 01a220272d08
 - id: 01a22045-f5d6-7052-b7bb-1a24c73fb8d9
   author: joe
-  content: |-
-    INTEGRATION: #4785 @ f350b9edd45 FAST is RED (real failures from this PR, not flakes). The pre-check PASS stands, but S1 needs a rework round before p56.
+  content: 'INTEGRATION: #4785 @ f350b9edd45 FAST is RED (real failures from this PR, not flakes). The pre-check PASS stands, but S1 needs a rework round before p56.
+
     Three failing aida-ci-guards ratchets, in both fast compile and fast gates:
+
     (1) story_2539_vendor_literal_ratchet: new vendor string literals in init_allowlist_report.rs. build_allowlist_report has "claude", "codex" and "antigravity"; report_agent_selection has "claude", "codex" x2, "agy" and "antigravity". Additions are forbidden. Take the names and programs from the existing vendor registry/constants that init_cmd.rs and agent selection already use, not new literals.
+
     (2) and (3) bug_1723_config_trust_tests: init_allowlist_report.rs has 2 config.toml sites with no [readers] entry in scripts/config-trust.toml. These are the ".aida/config.toml" display strings in SettingEntry, plus the resolve_default_vendor read. Classify them in scripts/config-trust.toml (display-only / operator repo at init), or reference the existing path constant if the guard exempts it. The second test also counts sites, so the inventory total must match.
-    Local repro: cargo test -p aida-ci-guards --lib story_2539 bug_1723. check-ci-fast does not build, so it can't catch these.
-  created_at: 2026-11-28T03:49:17.447949685Z
-  modified_at: 2026-11-28T03:49:17.447949685Z
+
+    Local repro: cargo test -p aida-ci-guards --lib story_2539 bug_1723. check-ci-fast does not build, so it can''t catch these.'
+  created_at: 2026-11-28 03:49:17.447949+00:00
+  modified_at: 2026-11-28 03:49:17.447949+00:00
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 - id: 01a22058-db1a-70b0-aaca-dc183e2fc48c
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: 17cb9e23ef (round 2 on #4785). Scope: the two CI guard fixes only. Vendor names and the Codex-default check moved to vendors/init_allowlists.rs. The report reuses detected_agent_selection and AgentSelection::names. The config path now uses config_commit::CONFIG_REL_PATH. No ledger or inventory edits.
+
     Evidence: aida-ci-guards story_2539 + bug_1723, 15 passed. init_allowlist_report tests, 4 passed. make check-ci-fast exit 0.
+
     Probes: the agent order is unchanged (names() order matches the old if-chain). Fallback to all when nothing is detected is preserved (detected_agent_selection falls back before the Codex add; the old code added Codex first, and the result is the same). An unknown agent name gets no settings, but parse_agent_selection only yields the three known names.
-    Residual risk: the vendor helper matches on init selection names and has no test of its own; the report tests cover all three arms through build_allowlist_report.
-  created_at: 2026-11-28T04:10:23.898868558Z
-  modified_at: 2026-11-28T04:10:23.898868558Z
+
+    Residual risk: the vendor helper matches on init selection names and has no test of its own; the report tests cover all three arms through build_allowlist_report.'
+  created_at: 2026-11-28 04:10:23.898868+00:00
+  modified_at: 2026-11-28 04:10:23.898868+00:00
   session_id: 01a220497869
   harness_version: 2.1.319 (Claude Code)
 - id: 01a22059-09fb-77e1-85b7-90a6858cd21f
   author: dirtlab
   content: 'Correction to the self-review at 17cb9e23ef: the report tests cover only the claude and codex arms of vendors/init_allowlists.rs. The antigravity arm (contained.allowed_hosts only) is untested. It was untested before this round too; the arm moved unchanged. Leaving it for slice 2 per the fix-only brief.'
-  created_at: 2026-11-28T04:10:35.899008076Z
-  modified_at: 2026-11-28T04:10:35.899008076Z
+  created_at: 2026-11-28 04:10:35.899008+00:00
+  modified_at: 2026-11-28 04:10:35.899008+00:00
   session_id: 01a220497869
   harness_version: 2.1.319 (Claude Code)
 - id: 01a22060-3963-7051-b5c5-ca265b709a14
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `story-2838-s1-init-detect` at head `17cb9e23ef6ad33628decf84a60b45d881035c8d`.'
-  created_at: 2026-11-28T04:18:26.787834848Z
-  modified_at: 2026-11-28T04:18:26.787834848Z
+  created_at: 2026-11-28 04:18:26.787834+00:00
+  modified_at: 2026-11-28 04:18:26.787834+00:00
   session_id: 01a220497869
 - id: 01a22063-e4c6-76c1-b81e-deb80610c903
   author: joe
   content: 'INTEGRATION: S1 promoted to main as p56 #4790 (Refs STORY-2838). Linear cherry-pick of fb1f8edfbad on main 11781feb5de; the patch-id matches the squash and the PR head (f24974a27d49).'
-  created_at: 2026-11-28T04:22:07.615336163Z
-  modified_at: 2026-11-28T04:22:07.615336163Z
+  created_at: 2026-11-28 04:22:07.615336+00:00
+  modified_at: 2026-11-28 04:22:07.615336+00:00
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2210a-ea0a-7411-8edd-dbc62cf0d8dc
+  author: dirtlab
+  content: '## Implementer self-review
+
+    Reviewed HEAD: 1a6a7ff7ae (branch story-2838-s2-init-write, base origin/integration fb1f8edfba; PR #4805). Slice 2 only (Refs): `aida init --report-allowlists --write` (or an interactive yes) writes the reported entries.
+
+    Acceptance evidence (S2 brief): [behavioral-test] write puts the entries in both configs, and a second run is byte-identical (write_adds_reported_entries_keeps_user_entries_and_is_idempotent). User entries and comments are kept. A user-set codex posture is kept and the unselected Claude file is untouched (write_keeps_a_user_set_vendor_posture_and_skips_unselected_agents). Without --write no file changes (without_write_no_file_changes). Nested DIR gives no remotes (a_dir_nested_in_an_enclosing_repo_reports_no_remotes). A missing config is refused before any write (write_refuses_before_any_change_when_a_target_is_unusable). Lane: 9 passed. Guards: story_2539 + bug_1723 passed in aida-ci-guards (15) and aida-cli-lib, and the help golden passed. make check-ci-fast exit 0.
+
+    Probes: (1) case: hosts dedupe case-insensitively against existing entries. (2) format: TOML comments preserved via toml_edit; an unparseable JSON/TOML errors before any write; an inline table is refused by set_nested. (3) multiplicity: a setting shared by Claude and Codex (contained.allowed_hosts) merges into one edit; empty hosts plan no edit. (4) symlinked settings.json (this repo''s own layout) and a missing config are refused up front.
+
+    Fixes during review: a partial write was possible when the second target was unusable, so all targets are now checked first. A new AIDA_HEADLESS env read was flagged by the ExecContext ratchet and removed (no TTY means no prompt). The store-writer inventory was regenerated with 3 rows.
+
+    S1 nits: the shared host git builder, the enclosing-repo guard, a 5 s --version timeout, and the size (~270 non-test lines, over 250).
+
+    Residual risks: --write requires an initialized project. A mid-write failure after up-front checks can leave earlier files written. The interactive prompt path is untested. The golden was hand-edited but verified by the golden test.'
+  created_at: 2026-11-28 07:24:53.130246+00:00
+  modified_at: 2026-11-28 07:24:53.130246+00:00
+  session_id: 01a220dbd95e
+  harness_version: 2.1.319 (Claude Code)
 - id: 01a2210f-5ed2-70f3-a164-5dc2ae8cc142
   author: joe
-  content: |-
-    INTEGRATION PRE-CHECK #4805 @ 1a6a7ff7ae0 (S2, --write). Verdict: PASS (STANDARD). Two SHOULDs; neither blocks the p57 promotion, but both are cheap.
+  content: 'INTEGRATION PRE-CHECK #4805 @ 1a6a7ff7ae0 (S2, --write). Verdict: PASS (STANDARD). Two SHOULDs; neither blocks the p57 promotion, but both are cheap.
+
     OK:
+
     - It writes only with --write or an interactive yes. JSON output, piped and headless runs only report.
+
     - It writes only validated hostnames plus the codex "native" scalar.
-    - It's additive and idempotent: case-insensitive dedup, and a user's scalar is kept.
+
+    - It''s additive and idempotent: case-insensitive dedup, and a user''s scalar is kept.
+
     - An unparseable existing file errors with "nothing was written".
-    - A symlinked target file is refused, so the AIDA repo's linked .claude/settings.json is safe.
+
+    - A symlinked target file is refused, so the AIDA repo''s linked .claude/settings.json is safe.
+
     - A missing .aida/config.toml asks the user to run init first.
+
     - The TOML edit goes through config_edit, so comments and order are kept.
+
     - All S1 nits are fixed: host_fetch_git_command, the show-toplevel == DIR guard for a nested DIR, and the 5 s bounded --version probe.
+
     SHOULD (security, small): apply_allowlist_writes lstat-checks only the final file. A symlinked PARENT directory (.claude -> elsewhere, or .aida -> elsewhere) is followed, and create_dir_all plus fs::write land outside the project. lstat each component under root (or canonicalize the parent and require it to start with the canonical root), and refuse otherwise. Add a test with a .claude dir symlink.
-    SHOULD (UX): .claude/settings.json is rewritten through serde_json without preserve_order, so every key in the user's file gets re-sorted alphabetically on the first --write. That's churn in a hand-edited file. Enable serde_json preserve_order for this path (e.g. parse to an IndexMap-backed Value), or edit it surgically. The write also isn't atomic (fs::write); config_edit::save_doc may already be the atomic pattern, so reuse it.
-    CI: fast is running. I'll send FAST done when it's green.
-  created_at: 2026-11-28T07:29:16.997670741Z
-  modified_at: 2026-11-28T07:29:16.997670741Z
+
+    SHOULD (UX): .claude/settings.json is rewritten through serde_json without preserve_order, so every key in the user''s file gets re-sorted alphabetically on the first --write. That''s churn in a hand-edited file. Enable serde_json preserve_order for this path (e.g. parse to an IndexMap-backed Value), or edit it surgically. The write also isn''t atomic (fs::write); config_edit::save_doc may already be the atomic pattern, so reuse it.
+
+    CI: fast is running. I''ll send FAST done when it''s green.'
+  created_at: 2026-11-28 07:29:16.997670+00:00
+  modified_at: 2026-11-28 07:29:16.997670+00:00
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a22112-f887-7f31-aa72-1a33a4458109
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `story-2838-s2-init-write` at head `1a6a7ff7ae00bb65d3f4d3a36f81ddb3bbbb37f7`.'
+  created_at: 2026-11-28 07:33:41.127239+00:00
+  modified_at: 2026-11-28 07:33:41.127239+00:00
+  session_id: 01a220dbd95e
 history:
 - id: 01a1e0f7-c069-77f2-b73d-5d3a4f0f8d52
   author: joe
-  timestamp: 2026-11-15T20:48:15.465025924Z
+  timestamp: 2026-11-15 20:48:15.465025+00:00
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
   changes:
@@ -183,33 +198,33 @@ history:
     new_value: Approved
 - id: 01a1e0f7-cb2b-7af1-969f-7f9c9f2a70a9
   author: joe
-  timestamp: 2026-11-15T20:48:18.219832661Z
+  timestamp: 2026-11-15 20:48:18.219832+00:00
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
   changes: []
 - id: 01a22027-6492-7601-bca8-1f447b920231
   author: aida-session-start
-  timestamp: 2026-11-28T03:16:22.290921914Z
+  timestamp: 2026-11-28 03:16:22.290921+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a22028-01cf-7a92-a7ea-37762fb2bdc1
   author: dirtlab
-  timestamp: 2026-11-28T03:17:02.543557836Z
+  timestamp: 2026-11-28 03:17:02.543557+00:00
   session_id: 01a220272d08
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a22049-07f7-7641-879b-3f964cf75b76
   author: joe
-  timestamp: 2026-11-28T03:53:06.807731926Z
+  timestamp: 2026-11-28 03:53:06.807731+00:00
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
 - id: 01a22062-93bd-7292-8cd3-1ed0ad0d76a1
   author: aida-pr-open
-  timestamp: 2026-11-28T04:21:00.989786444Z
+  timestamp: 2026-11-28 04:21:00.989786+00:00
   changes:
   - field_name: status
     old_value: Approved
