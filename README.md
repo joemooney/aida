@@ -49,12 +49,17 @@ The install script detects your platform, downloads the matching release, and
 installs `aida` into `~/.local/bin/`:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh -o install.sh && bash install.sh
 ```
 
-Pass `--version <tag>` to pin a release or `--prefix <dir>` to change the
-install directory (`... | bash -s -- --prefix /usr/local/bin`). Make sure the
-install directory is on your `PATH`. Later upgrades are `aida upgrade`.
+If the download fails, the command stops with curl's error and installs
+nothing. Pass `--version <tag>` to pin a release or `--prefix <dir>` to change
+the install directory (`bash install.sh --prefix /usr/local/bin`). Without
+direct GitHub access, download the release tarball from
+[Releases](https://github.com/joemooney/aida/releases) on another machine, copy
+it and `install.sh` over, and run `bash install.sh --archive
+aida-linux-x86_64.tar.gz`. Make sure the install directory is on your `PATH`.
+Later upgrades are `aida upgrade`.
 
 ### Build from source
 
