@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: `aida doctor --lane-host` (and the lane-run STALE refusal) report "live binary N hours / M changes behind main; autobuild skipping since <time>: <reason from the autobuild log>" with the one command that clears it.
   - AC2: a test with a fake autobuild log showing consecutive skips and a stale live sha.
-status: Done
+status: Completed
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T18:59:22.407725451Z
-modified_at: 2026-11-27T21:15:03.646367849Z
+modified_at: 2026-11-28T01:45:54.141306496Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -192,6 +192,22 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a21fd4-9094-7e43-9e2e-ff62ff578eaa
+  author: aida-auto-bump
+  timestamp: 2026-11-28T01:45:54.068802151Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21fd4-90dd-70a2-affe-2f498a904932
+  timestamp: 2026-11-28T01:45:54.141302834Z
+  agent: aida
+  commit_sha: 2585c0fa9a398b6fdbd30104641cdd2a7cef443e
+  summary: 'BUG-2787 PASS. AC1 [behavioral-test]: dev_fresh::autobuild_note/skip_streak parse the trailing skip: run of the autobuild log (format matches scripts/aida-autobuild.sh log/skip/fail/promoted lines, ''%F %T'' stamps); run_check_fresh (used by scripts/lane-run.sh) prints ''live binary Nh / M change(s) behind main; autobuild skipping since <first> (last <last>): <reason>'' plus a ''Clear it:'' hint naming git -C <primary> status and the autobuild rerun; lane_host::inspect adds an advisory ''autobuild'' row only when a same-project dev binary fails the binary check and is behind. Missing/unreadable log is reported, not an error; 256 KiB tail read starts at a whole line; slicing at byte 19 is guarded by line.get(..19). AC2 [behavioral-test]: dev_fresh stale_binary_names_the_autobuild_skip_streak_and_its_clearing_hint and lane_host behind_binary_row_names_autobuild_skip_streak_and_hint use fake logs with consecutive skips and a stale built sha, plus streak-ended and not-behind cases. AIDA_AUTOBUILD_LOG classified ambient and documented. Report-only, advisory row; no authority surface. CI fast compile and fast gates green at head; merge-hold-gate pending clearance (not external evidence).'
+  punted:
+  - 'punted: BUG-2787 at c8a4fbf642a1 (1 commit behind main; findings do not depend on base changes). AC1: implemented. dev_fresh run_check_fresh prints ''live binary Nh / M change(s) behind main; autobuild skipping since <t> (last <t>): <reason>'' plus ''Clear it: <hint>'' on the STALE refusal that scripts/lane-run.sh calls. lane_host adds an advisory ''autobuild'' row when a same-project dev binary is behind. The log format matches scripts/aida-autobuild.sh (''%F %T skip:/FAILED:/promoted and verified''). AC2: verified by dev_fresh::tests::stale_binary_names_the_autobuild_skip_streak_and_its_clearing_hint (fake log with consecutive skips, a stale built sha, streak reset by FAILED/promoted, missing log reported). Bug protocol ''touches at least one test file'': met via the inline #[cfg(test)] module in dev_fresh.rs. The blocker: the new AIDA_AUTOBUILD_LOG literal is unclassified in launch_policy, which fails the story_2326 ambient-input ratchet, matching the red fast-compile ''Ratchet set'' step. The fast-gates job is also red, and its gate could not be identified from the sandbox. Two non-blocking follow-ups: lane_host has no test, and the AC1 ''one command'' hint wording.'
+  review_verdict: approved
 filed_at:
   code_sha: 8e06142ac48de544984d38cafbfdb2b0a965fec5
   branch: main
@@ -203,3 +219,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-27T20:33:50.065881285Z
   implemented_by: dirtlab
+  completed_at: 2026-11-28T01:45:54.068795408Z
+  completion_sha: 2585c0fa9a398b6fdbd30104641cdd2a7cef443e
