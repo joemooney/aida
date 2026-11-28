@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: e430c0baf88df0c260070b7093e640e9838d6a29
 
   ResourceWatch measures its deadline from script start, not from job start (scripts/ci-test-shards.py ResourceWatch.__init__; ci.yml AIDA_CI_TEST_DEADLINE_SECS=1980). On the first cold-cache run under the new ci-dev-profile-lib-lines key, setup plus 'Build aida binary for lib unit tests' can take more than 7 minutes. The 40-minute job timeout then fires before the 33-minute deadline, and the lane still ends in a silent cancel. Consider deriving the budget from the job start, for example a timestamp written in an early step.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T05:19:17.291424342Z
-modified_at: 2026-11-28T01:05:17.279489141Z
+modified_at: 2026-11-28T01:05:19.982649306Z
 req_type: Task
 tags:
 - carried-from:BUG-2768
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21faf-6c6e-7741-947c-d7e2449cbfb6
+  author: joe
+  timestamp: 2026-11-28T01:05:19.982645389Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: e430c0baf88df0c260070b7093e640e9838d6a29
   branch: pr-4623
