@@ -12,18 +12,27 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T18:25:56.389777063Z
-modified_at: 2026-11-26T18:25:56.389777063Z
+modified_at: 2026-11-28T00:33:14.834179072Z
 req_type: Task
 tags:
 - from-implementer:BUG-2772
 - kind:deviation
 - severity:minor
+relationships:
+- rel_type: Supersedes
+  target_id: 01a21922-3270-7912-8d3b-07511e4650d4
+  created_at: 2026-11-28T00:33:14.834120200Z
+  created_by: joe
 history:
 - id: 01a21924-b225-78c3-a5c7-7b5512e9a6fa
   author: joe
   timestamp: 2026-11-26T18:36:05.029704713Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+  changes: []
+- id: 01a21f92-b995-7312-a883-8d7723ada1c2
+  author: joe
+  timestamp: 2026-11-28T00:33:59.189384507Z
   changes: []
 filed_at:
   code_sha: b9e84bdb3a766f206e375922b64ab031c5f13a5f
