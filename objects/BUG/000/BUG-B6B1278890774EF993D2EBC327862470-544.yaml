@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:42:37.637024707Z
-modified_at: 2026-11-28T01:42:22.712647339Z
+modified_at: 2026-11-28T02:08:16.704012987Z
 req_type: Bug
 comments:
 - id: 01a21b1a-ee60-7891-ba06-fa2ea0739f94
@@ -299,6 +299,15 @@ comments:
   created_at: 2026-11-28T00:04:50.940495653Z
   modified_at: 2026-11-28T00:04:50.940495653Z
   session_id: 01a21f60b8e9
+- id: 01a21fe9-0d40-78b2-b8d8-be4a9660a9d5
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: af6195b67a. Round 4 change, the only one: review_runner's confined() no longer reads HOME directly. It resolves the operator's home through the new aida_core::home::home_in, which applies home_dir's HOME-then-USERPROFILE precedence to the captured parent_env snapshot. Behaviour is otherwise the same: CODEX_HOME wins, else <home>/.codex; a relative or parentless home and a checkout-resident auth source are still refused. Probes: (1) empty values were already filtered by RunnerCall::var, so an empty HOME still fails closed; (5) no new authority path, refusal tests bug2783_confined_auth_source_never_lies_inside_the_checkout and bug2783_confined_runner_fails_closed_without_bwrap still pass. Evidence: no_direct_home_resolution 1/1; story_2539 vendor-literal ratchet 3/3; review_runner 10/10; review_prepare 35/35; review_challenger 8/8; make check-ci-fast 47 gates passed. Residual: a USERPROFILE fallback now applies when HOME is unset (Windows-only in practice). The aida-core home:: tests were not run locally (job output not captured); CI covers them.
+  created_at: 2026-11-28T02:08:16.704012987Z
+  modified_at: 2026-11-28T02:08:16.704012987Z
+  session_id: 01a21fd11c4e
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21b19-d8a7-7963-8736-0792eea43275
   author: joe
