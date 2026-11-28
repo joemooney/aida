@@ -14,8 +14,50 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T06:28:56.284634899Z
-modified_at: 2026-11-28T06:33:43.239538554Z
+modified_at: 2026-11-28T06:39:44.450386951Z
 req_type: Task
+comments:
+- id: 01a220dd-7ae6-7373-86ce-7ef0265cd63c
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (fixture):** new shared helper `tests/fixture_teardown.py::temp_project(prefix)` -- a TemporaryDirectory replacement that, before removal, waits for every live process whose cwd or argv path is inside the fixture (the detached `cache refresh --worker` runs with cwd = project root and `--store/--cache` under it). Logic moved from `test_show_latency.py` (BUG-1990), not duplicated. Stop-before-rmtree is used rather than AIDA_CACHE_NO_DETACH because test_cache_refresh_outputs.py deliberately exercises the detached worker (TASK-3853) -- the race came from that section. Adopted by the contract-step tests that create temp AIDA projects.
+    - **AC2 (fixture, looped):** `tests/test_fixture_teardown.py` spawns a simulated worker (worker argv shape, cwd in project) that keeps creating files under `.aida/cache-db`, exits `temp_project` while it is mid-write, asserts the teardown waited and the tree is gone; 25 iterations. Wired into CI contracts step.
+    - **AC3 (manual-inspection):** diff touches only tests/ and the CI step list.
+
+    ### Expected files
+    - tests/fixture_teardown.py (new), tests/test_fixture_teardown.py (new)
+    - tests/test_cache_refresh_outputs.py, tests/test_show_latency.py, other contracts-step tests using TemporaryDirectory
+    - .github/workflows/ci.yml (one line)
+
+    ### Ambiguities / conflicts as questions
+    - None
+  created_at: 2026-11-28T06:35:15.558948509Z
+  modified_at: 2026-11-28T06:35:15.558948509Z
+  session_id: 01a220dbd847
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a220e1-9542-7b60-99db-06e2206c88a3
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6d94a86892 (git diff origin/main...HEAD).
+
+    Acceptance evidence:
+    - AC1 [fixture]: tests/fixture_teardown.py::temp_project waits for every /proc process with cwd or argv path inside the fixture, then removes the tree (in a finally, so it also runs when the body raised). Adopted by test_cache_refresh_outputs (the failing one), test_gitlab_review_handoff, test_pr_ship_preflight, test_seat_takeover_lifecycle, test_skill_discovery, test_status_cold_cache. test_show_latency and test_origin_prompt now import the shared wait (moved, not copied). Chose wait-before-rmtree over AIDA_CACHE_NO_DETACH because test_cache_refresh_outputs deliberately exercises the detached worker (TASK-3853).
+    - AC2 [behavioral]: tests/test_fixture_teardown.py runs 25 teardowns with a stand-in worker that is still writing to .aida/cache-db, plus a case where the body raised. Both pass in about 13s. Negative control done by hand: the same writer under a plain TemporaryDirectory failed 20/20 with OSError 39 Directory not empty. Wired into the CI contracts step.
+    - AC3 [manual-inspection]: the diff touches only tests/ and one CI step. No product code.
+
+    Run locally against the live binary, all exit 0: test_cache_refresh_outputs, test_skill_discovery, test_origin_prompt, test_status_cold_cache, test_gitlab_review_handoff, test_show_latency, test_seat_takeover_lifecycle, test_pr_ship_preflight, test_fixture_teardown.
+
+    Probes: 0/1/N processes handled by the polling loop. Symlinked tmp roots are covered by realpath plus abspath. A zombie or unreadable /proc entry is skipped. Without /proc (non-Linux) the wait is a no-op, the same as before.
+
+    Residual risks: the wait times out after 60s, so a hung worker surfaces as an AssertionError naming the pid instead of ENOTEMPTY. The diff is 160 insertions and 55 deletions (about 105 net, the deletions are the moved helper), slightly over the 120-line guide in gross terms.
+  created_at: 2026-11-28T06:39:44.450386951Z
+  modified_at: 2026-11-28T06:39:44.450386951Z
+  session_id: 01a220dbd847
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a220dc-1247-73d3-8df8-5bfbbcb2c451
   author: aida-session-start

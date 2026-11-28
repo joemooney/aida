@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T04:52:28.064803Z
-modified_at: 2026-11-28T06:25:17.806143343Z
+modified_at: 2026-11-28T06:36:08.245734965Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -96,6 +96,19 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-28T06:22:39.548770Z
   modified_at: 2026-11-28T06:22:39.548770Z
+- id: 01a220de-48b5-75f2-86e2-2bb81ce58574
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: df175ced76 (round 2 on #4799). Diff vs 5739c066: 2 test-expectation edits, no behaviour change.
+    - Finding 1: codex_init.py's last init step now passes --verbose, so bug_2752 still checks 'global roles installed' (role setup lines are verbose-only by design under this task). Local: bug_2752_codex_init_and_advisor_launch ... ok.
+    - Finding 2: s5 truncation note expects `report.md` (unpadded). This is the intended code_span format; S5 behaviour is unchanged. Local: s5_comment_over_cap_goes_on_stdin_truncated_with_fences_balanced ... ok.
+    - Scanned review/prepare/comment sources and tests for other padded-span expectations: none found.
+    Residual risk: other integration tests that grep non-verbose init output for now-hidden lines; CI cli jobs at this head will show any.
+  created_at: 2026-11-28T06:36:08.245734965Z
+  modified_at: 2026-11-28T06:36:08.245734965Z
+  session_id: 01a220d4214e
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a22080-0acd-7123-bb30-50e7fe96392e
   author: joe
