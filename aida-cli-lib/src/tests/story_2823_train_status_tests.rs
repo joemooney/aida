@@ -28,6 +28,7 @@ fn built(prs: &[u64]) -> Built {
             })
             .collect(),
         dropped: Vec::new(),
+        regen: None,
     }
 }
 

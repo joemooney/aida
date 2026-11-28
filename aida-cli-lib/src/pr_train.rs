@@ -31,6 +31,9 @@ pub(crate) use check::{next_actors, pr_train_check_handler, CheckOptions, NextAc
 pub(crate) mod culprit;
 #[path = "pr_train_journal.rs"]
 mod journal;
+// trace:TASK-3963 | ai:claude
+#[path = "pr_train_regen.rs"]
+pub(crate) mod regen;
 pub(crate) use journal::TrainJournalBusy;
 /// Holds the train run lock in `dir` until dropped (tests only).
 #[cfg(test)]
@@ -258,6 +261,9 @@ pub(crate) struct Built {
     pub tip: String,
     pub cars: Vec<Car>,
     pub dropped: Vec<Ejected>,
+    /// The tip's regeneration commit on top of the last car. trace:TASK-3963 | ai:claude
+    #[serde(default)]
+    pub regen: Option<crate::gate::train_generated::RegenCommit>,
 }
 
 impl Built {
@@ -364,6 +370,7 @@ pub(crate) fn build(repo: &Path, base: &str, members: &[Member]) -> Result<Built
         tip,
         cars,
         dropped,
+        regen: None,
     })
 }
 
@@ -3502,6 +3509,10 @@ pub(crate) fn train_pr_body(train: &Built) -> String {
     {
         s.push_str(&format!("Not in this train: #{} {}\n\n", d.pr, d.reason));
     }
+    if let Some(regen) = &train.regen {
+        s.push_str(&crate::gate::train_generated::pr_body_block(regen));
+        s.push('\n');
+    }
     s.push_str(&members_line(&train.cars));
     s.push('\n');
     s
@@ -4018,6 +4029,7 @@ impl TrainForge for LiveTrainForge<'_> {
         }
         let mut train = build(&self.main_worktree, base, &accepted)?;
         train.dropped.extend(dropped);
+        regen::regenerate(&self.main_worktree, &self.project_root, &mut train);
         Ok(train)
     }
 

@@ -937,6 +937,22 @@ fn verify_structure(repo: &Path, train: &Built) -> Result<Vec<Value>> {
             "release_cover": car.member.release.as_ref().map(|cover| json!({"id":cover.id,"principal":cover.principal}))}));
         parent = car.commit.clone();
     }
+    // At most one regeneration commit, last, on the last car. trace:TASK-3963 | ai:claude
+    if let Some(regen) = &train.regen {
+        let ancestry = git(repo, &["rev-list", "--parents", "-n", "1", &regen.commit])?;
+        anyhow::ensure!(
+            ancestry == format!("{} {}", regen.commit, parent),
+            "train regeneration commit parent changed"
+        );
+        let message = git(repo, &["show", "-s", "--format=%B", &regen.commit])?;
+        let touched =
+            super::regen::touched(repo, &parent, &regen.commit).map_err(anyhow::Error::msg)?;
+        crate::gate::train_generated::verify_regen(&message, &touched, regen)
+            .map_err(anyhow::Error::msg)?;
+        super::regen::ledger_check(repo, &parent, &regen.commit, &touched)
+            .map_err(anyhow::Error::msg)?;
+        parent = regen.commit.clone();
+    }
     anyhow::ensure!(parent == train.tip, "train tip or car count changed");
     Ok(proof)
 }

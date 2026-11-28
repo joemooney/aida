@@ -667,6 +667,7 @@ impl Rails for Script {
                 })
                 .collect(),
             dropped: Vec::new(),
+            regen: None,
         })
     }
     fn test(&mut self, trains: &[Built]) -> Result<Vec<CiVerdict>> {
@@ -2168,6 +2169,7 @@ fn train_of(base: &str, members: &[Member]) -> Built {
         tip: cars.last().map(|c| c.commit.clone()).unwrap_or_default(),
         cars,
         dropped: Vec::new(),
+        regen: None,
     }
 }
 
@@ -3553,6 +3555,7 @@ esac
         tip: tip.clone(),
         cars: vec![],
         dropped: vec![],
+        regen: None,
     };
     assert!(matches!(
         host.wait_ci(&change, &train).unwrap(),
@@ -4731,6 +4734,7 @@ fn story_2401_live_preland_gate_refusal_retains_unconfirmed_close() {
         base: base.clone(),
         tip,
         dropped: vec![],
+        regen: None,
         cars: vec![Car {
             member: member(42, "approved-head", "member"),
             commit: base.clone(),
