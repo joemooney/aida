@@ -48,12 +48,12 @@ description: |-
   - [ ] `aida init --agent codex` does not create `.claude/settings.json` and documents/configures `[contained.vendors] codex = "native"` when contained posture is chosen.
   - [ ] `aida init` on a brand-new repo (no `origin` remote yet) detects custom forge hosts from `GH_HOST` / `GITLAB_HOST`, `git config` `insteadOf`, or `~/.config/gh/hosts.yml` / `~/.config/glab-cli/config.yml` and includes them in `[contained] allowed_hosts` (and `.claude/settings.json` when Claude is enabled).
   - [ ] `aida scaffold upgrade` and `aida scaffold refresh` additively merge missing `[contained] allowed_hosts` into `.claude/settings.json`'s `sandbox.network.allowedDomains` without clobbering existing user domains.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T03:41:07.856444Z
-modified_at: 2026-11-28T09:39:17.937690196Z
+modified_at: 2026-11-28T09:43:29.789742792Z
 req_type: Story
 tags:
 - containment
@@ -311,6 +311,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a22189-d0fd-7682-a50d-46982affd6e1
+  author: aida-session-start
+  timestamp: 2026-11-28T09:43:29.789741626Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: e351be429570bde045d975f8a19c733d65360ded
   branch: main
