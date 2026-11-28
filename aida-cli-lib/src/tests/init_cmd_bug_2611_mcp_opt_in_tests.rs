@@ -50,7 +50,7 @@ fn bug_2611_global_mcp_requires_opt_in() {
             "test store",
             false,
             crate::cli::InitFootprint::Full,
-            true,
+            ScaffoldCommit::Suppress,
         )
         .unwrap();
         for path in &configs {

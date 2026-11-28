@@ -206,6 +206,7 @@ pub(crate) fn handle_init_command(
     verbose: bool,
     _name: Option<&str>,
     footprint: Option<crate::cli::InitFootprint>,
+    commit_scaffold: bool,
 ) -> Result<()> {
     eprintln!(
         "{}: --centralized initializes a SQLite-canonical store, which is deprecated.",
@@ -276,9 +277,9 @@ pub(crate) fn handle_init_command(
         "Requirements database (SQLite)",
         verbose,
         footprint,
-        // Legacy centralized first-init: commit scaffolding as before (BUG-570
-        // suppression is the bootstrap-clone path only). trace:BUG-570
-        false,
+        // Legacy centralized first-init: commit only when asked.
+        // trace:BUG-570 trace:TASK-3952 | ai:claude
+        ScaffoldCommit::from_flag(commit_scaffold),
     )
 }
 
@@ -407,17 +408,48 @@ fn portable_pack_commit_paths(root: &std::path::Path) -> Vec<String> {
         .collect()
 }
 
-/// Decide whether init should auto-commit its scaffolding (`Some(true)`),
-/// never commit (`Some(false)`), or prompt the operator (`None`). Pure so the
-/// auto-vs-prompt branch is unit-testable without a real TTY.
+/// How init treats a commit of the files it wrote to the user's branch.
+// trace:TASK-3952 | ai:claude
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ScaffoldCommit {
+    /// Bootstrap clone of an existing project: never commit, never ask
+    /// (BUG-570).
+    Suppress,
+    /// First-init default: leave the files uncommitted; at a terminal, ask
+    /// (default no).
+    Ask,
+    /// `--commit`: commit without asking.
+    Commit,
+}
+
+impl ScaffoldCommit {
+    fn from_flag(commit: bool) -> Self {
+        if commit {
+            Self::Commit
+        } else {
+            Self::Ask
+        }
+    }
+}
+
+/// Decide whether init should commit its scaffolding (`Some(true)`), leave it
+/// uncommitted (`Some(false)`), or ask the operator (`None`). Pure so the
+/// branch is unit-testable without a real TTY.
 ///
-/// Auto when non-interactive (no TTY: orchestrator / agent / CI / piped) —
-/// same non-TTY-fast-path discipline as BUG-422/BUG-407. On a TTY we return
-/// `None` so the caller prompts (default-Y) and an operator with unrelated
-/// WIP can decline. An explicit `AIDA_INIT_COMMIT_SCAFFOLD` env override wins
-/// over the TTY heuristic in both directions (`1`/`true`/`yes`/`on` → auto,
-// `0`/`false`/`no`/`off` → never). trace:TASK-631 | ai:claude
-fn should_auto_commit_scaffold(stdin_is_tty: bool, env_override: Option<&str>) -> Option<bool> {
+/// `--commit` always commits. Otherwise an explicit `AIDA_INIT_COMMIT_SCAFFOLD`
+/// override wins (`1`/`true`/`yes`/`on` → commit, `0`/`false`/`no`/`off` →
+/// never). With neither, a terminal is asked and everything else (CI, scripts,
+/// agents, piped) leaves the files uncommitted: init never commits to the
+/// user's branch unless asked.
+// trace:TASK-631 trace:TASK-3952 | ai:claude
+fn should_auto_commit_scaffold(
+    commit_requested: bool,
+    stdin_is_tty: bool,
+    env_override: Option<&str>,
+) -> Option<bool> {
+    if commit_requested {
+        return Some(true);
+    }
     if let Some(raw) = env_override {
         match raw.trim().to_ascii_lowercase().as_str() {
             "1" | "true" | "yes" | "on" => return Some(true),
@@ -426,12 +458,60 @@ fn should_auto_commit_scaffold(stdin_is_tty: bool, env_override: Option<&str>) -
         }
     }
     if stdin_is_tty {
-        // TTY → caller should prompt (default-Y), not auto-commit.
         None
     } else {
-        // Non-interactive → auto-commit.
-        Some(true)
+        Some(false)
     }
+}
+
+/// Files and lines under `path` (a file, or a directory walked recursively).
+/// Symlinks count as one file with no lines and are never followed.
+// trace:TASK-3952 | ai:claude
+fn count_files_and_lines(path: &std::path::Path) -> (usize, usize) {
+    let Ok(meta) = std::fs::symlink_metadata(path) else {
+        return (0, 0);
+    };
+    if meta.is_dir() {
+        let Ok(entries) = std::fs::read_dir(path) else {
+            return (0, 0);
+        };
+        entries.flatten().fold((0, 0), |(f, l), e| {
+            let (ef, el) = count_files_and_lines(&e.path());
+            (f + ef, l + el)
+        })
+    } else if meta.is_file() {
+        let bytes = std::fs::read(path).unwrap_or_default();
+        let mut lines = bytes.iter().filter(|&&b| b == b'\n').count();
+        if bytes.last().is_some_and(|&b| b != b'\n') {
+            lines += 1;
+        }
+        (1, lines)
+    } else {
+        (1, 0)
+    }
+}
+
+/// One display row per scaffold path: `path  (N files, M lines)`.
+// trace:TASK-3952 | ai:claude
+fn scaffold_summary_rows(root: &std::path::Path, paths: &[String]) -> Vec<String> {
+    let plural = |n: usize, word: &str| format!("{n} {word}{}", if n == 1 { "" } else { "s" });
+    paths
+        .iter()
+        .map(|p| {
+            let full = root.join(p);
+            let (files, lines) = count_files_and_lines(&full);
+            let is_dir = std::fs::symlink_metadata(&full).is_ok_and(|m| m.is_dir());
+            if is_dir {
+                format!(
+                    "{p}  ({}, {})",
+                    plural(files, "file"),
+                    plural(lines, "line")
+                )
+            } else {
+                format!("{p}  ({})", plural(lines, "line"))
+            }
+        })
+        .collect()
 }
 
 /// BUG-565: split scaffold paths into `(to_stage, ignored)` by asking git which
@@ -1469,6 +1549,7 @@ pub(crate) fn write_enabled_agent_selection(
 fn commit_init_scaffolding(
     root: &std::path::Path,
     footprint: crate::cli::InitFootprint,
+    commit_requested: bool,
 ) -> Result<bool> {
     use aida_core::git_ops;
 
@@ -1479,29 +1560,28 @@ fn commit_init_scaffolding(
 
     let stdin_is_tty = std::io::stdin().is_terminal();
     let env_override = std::env::var("AIDA_INIT_COMMIT_SCAFFOLD").ok();
-    let decision = should_auto_commit_scaffold(stdin_is_tty, env_override.as_deref());
+    let decision =
+        should_auto_commit_scaffold(commit_requested, stdin_is_tty, env_override.as_deref());
+
+    // Always say what init wrote before deciding on a commit, so a commit is
+    // never a surprise and an uncommitted tree is never a mystery.
+    // trace:TASK-3952 | ai:claude
+    let branch = git_ops::current_branch(root).unwrap_or_else(|_| "your branch".to_string());
+    println!();
+    println!("  AIDA wrote these files to your project:");
+    for row in scaffold_summary_rows(root, &paths) {
+        println!("    {}", row.dimmed());
+    }
 
     let proceed = match decision {
-        Some(true) => true,
-        Some(false) => false,
-        None => {
-            // TTY: show what will be staged, then prompt default-Y.
-            println!();
-            println!(
-                "  {} will stage these AIDA scaffolding paths:",
-                "init".bold()
-            );
-            for p in &paths {
-                println!("    {}", p.dimmed());
-            }
-            prompt_yes_no("  Commit the AIDA scaffolding now? [Y/n] ", true).unwrap_or(false)
-        }
+        Some(proceed) => proceed,
+        None => prompt_yes_no(&format!("  Commit them to `{branch}` now? [y/N] "), false)
+            .unwrap_or(false),
     };
 
     if !proceed {
         println!(
-            "  {} scaffolding left uncommitted — commit it with `git add {} && git commit -m 'chore: scaffold AIDA'`.",
-            "Note:".dimmed(),
+            "  They are not committed. Review them with `git status`, then save them with:\n    git add {} && git commit -m 'chore: scaffold AIDA'\n  (Scripts and CI can run `aida init --commit` instead.)",
             paths.join(" "),
         );
         return Ok(false);
@@ -1560,7 +1640,7 @@ fn commit_init_scaffolding(
             // instead of leaving the file dirty. trace:BUG-1938 | ai:claude
             crate::config_commit::mark_init_scaffold_committed();
             println!(
-                "  {} saved your AIDA setup",
+                "  {} committed them to `{branch}` as \"chore: scaffold AIDA\"",
                 crate::glyph(crate::glyphs::Glyph::Check).green()
             );
             Ok(true)
@@ -1601,8 +1681,12 @@ fn complete_init_scaffolding(
     // scaffold dump to the shared default branch — the operator commits
     // deliberately if they want. Genuinely-new first-init passes false and
     // commits its own scaffolding as before. trace:BUG-570 | ai:claude
-    suppress_scaffold_commit: bool,
+    // TASK-3952: first-init now leaves its files uncommitted unless asked
+    // (`Ask`), and commits only on `--commit` (`Commit`).
+    scaffold_commit: ScaffoldCommit,
 ) -> Result<()> {
+    let suppress_scaffold_commit = scaffold_commit == ScaffoldCommit::Suppress;
+    let commit_requested = scaffold_commit == ScaffoldCommit::Commit;
     write_init_footprint(root, footprint)?;
     if footprint == crate::cli::InitFootprint::MemoryLane {
         ensure_minimal_cache(root, &db_path);
@@ -1642,7 +1726,7 @@ fn complete_init_scaffolding(
             }
             false
         } else {
-            commit_init_scaffolding(root, footprint).unwrap_or(false)
+            commit_init_scaffolding(root, footprint, commit_requested).unwrap_or(false)
         };
         if scaffolding_committed {
             use aida_core::git_ops;
@@ -1688,7 +1772,7 @@ fn complete_init_scaffolding(
             }
             false
         } else {
-            commit_init_scaffolding(root, footprint).unwrap_or(false)
+            commit_init_scaffolding(root, footprint, commit_requested).unwrap_or(false)
         };
         if scaffolding_committed {
             use aida_core::git_ops;
@@ -2299,7 +2383,7 @@ fn complete_init_scaffolding(
         }
         false
     } else {
-        commit_init_scaffolding(root, footprint).unwrap_or(false)
+        commit_init_scaffolding(root, footprint, commit_requested).unwrap_or(false)
     };
 
     // BUG-789: having just made a commit on the code branch, say plainly
@@ -2330,7 +2414,12 @@ fn complete_init_scaffolding(
     // also skip the onboarding task — a clone of an already-set-up project
     // shouldn't be nudged to commit a scaffold dump to the shared branch; the
     // uncommitted-files note above already covers the deliberate-commit option.
-    if !scaffolding_committed && !suppress_scaffold_commit {
+    //
+    // TASK-3952: the same holds when the user chose not to commit (the
+    // default): the note already names the git command, and a seeded task
+    // would take the user's first ID. Only a requested commit that failed
+    // leaves the onboarding task behind. trace:TASK-3952 | ai:claude
+    if !scaffolding_committed && commit_requested {
         if let Err(e) = enqueue_initial_scaffold_task(root, &db_path) {
             eprintln!(
                 "  {} could not enqueue initial scaffolding task: {}",
@@ -3189,7 +3278,8 @@ pub(crate) fn handle_init_distributed_worktree(
                 &storage_label,
                 verbose,
                 crate::cli::InitFootprint::Full,
-                false,
+                // trace:TASK-3952 | ai:claude
+                ScaffoldCommit::from_flag(commit_scaffold),
             )?;
             return Ok(false);
         }
@@ -3621,9 +3711,9 @@ pub(crate) fn handle_init_distributed_worktree(
         &storage_label,
         verbose,
         footprint,
-        // Genuinely-new first-init: commit the scaffolding as before (BUG-570
-        // suppression applies only to the bootstrap-clone path).
-        false,
+        // Genuinely-new first-init: commit only when asked (`--commit`), else
+        // leave the files uncommitted. trace:BUG-570 trace:TASK-3952 | ai:claude
+        ScaffoldCommit::from_flag(commit_scaffold),
     )?;
 
     // Sharing + teammate onboarding are real, but premature for a solo
@@ -4127,9 +4217,13 @@ fn handle_init_post_clone(
         verbose,
         footprint,
         // BUG-570: bootstrap-clone → suppress the scaffold commit by default.
-        // Only `--commit-scaffold` opts into a deliberate code-branch commit.
+        // Only `--commit` opts into a deliberate code-branch commit.
         // trace:BUG-570 | ai:claude
-        !commit_scaffold,
+        if commit_scaffold {
+            ScaffoldCommit::Commit
+        } else {
+            ScaffoldCommit::Suppress
+        },
     )?;
 
     finish_clone_node_setup(&store_path, work_binding, node_name)
@@ -4317,6 +4411,7 @@ pub(crate) fn handle_init_distributed_sibling(
     verbose: bool,
     name: Option<&str>,
     footprint: Option<crate::cli::InitFootprint>,
+    commit_scaffold: bool,
 ) -> Result<()> {
     use aida_core::git_ops;
 
@@ -4711,9 +4806,9 @@ pub(crate) fn handle_init_distributed_sibling(
         &storage_label,
         verbose,
         footprint,
-        // Genuinely-new sibling first-init: commit scaffolding as before (no
-        // bootstrap-clone path here). trace:BUG-570
-        false,
+        // Genuinely-new sibling first-init: commit only when asked.
+        // trace:BUG-570 trace:TASK-3952 | ai:claude
+        ScaffoldCommit::from_flag(commit_scaffold),
     )?;
 
     println!();
@@ -5093,14 +5188,13 @@ pub(crate) struct InitArgs {
     #[clap(long)]
     pub git_init: bool,
 
-    /// When bootstrapping a clone of an already-initialized AIDA project,
-    /// commit the locally-written scaffold files to the code branch. The
-    /// safe default leaves them uncommitted so a clone never pushes a
-    /// scaffold dump to the shared default branch; pass this to opt into a
-    /// deliberate scaffold commit. No effect on a genuinely-new first init,
-    /// which always commits its own scaffolding.
-    // trace:BUG-570 | ai:claude
-    #[clap(long)]
+    /// Commit the files init writes to your current branch, as
+    /// "chore: scaffold AIDA". By default init lists what it wrote and leaves
+    /// it uncommitted for you to review; at a terminal it asks first (default
+    /// no). Scripts and CI that rely on init's commit must pass --commit.
+    /// `--commit-scaffold` is the older spelling.
+    // trace:BUG-570 trace:TASK-3952 | ai:claude
+    #[clap(long = "commit", alias = "commit-scaffold")]
     pub commit_scaffold: bool,
 
     /// Friendly name for this node, recorded alongside the node id in the
@@ -5295,6 +5389,7 @@ fn run_init(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> an
             *verbose,
             name.as_deref(),
             Some(init_footprint),
+            *commit_scaffold,
         )?;
     } else if *sibling || store_path.is_some() {
         // STORY-676: --store-path implies the sibling storage model at an
@@ -5311,6 +5406,7 @@ fn run_init(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> an
             *verbose,
             name.as_deref(),
             Some(init_footprint),
+            *commit_scaffold,
         )?;
     } else {
         initialized = self::handle_init_distributed_worktree(

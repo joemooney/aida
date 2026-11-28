@@ -1,4 +1,4 @@
-use super::complete_init_scaffolding;
+use super::{complete_init_scaffolding, ScaffoldCommit};
 
 /// Run the full init scaffold (Codex agent, so AGENTS.md is written)
 /// into `root`, where AGENTS.md is a symlink to `target`.
@@ -19,7 +19,7 @@ fn init_with_agents_link(root: &std::path::Path, target: &std::path::Path) {
         "test store",
         false, // verbose
         crate::cli::InitFootprint::Full,
-        true, // suppress scaffold commit
+        ScaffoldCommit::Suppress,
     )
     .unwrap();
 }

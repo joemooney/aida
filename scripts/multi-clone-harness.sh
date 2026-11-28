@@ -203,7 +203,8 @@ do_setup() {
 
     # aida init in clone A (distributed default): creates + pushes aida-store.
     log "clone A: aida init (distributed)"
-    aida_in "$CLONE_A" init --no-skills --no-hooks --no-agent-config >/dev/null 2>&1 \
+    # --commit: clone B must inherit the scaffold through main (TASK-3952).
+    aida_in "$CLONE_A" init --commit --no-skills --no-hooks --no-agent-config >/dev/null 2>&1 \
         || { echo "${C_RED}FATAL: aida init failed in clone A${C_RST}"; aida_in "$CLONE_A" init --no-skills --no-hooks --no-agent-config; exit 1; }
     # Push the store (and any code changes init made) to origin.
     aida_in "$CLONE_A" push >/dev/null 2>&1 || aida_in "$CLONE_A" db sync --push >/dev/null 2>&1 || true

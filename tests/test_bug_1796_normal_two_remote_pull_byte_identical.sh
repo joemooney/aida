@@ -40,7 +40,8 @@ with (git_dir / "aida-allocation.toml").open("x", encoding="utf-8") as setting:
     setting.write("version=1\nauthoritative=true\n")
 PY_HOME
 
-(cd "$project" && "$AIDA" init --no-skills --no-hooks --no-post-hooks --no-roles --no-agent-config --no-schedule --footprint minimal >/dev/null)
+# --commit: this test expects a clean code tree after init (TASK-3952).
+(cd "$project" && "$AIDA" init --commit --no-skills --no-hooks --no-post-hooks --no-roles --no-agent-config --no-schedule --footprint minimal >/dev/null)
 
 # `aida init` already creates the canonical local `.aida-store` worktree and
 # configures its `origin` to the project's code remote. Publish the orphan

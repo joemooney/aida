@@ -851,7 +851,7 @@ init	Write	false	true	false
 init --agent TASK-1	Write	false	true	false
 init --attach	Write	false	true	false
 init --centralized	Write	false	true	false
-init --commit-scaffold	Write	false	true	false
+init --commit	Write	false	true	false
 init --distributed	Write	false	true	false
 init --focus TASK-1	Write	false	true	false
 init --footprint full	Write	false	true	false
