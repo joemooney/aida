@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T15:12:00.311702285Z
-modified_at: 2026-11-28T02:41:20.218277672Z
+modified_at: 2026-11-28T02:48:14.055553357Z
 req_type: Task
 tags:
 - from-implementer:BUG-2738
@@ -62,6 +62,12 @@ comments:
   modified_at: 2026-11-28T02:29:20.899325923Z
   session_id: 01a21ff29b63
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2200d-a1e7-7591-8d3c-bf1bca396655
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3501-landed-guard` at head `7731f89c36f94df43f2990197bcd08e7ee8631c0`.'
+  created_at: 2026-11-28T02:48:14.055549861Z
+  modified_at: 2026-11-28T02:48:14.055549861Z
+  session_id: 01a21ff29b63
 history:
 - id: 01a21876-55c7-7810-9bcf-7d0b56461861
   author: joe
