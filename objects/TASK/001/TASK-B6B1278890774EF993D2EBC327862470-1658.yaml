@@ -17,12 +17,12 @@ description: |-
   - AC1: every agent-CLI --version probe above (and the forge-bin one) goes through ONE shared bounded helper (reuse run_bounded / command_output_with_timeout_io): a short timeout (e.g. 5s), stdin=/dev/null, kill on timeout, reported as 'did not answer --version within Ns' (not a hang, not 'not installed').
   - AC2: a test with a fake agent binary that sleeps forever asserts the probe returns within the bound for init detection and for the codex probes.
   - AC3: a ratchet or test fails if a new Command::...arg("--version") spawn of an agent CLI bypasses the helper.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T10:10:57.877165375Z
-modified_at: 2026-11-28T10:19:08.962835331Z
+modified_at: 2026-11-28T10:50:58.318947224Z
 req_type: Task
 comments:
 - id: 01a221aa-7522-7332-b2cb-f894de0cb031
@@ -44,6 +44,31 @@ comments:
   modified_at: 2026-11-28T10:19:08.962835331Z
   session_id: 01a221a8c1a6
   harness_version: 2.1.319 (Claude Code)
+- id: 01a221c0-dce3-7513-b4f7-f329eb1a056f
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 65f5c03712 (git diff origin/main...HEAD, 10 files, +262/-42).
+
+    Acceptance evidence:
+    - AC1 [behavioral-test]: one helper, aida-cli-lib/src/bounded_process.rs probe_version/probe_version_within/version_probe_available over command_output_with_timeout_io: 5s VERSION_PROBE_TIMEOUT, stdin=/dev/null, process-group SIGKILL at the bound, stderr note "`<bin>` did not answer --version within 5s; treating it as unavailable." Missing (spawn failure) is a separate variant. Routed: init_cmd agent_cli_detected + Codex MCP gate, scaffold_cmd installed_codex_version, compete_cmd binary_on_path, remote_create is_on_path.
+    - AC2 [behavioral-test]: tests/task_3965_version_probe_tests.rs — a sleep-600 fake CLI: probe_kills_a_cli_that_never_answers_and_reports_a_timeout, init_agent_detection_returns_within_the_bound, codex_version_probe_returns_within_the_bound (installed_codex_version_of + the init MCP gate probe); probe_reads_the_banner_with_stdin_closed proves stdin is closed. 6/6 pass via lane job.
+    - AC3 [behavioral-test]: task_3965_no_unreviewed_version_spawn_bypasses_the_bounded_probe — workspace scan of production sources for .arg("--version")/.args(["--version" against a per-file reviewed ledger (exact counts; raises and new files fail). Registered in scripts/ratchet-set.json; behavioral tests disposed in ci-structural-exclusions.json.
+
+    Probes: (1) cross-ref: both ledgers (2539 vendor literals unchanged counts; 2326 launch ledger lowered, CEILING 136->131). (2) n/a. (3) multiplicity: init detection worst case is 4 probes x 5s = 20s serial, vs a 45-min hang. (4) adversarial: a CLI that spawns grandchildren holding pipes is covered by the process-group kill; a scoped forge deadline can shorten the bound but the note still says 5s (cosmetic).
+    Fixes during review: shared executable fixture writer (executable-fixture ratchet), launch ledger update.
+    Residual risks: init's follow-on `codex mcp list`/`codex mcp add` and the non-agent probes (dev_cmd, cast_recording, show_negative, upgrade_*, mcp.rs) remain unbounded — ledgered, out of AC scope. compete/remote_create entry points are covered by the shared helper tests + source ratchet rather than per-entry sleep tests (their fns are private thin wrappers). Diff is ~300 changed lines vs the 200 budget; ~95 are production.
+    Validation: cargo test -p aida-cli-lib --lib task_3965 6/6, story_2539 4/4, -p aida-ci-guards --lib 51/51, make check-ci-fast exit 0 at 65f5c03712.
+  created_at: 2026-11-28T10:43:37.315817502Z
+  modified_at: 2026-11-28T10:43:37.315817502Z
+  session_id: 01a221a8c1a6
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a221c7-978e-7631-ab5c-813a0433ca21
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3965-bounded-version-probes` at head `65f5c037121497c077b8f10cdfda963c0040d60c`.'
+  created_at: 2026-11-28T10:50:58.318943981Z
+  modified_at: 2026-11-28T10:50:58.318943981Z
+  session_id: 01a221a8c1a6
 history:
 - id: 01a221a8-fe64-7bc2-974f-f6caa7d2859a
   author: aida-session-start
@@ -52,6 +77,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a221c1-2901-7b61-bc75-2ada31c3707a
+  author: dirtlab
+  timestamp: 2026-11-28T10:43:56.801976788Z
+  session_id: 01a221a8c1a6
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: eb18c450c68d9170041ea975e6283dcb02975138
   branch: main
@@ -59,3 +93,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: eb18c450c68
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-28T10:43:56.740818495Z
+  implemented_by: dirtlab
