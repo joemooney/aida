@@ -9,12 +9,12 @@ description: |
 
   Raised by the implementer while working BUG-2782.
   Branch: bug-2782-ccf-no-build  ·  Commit: 71f95102f1  (PR link added on merge)
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:42:51.691935317Z
-modified_at: 2026-11-28T00:37:18.577397778Z
+modified_at: 2026-11-28T01:46:33.780723425Z
 req_type: Task
 tags:
 - ci-gates
@@ -40,6 +40,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a21fd5-2bb4-7c43-90bf-70fd6d33c47c
+  author: aida-session-start
+  timestamp: 2026-11-28T01:46:33.780712460Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 71f95102f1d8c0bec2d04160642f479d442360a6
   branch: bug-2782-ccf-no-build
