@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: d529d3b23b5c867f25514c44633fc8333b2cd11a
 
   backlog_report.rs driver_activity/stale_claims: lane logs are named <branch>-<session>.jsonl (standalone_implementer.rs:1621, queue_cmd/work.rs:7683), and a lane log only counts toward a spec when the branch name contains the spec ID. Lanes on branches like report-backlog-s3, and lanes whose logs live on the lane host rather than in the local .aida/headless-logs, add no driver activity. For those specs the stale-claim test quietly falls back to status age, the S2 behaviour. This fails safe: it can only over-prescribe a release command and never acts. Follow-up: map logs to specs through the lease/session record instead of the file name, or list the specs with no activity source among the unavailable signals.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T11:55:28.415550578Z
-modified_at: 2026-11-28T01:08:05.735126739Z
+modified_at: 2026-11-28T01:08:07.729047636Z
 req_type: Task
 tags:
 - carried-from:STORY-3143
@@ -43,6 +43,13 @@ history:
   author: joe
   timestamp: 2026-11-28T00:28:36.582328171Z
   changes: []
+- id: 01a21fb1-fbb1-78d3-a543-d142b13868d7
+  author: joe
+  timestamp: 2026-11-28T01:08:07.729044914Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: d529d3b23b5c867f25514c44633fc8333b2cd11a
   branch: pr-4649
