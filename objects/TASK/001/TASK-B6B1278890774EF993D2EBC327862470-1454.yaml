@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T22:31:03.740099376Z
-modified_at: 2026-11-25T22:31:03.740099376Z
+modified_at: 2026-11-28T00:23:19.366493992Z
 req_type: Task
 tags:
 - carried-from:BUG-2765
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a21471-4e55-7201-be4e-604408724146
   created_at: 2026-11-25T22:31:03.740159799Z
+comments:
+- id: 01a21f88-f646-7440-ba3d-b8ef8cf7d714
+  author: joe
+  content: 'NEEDS SKETCH before approval (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Admission/claim semantics: forge writes in admit_change now run outside the claim (check-then-act); needs design signoff.'
+  created_at: 2026-11-28T00:23:19.366493992Z
+  modified_at: 2026-11-28T00:23:19.366493992Z
 history:
 - id: 01a21532-a58f-7d73-9162-f385aa818c8b
   author: joe
