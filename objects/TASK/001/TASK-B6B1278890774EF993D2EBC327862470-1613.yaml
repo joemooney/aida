@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:30:54.837993440Z
-modified_at: 2026-11-28T05:14:05.426342202Z
+modified_at: 2026-11-28T05:14:09.092279463Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -93,6 +93,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: TASK-3955 (completing). AC1 PARTIAL: a codex finder is verified by task3955_signed_out_codex_fails_fast_with_the_sign_in_hint (signed out: exact `codex login` message within 2s; a hung check names its bound; API key, other vendor, inconclusive and signed-in all pass; the probe runs confined). The finder is wired before the first batch (review_prepare.rs:392). The lanes claim relies on the existing contained-lane admission hints (codex_auth_hints.rs), which is plausible. The gap: a codex challenger (--adversarial) is unguarded and still hangs silently for 15 minutes. AC2: verified for the finder by the same test; unmet for the challenger. The rest of the diff is sound: struct-update copies only Copy fields, `not logged in` matching is lowercase on both sides, and the --agent ''using'' line is suppressed under AIDA_REVIEW_RUNNER_CMD. CI at this head is red: the CI (fast compile) ''Ratchet set'' step exited 101 (a cargo test or build failure in a ratchet group; this PR adds a test to the launch::review_runner group), and CI (rest) ''Run tests'' failed. CI (fast gates) failed at the EXEC_CONTEXT_BASE step, which looks like infrastructure. I could not read the job logs from this sandbox (the log blob host was refused), so I have not attributed these failures. The implementer must check the Ratchet set and rest logs and fix any failure this PR causes. Head is 1 commit behind main; no finding depends on base changes.. No triage reason was given.'
   created_at: 2026-11-28T05:14:05.426339744Z
   modified_at: 2026-11-28T05:14:05.426339744Z
+- id: 01a22093-3897-7790-aeb1-9ebadabfb6de
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3955):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c4a52a471c72
+    Recorded: 2026-11-28T05:12:44.566967756+00:00
+    Findings:
+    1. AC1/AC2 unmet for a codex challenger: the sign-in check guards only the finder (review_prepare.rs:390-394 calls call.sign_in_check, never pass.sign_in_check). With `aida review prepare --run-review --adversarial` and a claude finder, codex is the default challenger pick; a signed-out codex challenger's `exec` retries silently until the per-batch deadline (challenger deadline = finder.deadline = RUN_DEADLINE, 15 min, review_challenger.rs:142), then the report says only 'challenger: unavailable' with a deadline error. No `codex login` hint and a 15-minute silent hang, which AC2 forbids. The implementer's self-review names this gap (P3) and defers it, but the PR completes TASK-3955. Fix: also run the probe for the challenger pass (when it is codex) before the first batch, with the same message, or degrade it to unchallenged naming `codex login`. Add a test for the challenger case.
+    2. Test gap: the review_prepare wiring is untested. task3955_signed_out_codex_fails_fast_with_the_sign_in_hint exercises RunnerCall::sign_in_check directly. No test drives handle_review_prepare --run-review --agent codex with a signed-out fake codex and asserts that the run fails before any batch runs, with the `codex login` message. Removing the call at review_prepare.rs:392 would pass every test.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-28T05:14:08.919862786Z
+  modified_at: 2026-11-28T05:14:08.919862786Z
 history:
 - id: 01a22034-e919-78c1-a961-1cd42c78c571
   author: joe
