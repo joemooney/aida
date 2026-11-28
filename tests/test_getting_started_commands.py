@@ -85,7 +85,7 @@ def main() -> int:
         env = {
             "HOME": str(home),
             "PATH": f"{bin_dir}:/usr/local/bin:/usr/bin:/bin",
-            "TMPDIR": os.environ.get("TMPDIR", "/tmp"),
+            "TMPDIR": tempfile.gettempdir(),
             "LANG": "C.UTF-8",
         }
         greet = repo / "greet.py"
