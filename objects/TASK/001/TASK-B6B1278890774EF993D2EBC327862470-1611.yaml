@@ -1,0 +1,25 @@
+id: 01a22032-8cfe-72a3-87f2-0c05d9236985
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1611
+agreed_id: TASK-3953
+title: 'First-run: an empty review range reports ''nothing to review'', not a green pass (F11)'
+description: |-
+  ## Acceptance
+  - AC1: aida review prepare (incl. --run-review) on an empty diff/range prints 'nothing to review' with the range it resolved, and exits with a distinct non-zero code documented in --help.
+  - AC2: SARIF/report output for an empty range says no files were reviewed (never a pass).
+  - AC3: tests for --from with no changes and for a workspace with no changes.
+
+  Source: docs/plans/2026-11-27-fresh-user-walkthrough.md (on branch task-3951-fresh-user-walkthrough / PR #4782), section F11. Advisor aida-d3 2026-11-27 20:30 priority order; filed by product-15 for laning now (one spec per lane).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T03:28:33.534011321Z
+modified_at: 2026-11-28T03:28:33.534011321Z
+req_type: Task
+filed_at:
+  code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c6
+  vendor: claude
