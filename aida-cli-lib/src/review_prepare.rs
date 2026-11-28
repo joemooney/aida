@@ -27,37 +27,65 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// Clap arguments for `aida review prepare`.
+/// Long help for `aida review prepare`: what it does in one line, then the
+/// three invocations a new user needs. trace:TASK-3959 | ai:claude
+pub(crate) const PREPARE_LONG_HELP: &str = "\
+Review a change with an AI agent and get line-anchored findings.
+
+Common uses:
+  aida review prepare --run-review --pr 42
+      Review a pull request.
+  aida review prepare --run-review --from v1.2 --to v1.3
+      Review the commits between two refs.
+  aida review prepare --run-review --from main
+      Review the commits on your branch (commit your work first).
+
+Add --agent codex to choose the reviewer, or --sarif review.sarif to save the
+findings for code-scanning tools. Without --run-review, it lists the files to
+review and how they are grouped, without running an agent.
+
+Exit codes: 0 reviewed with no blocking findings; 1 an error or a --fail-on
+match; 4 the --adversarial challenger was unavailable; 5 nothing to review
+(no changed files), which is not a pass.";
+
+/// Clap arguments for `aida review prepare`. Everyday flags come first;
+/// tuning and tooling flags sit under the Advanced heading.
 // trace:STORY-3076 | ai:antigravity
+// trace:TASK-3959 | ai:claude
 #[derive(clap::Args, Debug, Clone, Default)]
 #[clap(group(clap::ArgGroup::new("findings_source").args(["anchor_findings", "run_review"])))]
 pub struct ReviewPrepareArgs {
-    /// Comma-separated list of AIDA spec IDs whose `## Acceptance` criteria
-    /// should be injected into the review preparation bundle.
-    #[clap(long, value_name = "SPEC-IDS")]
-    #[clap(value_parser = crate::spec_arg::spec_id_csv)]
-    pub specs: Option<String>,
+    /// Run an AI agent over the change and report its findings with line
+    /// numbers. Needs --pr or --from. Review settings are read from the base
+    /// branch, so the change under review cannot alter them.
+    // trace:STORY-3120 | ai:claude
+    #[clap(long, conflicts_with_all = ["anchor_findings", "scan", "commit", "verify_coverage"])]
+    pub run_review: bool,
 
-    /// Pull spec IDs and base/head refs from PR/MR number N.
+    /// Which agent reviews with --run-review: `claude` or `codex` (or set
+    /// AIDA_REVIEW_RUNNER_CMD to run your own command).
+    #[clap(long, value_name = "AGENT", requires = "run_review")]
+    pub agent: Option<String>,
+
+    /// Review pull request N (its base and head, and any specs it names).
     #[clap(long, value_name = "N", conflicts_with_all = ["commit", "from", "to"])]
     pub pr: Option<u64>,
 
-    /// Base Git revision for range comparison (e.g. `main`).
+    /// Review the commits since this ref (for example `main`).
     #[clap(long, value_name = "REF")]
     pub from: Option<String>,
 
-    /// Target Git revision for range comparison (defaults to `HEAD` when `--from` is set).
+    /// End of the range for --from (default: `HEAD`).
     #[clap(long, value_name = "REF")]
     #[clap(requires = "from")]
     pub to: Option<String>,
 
-    /// Single commit SHA to inspect against its parent.
+    /// Review a single commit against its parent.
     #[clap(long, short = 'c', value_name = "SHA", conflicts_with = "from")]
     pub commit: Option<String>,
 
-    /// Full-file scan mode (`aida review prepare --scan [--path <DIR_OR_FILE>...]`).
-    /// Inventories tracked files under the specified paths (or the entire repo if
-    /// `--path` is omitted) instead of computing a Git diff.
+    /// Review whole files instead of a change: every tracked file under
+    /// --path, or the whole repository when --path is omitted.
     // trace:STORY-3076 | ai:antigravity
     #[clap(
         long,
@@ -65,81 +93,85 @@ pub struct ReviewPrepareArgs {
     )]
     pub scan: bool,
 
-    /// Target file or directory path(s) to scope `--scan` (or filter diff entries).
-    /// Repeatable (`--path aida-core/src --path aida-cli-lib/src`).
+    /// Only review files under this path. Repeatable (`--path src --path docs`).
     #[clap(long, value_name = "PATH")]
     pub path: Vec<String>,
 
-    /// Additional comma-separated glob patterns to exclude from review.
+    /// Skip files matching these comma-separated glob patterns.
     #[clap(long, value_name = "GLOBS", value_delimiter = ',')]
     pub exclude: Vec<String>,
 
-    /// Verify a reviewer coverage ledger JSON file against the classified inventory.
-    /// Exits non-zero if any reviewable file is unaccounted for or skipped without a reason.
-    #[clap(long, value_name = "LEDGER_JSON")]
-    pub verify_coverage: Option<PathBuf>,
-
-    /// Deterministically anchor quoted `existing_code` snippets in a findings JSON
-    /// file to exact 1-based `(start_line, end_line)` spans on the target revision.
-    #[clap(long, value_name = "FINDINGS_JSON")]
-    pub anchor_findings: Option<PathBuf>,
-
-    /// Review every batch with an agent and anchor its findings. Needs `--pr`
-    /// or `--from`; review settings come from the merge base.
-    // trace:STORY-3120 | ai:claude
-    #[clap(long, conflicts_with_all = ["anchor_findings", "scan", "commit", "verify_coverage"])]
-    pub run_review: bool,
-
-    /// Agent for `--run-review`: `claude` or `codex` (or set AIDA_REVIEW_RUNNER_CMD).
-    #[clap(long, value_name = "AGENT", requires = "run_review")]
-    pub agent: Option<String>,
-
-    /// Reasoning effort for `--run-review`: low, medium, high, xhigh (claude: max).
-    #[clap(long, value_name = "LEVEL", requires = "run_review")]
-    pub effort: Option<String>,
-
-    /// Model for `--run-review`.
-    #[clap(long, value_name = "MODEL", requires = "run_review")]
-    pub model: Option<String>,
-
-    /// Have a second agent reproduce or refute each finding. Refuted findings
-    /// are listed apart and marked suppressed in SARIF, but still count for
-    /// `--fail-on`. It prefers a vendor that did not write the change.
+    /// Have a second agent try to reproduce each finding. Findings it refutes
+    /// are listed separately and marked suppressed in SARIF, but still count
+    /// for --fail-on. It prefers an agent that did not write the change.
     // trace:STORY-3120 | ai:claude
     #[clap(long, requires = "run_review")]
     pub adversarial: bool,
 
-    /// Reasoning effort for the `--adversarial` challenger.
-    #[clap(long, value_name = "LEVEL", requires = "adversarial")]
-    pub challenger_effort: Option<String>,
-
-    /// Challenger agent for `--adversarial`: `claude`, `codex` or `agy`.
-    /// Overrides the automatic pick, which commit `[AI:<tool>]` tags steer
-    /// and which never chooses agy.
-    // trace:STORY-3120 | ai:claude
-    #[clap(long, value_name = "AGENT", requires = "adversarial")]
-    pub challenger_agent: Option<String>,
-
-    /// Write a SARIF 2.1.0 report inside the repository.
+    /// Save the findings as a SARIF 2.1.0 file inside the repository.
     #[clap(long, value_name = "PATH", requires = "findings_source")]
     pub sarif: Option<PathBuf>,
 
-    /// Exit with an error when any finding meets or exceeds this severity.
+    /// Exit with an error when any finding is at or above this severity.
     #[clap(long, value_name = "SEVERITY", requires = "findings_source")]
     pub fail_on: Option<String>,
 
-    /// Post the Markdown report as a comment on the `--pr` change. Off unless
-    /// given; agent text in the comment is code-fenced so it renders inert.
+    /// Post the report as a comment on the --pr pull request. Agent text in
+    /// the comment is code-fenced so it renders inert.
     // trace:STORY-3120 | ai:claude
     #[clap(long, requires = "pr")]
     pub post_comment: bool,
 
+    /// Reasoning effort for --run-review: low, medium, high, xhigh (claude: max).
+    #[clap(long, value_name = "LEVEL", requires = "run_review")]
+    #[clap(help_heading = "Advanced")]
+    pub effort: Option<String>,
+
+    /// Model for --run-review.
+    #[clap(long, value_name = "MODEL", requires = "run_review")]
+    #[clap(help_heading = "Advanced")]
+    pub model: Option<String>,
+
+    /// Reasoning effort for the --adversarial challenger.
+    #[clap(long, value_name = "LEVEL", requires = "adversarial")]
+    #[clap(help_heading = "Advanced")]
+    pub challenger_effort: Option<String>,
+
+    /// Challenger agent for --adversarial: `claude`, `codex` or `agy`.
+    /// Overrides the automatic pick, which commit `[AI:<tool>]` tags steer
+    /// and which never chooses agy.
+    // trace:STORY-3120 | ai:claude
+    #[clap(long, value_name = "AGENT", requires = "adversarial")]
+    #[clap(help_heading = "Advanced")]
+    pub challenger_agent: Option<String>,
+
+    /// Comma-separated spec IDs whose acceptance criteria are added to the
+    /// review bundle.
+    #[clap(long, value_name = "SPEC-IDS")]
+    #[clap(help_heading = "Advanced")]
+    #[clap(value_parser = crate::spec_arg::spec_id_csv)]
+    pub specs: Option<String>,
+
+    /// Check a reviewer coverage ledger (JSON) against the file list. Exits
+    /// non-zero if any reviewable file is missing or skipped without a reason.
+    #[clap(long, value_name = "LEDGER_JSON")]
+    #[clap(help_heading = "Advanced")]
+    pub verify_coverage: Option<PathBuf>,
+
+    /// Pin the quoted `existing_code` snippets in a findings JSON file to exact
+    /// line ranges in the reviewed revision.
+    #[clap(long, value_name = "FINDINGS_JSON")]
+    #[clap(help_heading = "Advanced")]
+    pub anchor_findings: Option<PathBuf>,
+
     /// Emit machine-readable JSON output.
     #[clap(long)]
+    #[clap(help_heading = "Advanced")]
     pub json: bool,
 
     /// Write output inside the repository (relative paths start at the project root).
     #[clap(long, value_name = "PATH")]
+    #[clap(help_heading = "Advanced")]
     pub write: Option<PathBuf>,
 }
 
