@@ -67,6 +67,18 @@ comments:
   created_at: 2026-11-27T23:57:41.920969333Z
   modified_at: 2026-11-27T23:57:41.920969333Z
   session_id: 01a21f5b34f0
+- id: 01a21fcf-37e8-7231-9ddf-5e0e27f0f5af
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3936):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 4bd255da781f
+    Recorded: 2026-11-28T01:38:48.091173952+00:00
+    Findings:
+    1. Full CI red at this head: lib-0 fails on this PR's own 3 new tests (host-dependent: 'review-watch reports the deputy' / 'a deputy on a deleted image' panic on the GitHub runner). Make the fixture hermetic and prove it under a clean HOME.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-28T01:40:03.688260671Z
+  modified_at: 2026-11-28T01:40:03.688260671Z
 history:
 - id: 01a21f4d-52bb-7912-beea-868359f153f8
   author: joe
