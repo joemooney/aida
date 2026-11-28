@@ -40,7 +40,7 @@ def _cfg(expr, features):
                        m[1] not in ('target_os', 'target_family') or m[2] in ('linux', 'unix'))
         return str(m[0] not in ('windows', 'miri'))
     python = re.sub(r'(\w+)\s*=\s*"([^"]*)"|\b(all|any|not)\s*\(|\w+', atom, expr)
-    python = python.replace(')', ',))').replace('((,', '((')
+    python = re.sub(r'\(\(,', '((', re.sub(r'\)', ',))', python))
     return eval(python, {'__builtins__': {}, 'all': all, 'any': any, 'not_': lambda v: not v[0]})
 
 
