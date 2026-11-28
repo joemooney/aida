@@ -1,0 +1,18 @@
+{
+  "id": "3c7b6fc5-deaf-4acc-80f2-95512fd034d6",
+  "thread_id": "3c7b6fc5-deaf-4acc-80f2-95512fd034d6",
+  "from": "aida-throughput-guard",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795829207026,
+  "body": "- [STUCK-MERGE-RED] #4751 is approved at b0312ca7 but its CI is red (Build (ubuntu-latest) run 46090699576 attempt 1 tier FULL conclusion failure (selected, not superseded), CI (rest) run 46090699576 attempt 1 tier FULL conclusion failure (selected, not superseded); base not fresh: CI run 46090699576 tested base 82c120dd1cf9, current base is 1633dfe0a757), for 102 min; failing tests: not named; cause undetermined: the log of `Build (ubuntu-latest)` was not read (the response contains terminal escape sequences; pass --allow-escape-sequences to output it anyway); the log of `CI (rest)` was not read (the response contains terminal escape sequences; pass --allow-escape-sequences to output it anyway); the log of `Build (ubuntu-latest)` was not read (the response contains terminal escape sequences; pass --allow-escape-sequences to output it anyway)\n  -> read the failed job on #4751: rerun it once if the failure is unrelated to the change, otherwise route rework\n\n11 stall(s) in all are listed in `aida schedule due --seat advisor`; `aida land stalls` prints the current picture. When done: `aida schedule done throughput-guard-route-advisor`.",
+  "subject": "Throughput guard: 1 new stall(s) for the advisor seat",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
