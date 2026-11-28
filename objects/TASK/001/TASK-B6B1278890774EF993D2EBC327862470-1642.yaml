@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T06:28:56.284634899Z
-modified_at: 2026-11-28T06:51:55.775113432Z
+modified_at: 2026-11-28T06:59:49.371531916Z
 req_type: Task
 comments:
 - id: 01a220dd-7ae6-7373-86ce-7ef0265cd63c
@@ -58,6 +58,12 @@ comments:
   modified_at: 2026-11-28T06:39:44.450386951Z
   session_id: 01a220dbd847
   harness_version: 2.1.319 (Claude Code)
+- id: 01a220f3-f7fb-7b22-a81c-7e4e0c509e1d
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3962-contract-teardown-race` at head `4861910ccace96dac40616fa4f54954a32a52492`.'
+  created_at: 2026-11-28T06:59:49.371524274Z
+  modified_at: 2026-11-28T06:59:49.371524274Z
+  session_id: 01a220dbd847
 history:
 - id: 01a220dc-1247-73d3-8df8-5bfbbcb2c451
   author: aida-session-start
