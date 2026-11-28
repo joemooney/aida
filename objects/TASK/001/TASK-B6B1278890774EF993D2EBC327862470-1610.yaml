@@ -1,0 +1,25 @@
+id: 01a22031-10d7-7210-8479-73832a41a87f
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1610
+agreed_id: TASK-3952
+title: 'First-run: aida init never commits to the user''s branch without asking (F5)'
+description: |-
+  ## Acceptance
+  - AC1: aida init shows what it will write (paths + line counts) and leaves the changes UNCOMMITTED by default; committing requires an explicit --commit (or an interactive yes).
+  - AC2: no commit is created on the user's current branch unless asked; a test in a fresh repo asserts HEAD is unchanged after a default init.
+  - AC3: existing callers that rely on the commit (CI, scripts) pass --commit explicitly; the help text says so.
+
+  Source: docs/plans/2026-11-27-fresh-user-walkthrough.md (on branch task-3951-fresh-user-walkthrough / PR #4782), section F5. Advisor aida-d3 2026-11-27 20:30 priority order; filed by product-15 for laning now (one spec per lane).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T03:26:56.215965481Z
+modified_at: 2026-11-28T03:26:56.215965481Z
+req_type: Task
+filed_at:
+  code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c6
+  vendor: claude
