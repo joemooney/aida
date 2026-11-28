@@ -1,0 +1,26 @@
+id: 01a2207d-d156-7d60-81ac-71693e9f5cd0
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1627
+agreed_id: TASK-3958
+title: 'First-run: review prepare errors say what to do next (F10, F12, F13)'
+description: |-
+  ## Acceptance
+  - AC1 (F10): --run-review on uncommitted work says what to do (commit, or use the workspace mode) instead of a bare refusal.
+  - AC2 (F12): a missing agent CLI is reported up front (before any work) in plain words: which CLI, how to install it, or how to pick another with --agent.
+  - AC3 (F13): a signed-out agent CLI is reported as 'not signed in: run <cli> login', never as 'stderr: (empty)'.
+  - AC4: no internal SPEC IDs or seat jargon in these messages; a test per message.
+
+  Source: docs/plans/2026-11-27-fresh-user-walkthrough.md, sections F10, F12, F13 (on main after #4782). Advisor aida-d3 2026-11-27 20:30 priority (g); grouped by area by product-15 for laning now.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T04:50:46.230140279Z
+modified_at: 2026-11-28T04:50:46.230140279Z
+req_type: Task
+filed_at:
+  code_sha: 4b06a37b464472f759637aecf25042f98a4e33c2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c6
+  vendor: claude
