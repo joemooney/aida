@@ -1,0 +1,31 @@
+id: 01a22048-04a0-7a41-90a8-01189ddfc5a3
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1616
+title: 'Review follow-up: The repair-reservations doctor finding still advertises only the attested path. RepairGuar'
+description: |-
+  From TASK-3891
+  Reviewed sha: 595589fc567535ce3403eca32af7ed18828f7180
+
+  The repair-reservations doctor finding still advertises only the attested path. RepairGuard::repair_findings (aida-cli-lib/src/repair_journal.rs:345-346) sets action to `aida doctor heal repair-reservations --id <id> --attest '<reason>'` for every held entry, so an operator looking at `aida doctor check repair-reservations` is never pointed at the new bare sweep. That sweep is the toil reduction TASK-3891 exists for. Suggest a summary or hint line naming the bare sweep for CLOSED/MERGED dead lanes.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-28T03:52:00.416933880Z
+modified_at: 2026-11-28T03:52:00.416933880Z
+req_type: Task
+tags:
+- carried-from:TASK-3891
+- finding-hash:3164adbf
+- from-review:TASK-3891
+relationships:
+- rel_type: References
+  target_id: 01a2104e-54cf-7e91-872e-e5e9838f396a
+  created_at: 2026-11-28T03:52:58.168603634Z
+filed_at:
+  code_sha: 595589fc567535ce3403eca32af7ed18828f7180
+  branch: pr-4784
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c6
+  vendor: claude
+  session: 01a220439a66
