@@ -7,12 +7,12 @@ description: |-
   - AC1: the first-run guide and init output show the ID format aida add really issues (or aida add issues the short form init promises); a test pins that the text and the real format agree.
 
   Source: docs/plans/2026-11-27-fresh-user-walkthrough.md (on branch task-3951-fresh-user-walkthrough / PR #4782), section F6. Advisor aida-d3 2026-11-27 20:30 priority order; filed by product-15 for laning now (one spec per lane).
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:31:21.556365075Z
-modified_at: 2026-11-28T05:26:55.802947550Z
+modified_at: 2026-11-28T07:05:06.856493970Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -102,6 +102,22 @@ history:
   author: joe
   timestamp: 2026-11-28T05:26:55.906387634Z
   changes: []
+- id: 01a220f8-cfe2-76f2-91b5-2d8f2d9b7b1e
+  author: aida-auto-bump
+  timestamp: 2026-11-28T07:05:06.786045928Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a220f8-d028-7240-b7b7-43dfe87f5911
+  timestamp: 2026-11-28T07:05:06.856489670Z
+  agent: aida
+  commit_sha: 5ebe080e740882305e2823fd47368a0f5aa23431
+  summary: 'TASK-3956 AC1 verified by aida-cli/tests/task_3956_init_first_id.rs: local_only_init_names_the_long_id_add_really_issues runs real init then add and asserts the predicted ID equals the issued node-local ID and that done/show/commit lines use it; block_allocating_init_promises_no_id_it_cannot_predict asserts init prints a placeholder (no wrong ID) when IDs come from a block. first_task_id_example (init_cmd.rs:1587) reuses effective_policy_for + GitBackend::peek_spec_id (read-only, no counter advance), so it predicts without side effects and fails to a placeholder. Guide adds a note explaining the long-ID format. Diff touches no gate/authority code; independent of the 1 commit main has moved. One cosmetic doc wording follow-up. CI pending at review time.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
@@ -110,3 +126,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: f0ad200d8c6
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-28T07:05:06.786038037Z
+  completion_sha: 5ebe080e740882305e2823fd47368a0f5aa23431
