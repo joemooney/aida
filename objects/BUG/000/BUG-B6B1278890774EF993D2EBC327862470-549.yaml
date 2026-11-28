@@ -1,0 +1,40 @@
+id: 01a221b1-4d25-72d2-b640-0e69f626c22f
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-549
+agreed_id: BUG-2788
+title: CI live-bwrap confinement gate step intermittently hangs to the 45-min job timeout and loses its logs
+description: |
+  The CI (gates) step "Live bwrap OS-wrap confinement gate" (.github/workflows/ci.yml, around line 734; runs only on full CI) intermittently hangs on the GitHub runner until the job's 45:00 timeout. A stall costs a whole train and loses the evidence: logs of cancelled jobs return BlobNotFound.
+
+  Evidence (2026-11-28 UTC), all trains for #4790 (promotion 56):
+  - train #4795 (run started 05:15Z): step 36 started 05:23:17 and never completed; cancelled at the job timeout.
+  - train #4809 (09:13Z): step 36 started 09:29:05 and never completed; cancelled at the job timeout.
+  - train #4810 (10:07Z): the same step passed in 7m51s (10:16:31-10:24:22).
+  - The other trains tonight passed it in 7-9 min (06:10, 06:38, 07:32, 08:43). The #4790 PR's own full run passed it in 10 min.
+  - Repro on dell1 (main eb18c450c68 + the S1 cherry-pick, the step's exact commands with AIDA_REQUIRE_BWRAP_LIVE=1 AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1): 96/96 lib bwrap tests in 33 s, and bug_1934_bwrap_presenter 2/2. It doesn't reproduce off the runner.
+  So the stall is intermittent and runner-side, not tied to any one change. 2 of about 6 trains tonight stalled there, each costing a 45-min train.
+
+  Acceptance:
+  1. The step has `timeout-minutes: 15` (a stall fails in ~15 min, not 45).
+  2. Each test in the live list has its own timeout, e.g. nextest `--slow-timeout` with `terminate-after`, or a per-test wrapper. A stalled test is killed and NAMED in the step output.
+  3. On a stall, the step prints the currently running test(s) and the tail of the live-bwrap log BEFORE it fails, so the next occurrence identifies its culprit.
+  4. A fixture or test proves a deliberately hanging live test is killed and named within the step timeout.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T10:26:37.477984708Z
+modified_at: 2026-11-28T10:26:37.477984708Z
+req_type: Bug
+tags:
+- ci
+- flaky
+- train
+filed_at:
+  code_sha: fb1f8edfbad86ac5eac7132125376d2f410757b7
+  branch: integration
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eb18c450c68
+  vendor: claude
+  session: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
