@@ -1,0 +1,26 @@
+id: 01a22001-696a-7592-b445-924f15dc4da4
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1608
+agreed_id: TASK-3951
+title: 'Fresh-user walkthrough: follow docs/getting-started.md end to end in a clean HOME and new repo, and file one story of friction points'
+description: |-
+  Advisor aida-d3 2026-11-27 19:42 (filed by product-15), from Joe's question whether AIDA the product is improving: most landings are factory plumbing, and almost no queued work is user-facing. Review prepare is Joe's first community-facing use case.
+
+  ## Acceptance
+  - AC1: in a throwaway HOME (no ~/.aida, no ~/.claude config) and a brand-new git repo, follow docs/getting-started.md EXACTLY as written (install/PATH, aida init, a first spec, then a first `aida review prepare --run-review` on a small diff, plus `aida review prepare --help`). Do not use repo knowledge to work around a step: if the doc is wrong, that is a finding.
+  - AC2: every friction point (a wrong or missing command, a confusing error, a missing step, an internal SPEC ID or jargon in user-facing output, a slow or noisy step) is recorded with the exact command, the output excerpt and the expected behaviour.
+  - AC3: the findings are filed as ONE new story (draft) with one AC per friction point, not as separate tasks. The walkthrough transcript is attached as a docs/plans/2026-11-27-fresh-user-walkthrough.md file in the PR.
+  - AC4: no product code changes in this task; doc typos found along the way may be fixed in the same PR.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T02:34:53.162188563Z
+modified_at: 2026-11-28T02:34:53.162188563Z
+req_type: Task
+filed_at:
+  code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c6
+  vendor: claude
