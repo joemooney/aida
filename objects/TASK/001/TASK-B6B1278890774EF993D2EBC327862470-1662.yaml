@@ -1,0 +1,31 @@
+id: 01a221e4-258e-78a2-b00f-56837638780f
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1662
+title: 'Review follow-up: compete_cmd::binary_on_path and remote_create::is_on_path now go through version_probe_ava'
+description: |-
+  From TASK-3965
+  Reviewed sha: 65f5c037121497c077b8f10cdfda963c0040d60c
+
+  compete_cmd::binary_on_path and remote_create::is_on_path now go through version_probe_available, but no sleeping-CLI test covers those entry points; the shared-helper tests and the source ratchet cover them only indirectly. AC2 names only init detection and the codex probes, so this is informational.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-28T11:22:09.678661320Z
+modified_at: 2026-11-28T11:22:09.678661320Z
+req_type: Task
+tags:
+- carried-from:TASK-3965
+- finding-hash:ce2cc8d2
+- from-review:TASK-3965
+relationships:
+- rel_type: References
+  target_id: 01a221a2-f6d5-7ef0-bf0a-a6cd13f8f124
+  created_at: 2026-11-28T11:22:27.827465304Z
+filed_at:
+  code_sha: 65f5c037121497c077b8f10cdfda963c0040d60c
+  branch: pr-4811
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eb18c450c68
+  vendor: claude
+  session: 01a221e1478a
