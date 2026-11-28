@@ -14,7 +14,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T06:14:41.499443358Z
-modified_at: 2026-11-28T01:18:40.935915385Z
+modified_at: 2026-11-28T01:18:44.996371062Z
 req_type: Bug
 tags:
 - lanes
@@ -100,6 +100,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3561): Test gap (AC2 wiring): the launch-time call in aida-cli-lib/src/queue_cmd/work.rs (handle_queue_work, after refuse_waiting_pickup) and rework_approval_gate::check_launch have no behavioral test; the module tests exercise evaluate/apply only, so a... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T01:18:28.330107980Z
   modified_at: 2026-11-28T01:18:28.330107980Z
+- id: 01a21fbb-b504-7f70-a79b-0dcf4180c8a7
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3562): Reconciler admission mismatch: forge_head treats a change as blocked only when the forge reports mergeable=Known(false) or the head commit''s CI aggregate is Failed, while land.rs decides Conflict by a local `git merge-tree` against the pinned base and... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:18:44.996371062Z
+  modified_at: 2026-11-28T01:18:44.996371062Z
 history:
 - id: 01a21e6d-63f2-7bd0-8149-5657f75e0428
   author: aida-session-start
