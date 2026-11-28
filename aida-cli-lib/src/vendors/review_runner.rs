@@ -249,6 +249,17 @@ pub(crate) const AGY_AUTH_PROBE: ReviewVendor = ReviewVendor {
     ..AGY
 };
 
+/// `codex login status`: answers from the local auth file in milliseconds,
+/// `Not logged in` on stderr with exit 1. A signed-out `codex exec` never says
+/// so: it retries its connection until the review deadline. Confined like the
+/// review, so it checks the same auth files the review would see.
+// trace:TASK-3955 | ai:claude
+pub(crate) const CODEX_SIGN_IN_PROBE: ReviewVendor = ReviewVendor {
+    argv: &["login", "status"],
+    auth_failure: &["not logged in"],
+    ..CODEX
+};
+
 /// The finder when neither `--agent` nor `[agents] vendor` names one.
 // trace:BUG-2775 | ai:claude
 pub(crate) const DEFAULT_REVIEW_VENDOR: &ReviewVendor = &CLAUDE;

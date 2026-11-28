@@ -76,8 +76,6 @@
         "s5c_rename_old_paths_apply_every_inventory_exclusion",
         "s5d_unavailable_challenger_keeps_finder_report_and_exits_partial",
         "s5e_forced_same_vendor_challenger_is_labelled_in_bundle_and_report",
-        "task3953_empty_range_says_nothing_to_review_never_a_pass",
-        "task3953_clean_workspace_says_nothing_to_review",
         "bug2775_runner_errors_name_runner_pass_batch_and_cause",
         "bug2775_run_review_agent_resolves_and_states_the_default",
         "bug2779_top_level_error_keeps_its_cause",
@@ -87,6 +85,7 @@
         "t3869_specs_resolve_only_through_store_and_refuse_unknown",
         "bug2783_unconfined_runner_review_is_never_posted",
         "bug_2783_bwrap_confined_codex_never_reads_the_canary",
+        "task3955_signed_out_codex_is_refused_before_any_batch",
         "forge_head_and_shallow_parent",
         "git_inventory_and_content_errors_propagate",
         "invalid_review_rules_errors",
@@ -94,7 +93,9 @@
         "prepare_excludes_credentials_before_revision_reads",
         "root_credential_dirs_excluded_reported_and_refused_as_findings",
         "root_commit_preserves_unusual_git_paths",
-        "write_confines_new_and_existing_paths"
+        "write_confines_new_and_existing_paths",
+        "task3953_empty_range_says_nothing_to_review_never_a_pass",
+        "task3953_clean_workspace_says_nothing_to_review"
       ],
       "scope": "module"
     },
@@ -134,7 +135,8 @@
         "s3a2_runner_fails_closed_on_escaped_descendant",
         "s3b_runner_argv_carries_only_validated_tuning",
         "story3202_agy_auth_failure_is_a_typed_cause",
-        "story3202_agy_effort_mapping_and_print_timeout"
+        "story3202_agy_effort_mapping_and_print_timeout",
+        "task3955_signed_out_codex_fails_fast_with_the_sign_in_hint"
       ],
       "scope": "module"
     },
