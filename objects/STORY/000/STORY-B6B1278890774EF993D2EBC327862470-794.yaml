@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T00:40:24.997836173Z
-modified_at: 2026-11-19T23:34:43.433826831Z
+modified_at: 2026-11-28T08:11:20.996338061Z
 req_type: Story
 tags:
 - architecture
@@ -62,6 +62,11 @@ comments:
   modified_at: 2026-11-19T23:34:43.433826831Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a22135-7424-7130-b568-3f658f6a633f
+  author: joe
+  content: 'SKETCH REQUIREMENTS (advisor aida-d3 2026-11-28 01:16; relayed by product-15; binding for the sketch): (a) regenerated output must be DETERMINISTIC from the reviewed sources: a generator run twice gives identical bytes, and the train checks it; (b) ONLY registered paths may change during regen, anything else means refuse; (c) the train RE-VERIFIES that the PR''s own non-generated diff is unchanged (patch-id over the non-generated paths), so a generator can never smuggle in content.'
+  created_at: 2026-11-28T08:11:20.996338061Z
+  modified_at: 2026-11-28T08:11:20.996338061Z
 history:
 - id: 01a1ec19-7b04-7850-af52-2ebbc7e873d2
   author: joe
