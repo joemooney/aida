@@ -9,12 +9,12 @@ description: |-
   - AC1: the Python contract tests that create temp AIDA projects either set the env that disables the deferred cache refresh, or stop/wait for the worker before removing the project (one shared fixture helper).
   - AC2: a test-only repro: a project whose cache worker is mid-write is torn down cleanly (no ENOTEMPTY), run in a loop.
   - AC3: test-only; no product behaviour change.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T06:28:56.284634899Z
-modified_at: 2026-11-28T07:50:08.156615823Z
+modified_at: 2026-11-28T07:56:07.501921469Z
 req_type: Task
 relationships:
 - rel_type:
@@ -105,6 +105,12 @@ comments:
   modified_at: 2026-11-28T07:50:08.156615823Z
   session_id: 01a221177613
   harness_version: 2.1.319 (Claude Code)
+- id: 01a22127-83cd-7390-b2c6-803255101510
+  author: aida-publication-done
+  content: Implementer push b6802b518391 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-28T07:56:07.501920883Z
+  modified_at: 2026-11-28T07:56:07.501920883Z
+  session_id: 01a221177613
 history:
 - id: 01a220dc-1247-73d3-8df8-5bfbbcb2c451
   author: aida-session-start
@@ -148,6 +154,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a22127-83cd-7390-b2c6-802c4655d6ed
+  author: aida-publication-done
+  timestamp: 2026-11-28T07:56:07.501918971Z
+  session_id: 01a221177613
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 4b06a37b464472f759637aecf25042f98a4e33c2
   branch: main
