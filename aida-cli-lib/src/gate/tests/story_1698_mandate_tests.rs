@@ -4213,7 +4213,7 @@ fn story_2893_preview_matches_the_ship_cover_and_writes_no_gate_evidence() {
         let before = watched();
         let preview = story_2893_subject(|| {
             crate::gate::mandate_ship::preview_ship_cover(
-                root, root, root, 42, &ids, "feature", &head,
+                root, root, root, 42, &ids, "feature", &head, false,
             )
         });
         assert!(
@@ -4235,6 +4235,7 @@ fn story_2893_preview_matches_the_ship_cover_and_writes_no_gate_evidence() {
                 &ids,
                 "feature",
                 &"0".repeat(40),
+                false,
             )
         });
         assert!(moved.is_err(), "{moved:?}");
@@ -4293,4 +4294,89 @@ fn story_2893_preview_carry_over_proves_without_appending() {
     );
     assert_eq!(prove(true), Some(Ok(clean.clone())));
     assert!(fx::proof_event(repo, &clean).is_some());
+}
+
+// ── STORY-3181: the automatic train's stricter decision ────────────────────
+
+// trace:STORY-3181 | ai:claude
+#[test]
+fn story3181_auto_train_decision_covers_only_an_independent_exact_head_approval() {
+    use crate::gate::merge_hold_core::HoldReasonKind;
+    let auto = |c: &Case| auto_train_decision(&c.check());
+    let mut c = Case::ok();
+    c.state = MandateState::Active(active(true));
+    assert!(auto(&c).is_ok(), "{:?}", auto(&c));
+    c.hold = HoldFacts::SupervisedByMode;
+    assert!(auto(&c).is_ok());
+    // An approval recorded by ANY advisor session is refused.
+    for seat in ["advisor", "Advisor", "dialog"] {
+        let mut a = c.candidates[0].clone();
+        a.attestation.as_mut().unwrap().seat = Some(seat.into());
+        let mut advised = Case::ok();
+        advised.state = MandateState::Active(active(true));
+        advised.candidates = vec![a];
+        advised.policy = policy(&advised.candidates);
+        assert_eq!(
+            auto(&advised),
+            Err(MandateRefusal::AdvisorApproval),
+            "{seat}"
+        );
+        assert!(advised.decide().is_ok(), "the manual ship is unchanged");
+    }
+    // A carried-over approval never covers, even when proven.
+    c.carry_over = Some(Ok(HEAD.into()));
+    assert!(matches!(auto(&c), Err(MandateRefusal::StaleApproval(_))));
+    c.carry_over = None;
+    // Only a supervision hold: a decision or rework hold stays human.
+    for kind in [HoldReasonKind::Decision, HoldReasonKind::Rework] {
+        c.hold = HoldFacts::Marker {
+            kind,
+            legacy: false,
+        };
+        assert!(c.decide().is_ok());
+        assert!(matches!(
+            auto(&c),
+            Err(MandateRefusal::HoldNotReleasable { .. })
+        ));
+    }
+    c.hold = HoldFacts::Marker {
+        kind: HoldReasonKind::Supervision,
+        legacy: false,
+    };
+    // Minted without --include-supervised: a supervision marker stays human.
+    c.state = MandateState::Active(active(false));
+    assert!(c.decide().is_ok());
+    assert!(matches!(
+        auto(&c),
+        Err(MandateRefusal::SupervisedNotIncluded { .. })
+    ));
+}
+
+/// The same decision is the recheck before the merge: a mandate with less
+/// than 30 minutes left, stopped or expired by then refuses.
+// trace:STORY-3181 | ai:claude
+#[test]
+fn story3181_auto_train_decision_refuses_a_mandate_ending_before_the_merge() {
+    let mut c = Case::ok();
+    let mut m = active(true);
+    m.expires_at = now() + AUTO_TRAIN_MANDATE_MIN_REMAINING - Duration::minutes(1);
+    c.state = MandateState::Active(m.clone());
+    assert!(c.decide().is_ok(), "a manual ship may still use it");
+    assert!(matches!(
+        auto_train_decision(&c.check()),
+        Err(MandateRefusal::ExpiresSoon { .. })
+    ));
+    m.expires_at = now() + AUTO_TRAIN_MANDATE_MIN_REMAINING;
+    c.state = MandateState::Active(m.clone());
+    assert!(auto_train_decision(&c.check()).is_ok());
+    c.state = MandateState::Stopped(m.clone());
+    assert!(matches!(
+        auto_train_decision(&c.check()),
+        Err(MandateRefusal::Stopped { .. })
+    ));
+    c.state = MandateState::Expired(m);
+    assert!(matches!(
+        auto_train_decision(&c.check()),
+        Err(MandateRefusal::Expired { .. })
+    ));
 }

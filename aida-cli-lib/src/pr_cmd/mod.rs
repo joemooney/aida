@@ -894,6 +894,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
             Some(&ship_branch),
             || pr_head_sha_for_merge_gate(&project_root, pr_number, &ship_branch),
             override_stale_approval,
+            false,
         )
     };
     // BUG-2184: the mandate scan has its own cost and must not eat the --wait

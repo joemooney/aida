@@ -1593,6 +1593,9 @@ pub(crate) enum MandateRefusal {
     SoloSelfApproval,
     // trace:STORY-1917 | ai:agy
     ScopeNotCovered { id: String, scope: &'static str },
+    // trace:STORY-3181 | ai:claude
+    AdvisorApproval,
+    ExpiresSoon { id: String },
 }
 
 impl MandateRefusal {
@@ -1665,6 +1668,11 @@ impl MandateRefusal {
             Self::ScopeNotCovered { id, scope } => {
                 format!("mandate {id} does not cover `{scope}`")
             }
+            Self::AdvisorApproval => "the approval was recorded by an advisor session; the automatic train needs an independent reviewer's approval, so a human ships it".to_string(),
+            Self::ExpiresSoon { id } => format!(
+                "mandate {id} has less than {} minutes left, too little for the automatic train to land under it",
+                AUTO_TRAIN_MANDATE_MIN_REMAINING.num_minutes()
+            ),
         };
         format!("PR-{pr}: the fire-fighting mandate does not cover this ship: {why}")
     }
@@ -1775,6 +1783,67 @@ pub(crate) fn ship_decision(c: &ShipCheck<'_>) -> std::result::Result<String, Ma
         }
     }
     Ok(mandate.id.clone())
+}
+
+/// The time an automatic train needs left on a mandate to land under it, at
+/// admission and again immediately before the merge.
+// trace:STORY-3181 | ai:claude
+pub(crate) const AUTO_TRAIN_MANDATE_MIN_REMAINING: Duration = Duration::minutes(30);
+
+/// STORY-3181: may the AUTOMATIC train land this supervised PR under the
+/// active mandate? [`ship_decision`] plus: the mandate was minted with
+/// `--include-supervised` and has [`AUTO_TRAIN_MANDATE_MIN_REMAINING`] left;
+/// the hold is a typed supervision marker or supervision by mode; the
+/// approval is at the exact head (no carry-over) and was not recorded by any
+/// advisor session.
+// trace:STORY-3181 | ai:claude
+pub(crate) fn auto_train_decision(
+    c: &ShipCheck<'_>,
+) -> std::result::Result<String, MandateRefusal> {
+    use crate::gate::merge_hold_core::HoldReasonKind::Supervision;
+    match c.hold {
+        HoldFacts::Marker { kind, legacy } if *legacy || *kind != Supervision => {
+            return Err(MandateRefusal::HoldNotReleasable {
+                kind: format!(
+                    "{} (the automatic train releases only a typed supervision hold)",
+                    kind.as_str()
+                ),
+            })
+        }
+        HoldFacts::ClearedByHuman => return Err(MandateRefusal::NoHoldMarker),
+        _ => {}
+    }
+    if c.carry_over.is_some() {
+        return Err(MandateRefusal::StaleApproval(
+            "the automatic train never lands a supervised PR on a carried-over approval".into(),
+        ));
+    }
+    let approvals: Vec<_> = c
+        .candidates
+        .iter()
+        .filter(|v| v.kind.approves() && !v.is_closed())
+        .cloned()
+        .collect();
+    let advisor = crate::gate::ship::newest_approval(&approvals)
+        .and_then(|v| v.attestation.as_ref())
+        .and_then(|a| a.seat.as_deref())
+        .is_some_and(|seat| {
+            aida_core::team::canonical_role(seat).eq_ignore_ascii_case(MANDATE_SEAT)
+        });
+    if advisor {
+        return Err(MandateRefusal::AdvisorApproval);
+    }
+    let id = ship_decision(c)?;
+    let MandateState::Active(mandate) = c.state else {
+        return Err(MandateRefusal::NoMandate);
+    };
+    if !mandate.include_supervised {
+        return Err(MandateRefusal::SupervisedNotIncluded { id });
+    }
+    if mandate.expires_at - c.now < AUTO_TRAIN_MANDATE_MIN_REMAINING {
+        return Err(MandateRefusal::ExpiresSoon { id });
+    }
+    Ok(id)
 }
 
 /// The two-person rule: the newest open approval was not recorded by — and

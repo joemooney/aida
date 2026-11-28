@@ -2441,6 +2441,22 @@ pub(crate) fn auto_train_supervised_refusal(main_worktree: &Path) -> Option<Stri
     crate::landing_policy::load(main_worktree).auto_train_supervised_refusal()
 }
 
+/// Why the automatic train does not land a supervised PR on these checks:
+/// EVERY check at `head` must be green, not just the required set.
+// trace:STORY-3181 | ai:claude
+pub(crate) fn auto_train_every_check_refusal(
+    checks: &crate::forge::CommitChecks,
+    head: &str,
+) -> Option<String> {
+    let ci = crate::forge::judge_commit_checks(checks, &[]);
+    (!checks.sha.eq_ignore_ascii_case(head) || ci != crate::forge::CommitCi::Green).then(|| {
+        format!(
+            "the automatic train lands a supervised PR only when every check at its head is \
+             green ({ci:?}); a human ships it"
+        )
+    })
+}
+
 /// [`MemberChecks`] against the project's forge, store and main clone.
 // trace:STORY-1690 | ai:claude
 pub(crate) struct LiveChecks<'a> {
@@ -2729,9 +2745,21 @@ impl MemberChecks for LiveChecks<'_> {
         // PR unless the default branch's `[landing]` allows it; the refusal
         // comes before any mandate read. Manual trains are unchanged.
         // trace:STORY-3181 | ai:claude
-        if ADVISOR_LOOP.with(std::cell::Cell::get) {
+        let auto = ADVISOR_LOOP.with(std::cell::Cell::get);
+        if auto {
             if let Some(why) = auto_train_supervised_refusal(self.main_worktree) {
                 at_gate(Gate::Mandate);
+                return Err(Some(MemberGateError::Refused(why)));
+            }
+            // It lands a supervised PR only when EVERY check at the head is
+            // green, not just the required set.
+            at_gate(Gate::Mandate);
+            let checks = self.forge.commit_checks(head).map_err(|e| {
+                Some(MemberGateError::Unavailable(format!(
+                    "its checks could not be read ({e:#}); failing closed"
+                )))
+            })?;
+            if let Some(why) = auto_train_every_check_refusal(&checks, head) {
                 return Err(Some(MemberGateError::Refused(why)));
             }
         }
@@ -2750,6 +2778,7 @@ impl MemberChecks for LiveChecks<'_> {
                 ids,
                 head_ref,
                 head,
+                auto,
             )
             .map_err(|refusal| {
                 use crate::gate::mandate::MandateRefusal::*;
@@ -2787,6 +2816,7 @@ impl MemberChecks for LiveChecks<'_> {
                 cover,
                 ids,
                 head_ref,
+                auto,
             )
             .map_err(|r| Some(r.message(pr).into()));
         }
@@ -2800,6 +2830,7 @@ impl MemberChecks for LiveChecks<'_> {
             Some(head_ref),
             || Some(head.to_string()),
             false,
+            auto,
         )
         .map_err(|r| match r {
             crate::gate::mandate::MandateRefusal::NoMandate => None,

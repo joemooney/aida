@@ -1343,6 +1343,33 @@ fn story2691_auto_train_requires_covered_head_green_ci_and_no_hold() {
     assert!(train::eligible(&c, &Fake::ready()).is_err());
 }
 
+/// STORY-3181: with the supervised lane open a held PR reaches the member
+/// gate (whose mandate cover decides), on an exact-head approval only; the
+/// cover then needs every check green, not just the required set.
+// trace:STORY-3181 | ai:claude
+#[test]
+fn story3181_the_supervised_lane_admits_a_held_pr_on_an_exact_head_approval_only() {
+    let mut c = change(0, false);
+    c.head_branch = Some("feature/example".into());
+    let mut f = Fake::ready();
+    f.hold = Ok(Some("supervision hold".into()));
+    assert!(train::eligible_in(&c, &f, false).is_err(), "lane closed");
+    assert!(train::eligible_in(&c, &f, true).is_ok());
+    f.approval.as_mut().unwrap().reviewed = "approved-before-base-merge".into();
+    f.approval.as_mut().unwrap().carried = Some("carried proof".into());
+    assert!(train::eligible_in(&c, &f, true).is_err(), "no carry-over");
+    let mut ci = green(&c.head);
+    assert_eq!(
+        crate::pr_train::auto_train_every_check_refusal(&ci, &c.head),
+        None
+    );
+    ci.checks.push(check("informational", CheckOutcome::Failed));
+    let why = crate::pr_train::auto_train_every_check_refusal(&ci, &c.head).unwrap();
+    assert!(why.contains("every check at its head is green"), "{why}");
+    let other = green("other-head");
+    assert!(crate::pr_train::auto_train_every_check_refusal(&other, &c.head).is_some());
+}
+
 // trace:STORY-2691 | ai:codex
 #[test]
 fn story2691_train_settled_refusals_differ_from_evidence_failures() {

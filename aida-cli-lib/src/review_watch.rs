@@ -5402,7 +5402,12 @@ pub(crate) fn advisor_train_eligible(
         |e: anyhow::Error| crate::pr_train::MemberGateError::Unavailable(format!("{e:#}"));
     let repo = forge::Repository::load(root).map_err(unavailable)?;
     let change = repo.change(root, pr).map_err(unavailable)?;
-    train::eligible(&change, &ready::Live { root, repo: &repo })?;
+    // trace:STORY-3181 | ai:claude
+    let main = crate::main_worktree_root_from(root);
+    let lane = crate::landing_policy::load(&main).auto_train_supervised_under_mandate
+        && matches!(crate::gate::mandate::current_state(),
+            crate::gate::mandate::MandateState::Active(m) if m.include_supervised);
+    train::eligible_in(&change, &ready::Live { root, repo: &repo }, lane)?;
     Ok(change.head)
 }
 

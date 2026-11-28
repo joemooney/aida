@@ -1,6 +1,6 @@
 //! STORY-3181 S1: the automatic train refuses every supervised PR unless the
 //! default branch's committed `[landing] auto_train_supervised_under_mandate`
-//! allows it, and in this slice it still refuses when it is on.
+//! allows it; on, the mandate cover decides (STORY-3181 S2).
 // trace:STORY-3181 | ai:claude
 use super::*;
 
@@ -98,19 +98,22 @@ fn story3181_a_local_only_edit_does_not_turn_the_knob_on() {
     assert!(refusal(cover(clone.path(), false)).contains("is off"));
 }
 
+/// On, the knob no longer refuses: the every-check gate comes next, before
+/// any mandate read, and an unreadable CI fails closed.
 #[test]
-fn story3181_knob_on_is_not_yet_a_landing_path() {
+fn story3181_knob_on_hands_the_member_to_the_every_check_gate() {
     let _auto = Automatic::enter();
     let clone = clone_with(
         "[landing]\nauto_train_supervised_under_mandate = true\n",
         None,
     );
     for read_only in [false, true] {
-        let why = refusal(cover(clone.path(), read_only));
-        assert!(
-            why.contains("auto_train_supervised_under_mandate` is on, but"),
-            "read_only={read_only}: {why}"
-        );
+        match cover(clone.path(), read_only) {
+            Some(MemberGateError::Unavailable(why)) => {
+                assert!(why.contains("its checks could not be read"), "{why}")
+            }
+            other => panic!("read_only={read_only}: {other:?}"),
+        }
     }
 }
 
