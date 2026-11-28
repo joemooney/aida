@@ -1,0 +1,31 @@
+id: 01a220b9-e7da-7c43-a0ce-ca31e96979ad
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1641
+title: 'Review follow-up: aida-cli-lib/src/tests/help_grouping_tests.rs review_prepare_help_leads_with_common_uses: '
+description: |-
+  From TASK-3959
+  Reviewed sha: 264c5f7dc54e62d52d3b995a86f1e0675c3b63f4
+
+  aida-cli-lib/src/tests/help_grouping_tests.rs review_prepare_help_leads_with_common_uses: the assertion at("--run-review") < advanced is vacuous, because --run-review first appears in the Common uses examples in the long_about, which always precede the Advanced heading. Moving --run-review under Advanced would not fail the test. Assert on the option row (for example "      --run-review\n") instead.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-28T05:56:24.154919785Z
+modified_at: 2026-11-28T05:56:24.154919785Z
+req_type: Task
+tags:
+- carried-from:TASK-3959
+- finding-hash:a5667e23
+- from-review:TASK-3959
+relationships:
+- rel_type: References
+  target_id: 01a2207e-20c9-7573-8754-0c139d8e13f6
+  created_at: 2026-11-28T05:56:41.957069353Z
+filed_at:
+  code_sha: 264c5f7dc54e62d52d3b995a86f1e0675c3b63f4
+  branch: pr-4797
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4b06a37b464
+  vendor: claude
+  session: 01a220b82b7e
