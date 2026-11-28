@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T15:15:41.002272518Z
-modified_at: 2026-11-28T06:35:41.557966229Z
+modified_at: 2026-11-28T06:59:03.715133153Z
 req_type: Story
 tags:
 - landing
@@ -197,6 +197,33 @@ comments:
     A reference merge (commit f0ad200d8c64, `(Refs STORY-3181)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-28T02:17:10.708392307Z
   modified_at: 2026-11-28T02:17:10.708392307Z
+- id: 01a220f3-45a3-7060-ae45-bcae76a808cc
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e439ee605e (slice 2 of the signed sketch; Refs only; knob stays OFF on main).
+    Acceptance evidence (S2 scope), all [behavioral-test]:
+    - Knob off: unchanged refusal before any mandate read (story3181_knob_off_by_default_refuses_the_automatic_pass_and_prescan, story3181_the_knob_refusal_is_the_supervised_gate_reason).
+    - Knob on: the knob no longer refuses. The member goes to the every-check gate before any mandate read, and unreadable CI fails closed (story3181_knob_on_hands_the_member_to_the_every_check_gate).
+    - Covering mandate + independent exact-head approval: covered (story3181_auto_train_decision_covers_only_an_independent_exact_head_approval).
+    - Refused: approval seat advisor/Advisor/dialog (AdvisorApproval; manual ship unchanged); a proven carry-over; decision and rework holds; a mandate minted without --include-supervised.
+    - Mandate ending: <30m left -> ExpiresSoon; exactly 30m is allowed; Stopped and Expired refused (story3181_auto_train_decision_refuses_a_mandate_ending_before_the_merge).
+    - Any non-required check red, or CI for another head: refused (auto_train_every_check_refusal in story3181_the_supervised_lane_admits_a_held_pr_on_an_exact_head_approval_only).
+    - Eligibility: a held PR passes only with the lane open, and only on an exact-head approval, never a carried one (same test).
+    Wiring: LiveChecks::mandate_cover under ADVISOR_LOOP binds all three cover paths to auto_train_decision with prove_carry_over=false: the pre-scan preview, the admission cover, and recheck_train_release after a hold release. pr_train_verified::collect runs for both the proof and the pre-merge refresh, and it re-runs the member gate. So the same decision, including the 30m floor and the stop/expiry reread, applies immediately before the merge. The proof sources now carry the member's mandate id, so a different mandate at the refresh changes the digest.
+    Mutation check (by hand): I disabled the 30m floor and the advisor-seat refusal. Both story3181_auto_train_decision tests FAILED (exit 101). I restored the code and re-ran: 146/146 targeted tests pass.
+    Probes: fail-closed on an unreadable policy (off), an unreadable CI (Unavailable) and no mandate (NoMandate). A Decision or Rework hold that passes eligibility is refused at the cover. ClearedByHuman is refused. The manual train and aida pr ship pass auto=false: same decision and carry-over proof as before.
+    Residual risks:
+    - No behavioral test drives recheck_train_release(auto) or collect end to end. It is covered only by the decision tests plus the wiring reading above. Sketch S4's tests (d)-(g) remain.
+    - The advisor-approval check reads attestation.seat. An advisor session that recorded without a seat grant is caught only by the two-person rule when it is the shipper.
+    - The pre-scan Refusals cache (10m) is not yet keyed on the mandate id (sketch S3 item).
+    - The every-check CI read happens before the mandate read, so with the knob on a supervised PR costs one commit_checks call per judge.
+    - The verdict key is not yet in the proof or landing records (S3).
+    Validation: cargo check --tests clean; 146 targeted tests pass; make check-ci-fast exit 0.
+  created_at: 2026-11-28T06:59:03.715133153Z
+  modified_at: 2026-11-28T06:59:03.715133153Z
+  session_id: 01a220daf966
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21873-34ec-7e40-815b-1570489bba5e
   author: joe
