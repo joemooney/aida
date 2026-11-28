@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T08:25:33.453173985Z
-modified_at: 2026-11-28T01:07:57.286416183Z
+modified_at: 2026-11-28T01:08:18.401014934Z
 req_type: Bug
 tags:
 - admission
@@ -194,6 +194,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3485): advisor_loop_train.rs train_wanted: the unclaimed pre-scan judges PRs with the legacy `eligible` gate. That gate had no callers before this PR. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T01:07:45.877193035Z
   modified_at: 2026-11-28T01:07:45.877193035Z
+- id: 01a21fb2-2561-7ca2-a6ed-96f50307864a
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3487): advisor_loop_train.rs bug2769 tests: TEST_HOLD_WARN_MS is set to 100 and never reset. That leaks a 100ms threshold into other tests of the same process that run run_passes, such as the task_1993 BUG-2703 fixture. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:08:18.401014934Z
+  modified_at: 2026-11-28T01:08:18.401014934Z
 history:
 - id: 01a216f9-22fb-70e0-8a0d-85c17cff229f
   author: joe
