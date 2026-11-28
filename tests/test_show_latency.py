@@ -17,49 +17,8 @@ import tempfile
 import time
 
 from test_cache_refresh_outputs import require, run, run_tty
-
-
-def fixture_processes(temp):
-    """Live processes whose cwd, or any argv path (the worker carries
-    --store/--cache under the fixture), is inside the fixture, as (pid, cmdline).
-    Matching argv too keeps the wait effective if the worker cwd policy ever
-    moves the cwd outside the fixture. trace:TASK-1357 | ai:claude"""
-    roots = {os.path.realpath(temp), os.path.abspath(temp)}
-
-    def inside(path):
-        return any(path == r or path.startswith(r + os.sep) for r in roots)
-
-    found = []
-    for pid in filter(str.isdigit, os.listdir("/proc")):
-        try:
-            cwd = os.readlink(f"/proc/{pid}/cwd")
-            raw = Path(f"/proc/{pid}/cmdline").read_bytes()
-        except OSError:
-            continue
-        args = [a.decode(errors="replace") for a in raw.split(b"\0") if a]
-        # An argv path may also be the value half of `--flag=/path`.
-        paths = [a.split("=", 1)[-1] for a in args]
-        if int(pid) != os.getpid() and (inside(cwd) or any(inside(a) for a in paths)):
-            found.append((int(pid), " ".join(args)))
-    return found
-
-
-def wait_for_fixture_processes(temp, timeout=60):
-    """Let the detached refresh worker (and any other child the fixture
-    spawned) exit before TemporaryDirectory removes the tree under it. A
-    worker still writing under .aida made rmtree fail with ENOTEMPTY after
-    every check had passed. trace:BUG-1990 | ai:claude"""
-    if not os.path.isdir("/proc"):
-        return
-    start = time.monotonic()
-    first = live = fixture_processes(temp)
-    while live:
-        if time.monotonic() - start > timeout:
-            raise AssertionError(f"fixture processes still running after {timeout}s: {live}")
-        time.sleep(0.05)
-        live = fixture_processes(temp)
-    if first:
-        print(f"teardown waited {(time.monotonic() - start) * 1000:.0f}ms for {first}", flush=True)
+# Shared with every contract-test temp project. trace:TASK-3962 | ai:claude
+from fixture_teardown import wait_for_fixture_processes
 
 
 def check(binary):

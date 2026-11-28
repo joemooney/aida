@@ -11,7 +11,7 @@ import re
 import tempfile
 from pathlib import Path
 from test_cache_refresh_outputs import run, require
-from test_show_latency import wait_for_fixture_processes
+from fixture_teardown import wait_for_fixture_processes  # trace:TASK-3962 | ai:claude
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--aida", required=True)

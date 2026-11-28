@@ -13,10 +13,11 @@ import subprocess
 import sys
 
 from test_cache_refresh_outputs import require, run
+from fixture_teardown import temp_project  # trace:TASK-3962 | ai:claude
 
 
 def check(binary, forge, fail_first=False, enumeration_shim=None):
-    with tempfile.TemporaryDirectory(prefix="aida-review-handoff-") as temp:
+    with temp_project("aida-review-handoff-") as temp:
         root, home, bins = (Path(temp) / n for n in ("project", "home", "bin"))
         for path in (root, home, bins):
             path.mkdir()

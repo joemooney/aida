@@ -10,9 +10,10 @@ import json
 import os
 from pathlib import Path
 import subprocess
-import tempfile
 import time
 import uuid
+
+from fixture_teardown import temp_project  # trace:TASK-3962 | ai:claude
 
 FAKE_GH = r'''#!/usr/bin/env python3
 import json, os, sys
@@ -56,7 +57,7 @@ def check(binary):
     cases = {'conflict':22, 'approval':23, 'corpus':23, 'definition':24,
              'hold':25, 'marker':25, 'definition_override':24, 'timeout':21, 'registration':21, 'red':20, 'postflight':23}
     for case, expected in cases.items():
-        with tempfile.TemporaryDirectory(prefix='ship-preflight-') as temp:
+        with temp_project('ship-preflight-') as temp:
             root = Path(temp)
             home = root / 'home'
             home.mkdir()

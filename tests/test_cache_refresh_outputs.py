@@ -15,9 +15,9 @@ from pathlib import Path
 import sqlite3
 import struct
 import subprocess
-import tempfile
 import termios
 import time
+from fixture_teardown import temp_project  # trace:TASK-3962 | ai:claude
 
 
 def run(args, root, env, timeout=30):
@@ -70,7 +70,7 @@ def losing_reader_past_wait_prints_stale_note_and_json_flag_exit_0(result):
 
 
 def stale_allowed_outputs_cover_deferred_writer_busy_and_worker_running(binary):
-    with tempfile.TemporaryDirectory(prefix="aida-cache-labels-") as temp:
+    with temp_project("aida-cache-labels-") as temp:
         root = Path(temp) / "project"
         home = Path(temp) / "home"
         root.mkdir(); home.mkdir()
