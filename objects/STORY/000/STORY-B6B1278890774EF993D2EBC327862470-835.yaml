@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T15:15:41.002272518Z
-modified_at: 2026-11-28T08:12:56.519213022Z
+modified_at: 2026-11-28T08:13:01.034168161Z
 req_type: Story
 tags:
 - landing
@@ -230,6 +230,22 @@ comments:
   created_at: 2026-11-28T07:07:44.099964692Z
   modified_at: 2026-11-28T07:07:44.099964692Z
   session_id: 01a220daf966
+- id: 01a22136-fa23-7583-b0ee-c2c4f18842fe
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4803):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e439ee605e8d
+    Recorded: 2026-11-28T07:28:26.149750749+00:00
+    Findings:
+    1. auto_train_decision (aida-cli-lib/src/gate/mandate.rs, the `advisor` computation) refuses an advisor approval only when the newest approval's attestation.seat canonicalises to `advisor`. If the attestation is missing or has no seat (an advisor session that recorded without a seat grant, as the implementer's own residual says), the check passes. Only the two-person rule then stands, and it catches the advisor only when it is also the shipper. The signed sketch (binding point 3) and the advisor signoff require refusing an approval from ANY advisor session. Fail closed: refuse when the newest approval has no attested seat, or resolve the role from the verified authority (c.policy.verified_authority) rather than the self-reported seat. Add a test with seat = None and one with a non-advisor seat whose verified authority is an advisor.
+    2. The slice removes S1's knob-on refusal (landing_policy::auto_train_supervised_refusal now returns None when the knob is on), so the automatic train can admit and release supervised holds once the knob is flipped. The pre-merge path has no behavioural test: recheck_train_release(auto=true) after a hold release, the auto branch of pr_train_verified::collect's refresh, and the eject and re-arm when the mandate expires, stops or narrows between release and merge (sketch tests d to g). Neither does the lane computation in review_watch::advisor_train_eligible (knob plus an Active mandate with include_supervised). The signed sketch requires the knob to stay inert until S4's pre-merge recheck lands, or S3 and S4 to ship together. Either keep the knob-on refusal until S4, or add behavioural tests for recheck_train_release(auto) and collect's refresh refusing a mandate that is stopped, expired, narrowed or below 30 minutes after release.
+    3. CI is red at this head: CI (lib-0) 'Run tests' exited 101 and CI (fast compile) 'Ratchet set' failed. Main and neighbouring PR runs are green, so the failures are probably caused by this change. Identify the failing tests from the job logs (runs 46119405057 and 46119095086) and fix them. A candidate to check is a test or ratchet that pins the automatic or prescan path, the train proof sources JSON (the new `mandate` member) or preview parity.
+    4. In LiveChecks::mandate_cover (aida-cli-lib/src/pr_train.rs), the every-check gate calls forge.commit_checks before the read-only `!self.mandate_active()` early return. With the knob on and no mandate active, every supervised PR on every automatic pre-scan and pass costs a GitHub checks read, which spends from the shared 5000/h budget. It also becomes a Refused or Unavailable error instead of the previous Err(None) no-cover outcome. Move the every-check read after the mandate-active check, or after the cover decision.
+    5. gate/mandate_ship.rs preview_cover_deciding is now called only from tests, since preview_ship_cover calls collect_mandate_cover directly. Its doc comment ('The read-only collection behind preview_ship_cover') is now false, and the function is dead code in non-test builds. Gate it with #[cfg(test)] and fix the comment, or route preview_ship_cover back through it.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-28T08:13:00.835600747Z
+  modified_at: 2026-11-28T08:13:00.835600747Z
 history:
 - id: 01a21873-34ec-7e40-815b-1570489bba5e
   author: joe
