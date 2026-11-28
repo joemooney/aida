@@ -9,6 +9,6 @@ note: 'advisor-121 05:52: stale mail-poll-setup on 01a1f4a0; the seat confirmed 
 due_since: 2026-11-20T13:00:55.721588579Z
 due_reason: on CronJobFailed:watchdog
 due_failure:
-  trip_id: watchdog@2026-11-27T10:55:17.182544336Z
+  trip_id: watchdog@2026-11-28T10:48:21.179583804Z
   job: watchdog
   error: 'exit 124: timed out: doctor check runaway-seats --fail-on-findings did not complete within 120s (killed)'
