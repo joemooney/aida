@@ -9,12 +9,12 @@ description: |
 
   Raised by the implementer while working TASK-3924.
   Branch: task-3924-train-waiters  ·  Commit: a4f7da7206  ·  PR #4728
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T06:09:31.745784818Z
-modified_at: 2026-11-28T02:39:40.338378074Z
+modified_at: 2026-11-28T02:49:46.923178632Z
 req_type: Task
 tags:
 - from-implementer:TASK-3924
@@ -48,6 +48,12 @@ comments:
   modified_at: 2026-11-28T02:39:40.338378074Z
   session_id: 01a21ff70ac3
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2200f-0cab-7e00-97ea-ebd9b482aee1
+  author: aida-publication-done
+  content: Implementer push 1d57c2f6f2df declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-28T02:49:46.923178058Z
+  modified_at: 2026-11-28T02:49:46.923178058Z
+  session_id: 01a21ff70ac3
 history:
 - id: 01a21ba6-8191-77d3-960c-90dc7a8b9eba
   author: joe
@@ -73,6 +79,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a2200f-0cab-7e00-97ea-ebc9dc7173fd
+  author: aida-publication-done
+  timestamp: 2026-11-28T02:49:46.923173904Z
+  session_id: 01a21ff70ac3
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: a4f7da7206450b57610db4aa4bdd76a78aa0cad3
   branch: task-3924-train-waiters
