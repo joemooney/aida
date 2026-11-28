@@ -1,0 +1,31 @@
+id: 01a22060-15de-7201-928a-f8ab00df741b
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-428
+title: 'Review PR-4787: [AI:claude] fix(install): the installer fails loudly when the download fails (TASK-3954)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a22041`) for branch `task-3954-installer-fail-loud`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4787>
+  - Branch: `task-3954-installer-fail-loud` → `main`
+
+  ## Covers
+
+  - TASK-3954
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4787` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T04:18:17.694905905Z
+modified_at: 2026-11-28T04:18:17.694905905Z
+req_type: Story
+filed_at:
+  code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c
