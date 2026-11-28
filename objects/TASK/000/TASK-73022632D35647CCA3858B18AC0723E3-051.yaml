@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T15:12:00.311702285Z
-modified_at: 2026-11-28T02:18:57.881159386Z
+modified_at: 2026-11-28T02:29:20.899325923Z
 req_type: Task
 tags:
 - from-implementer:BUG-2738
@@ -39,6 +39,29 @@ comments:
   content: 'APPROVED (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Apply BUG-2738 landed-spec guard to review stranded --fix and orchestrator shelve; only record path guarded on main.'
   created_at: 2026-11-28T00:28:43.507624672Z
   modified_at: 2026-11-28T00:28:43.507624672Z
+- id: 01a21ffc-5783-7840-8b35-c87676e660b2
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: df8c7a7a57
+
+    Acceptance evidence (the spec has no ## Acceptance section; checked against the description's two callers):
+    - Stranded sweep: `aida review stranded --fix` now runs each row through `fix_stranded_row` (review_commands.rs), which calls `leases::record_refusal_on_landed_spec` with `refused_change_merged(row.pr)` BEFORE it places the merge hold or shelves. Tests: task_3501_stranded_fix_on_merged_pr_is_noted_not_held_or_shelved (Done + MERGED -> Landed, stays Done, note, no hold) and task_3501_stranded_fix_on_open_pr_still_holds_and_shelves.
+    - Orchestrator phase 3: RealPhaseDriver::shelve_on_failure (phase_driver_trait.rs) applies the same guard for VerdictRequestChanges/VerdictReject, using pr_number or phase_done_pr; a landed spec is noted (author aida-orchestrator) and returns Ok(None). Tests: task_3501_orchestrator_shelve_skips_landed_specs (Done+MERGED, Completed+OPEN) and task_3501_orchestrator_shelve_still_parks_a_live_spec.
+    - Targeted run: cargo test --profile agent -p aida-cli-lib --lib -- bug_2738_landed_refusal_tests, 9 passed.
+
+    Probe findings:
+    - P1 consistency: both callers reuse landed_refusal and refused_change_merged, the same code the record path uses; no new comparison logic.
+    - P3 multiplicity: --fix loops all rows; a landed row is reported in a new JSON `landed` array and the text output, and a per-row note is printed only in non-JSON mode so --json stays valid JSON.
+    - P5 fail-open: an unreadable PR state counts as not merged, so it shelves as before (same as BUG-2738). With no PR number the orchestrator path checks Completed only.
+
+    Residual risks:
+    - When the orchestrator's shelve returns None for a landed spec, the drain handles it as an un-shelved failure (logged, no handoff). Since the PR has already merged, that is the conservative outcome, but the drain may pause there rather than skip on.
+    - Merged-PR detection still depends on the forge being GitHub (that is TASK-3504's scope).
+  created_at: 2026-11-28T02:29:20.899325923Z
+  modified_at: 2026-11-28T02:29:20.899325923Z
+  session_id: 01a21ff29b63
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21876-55c7-7810-9bcf-7d0b56461861
   author: joe
