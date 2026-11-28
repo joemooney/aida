@@ -8,12 +8,12 @@ description: |-
   - AC2: a test commits in a fresh aida init repo and asserts exit 0 and no failure wording.
 
   Source: docs/plans/2026-11-27-fresh-user-walkthrough.md (on branch task-3951-fresh-user-walkthrough / PR #4782), section F8. Advisor aida-d3 2026-11-27 20:30 priority order; filed by product-15 for laning now (one spec per lane).
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:31:49.783028382Z
-modified_at: 2026-11-28T04:42:30.291796489Z
+modified_at: 2026-11-28T04:55:50.738857615Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -41,6 +41,19 @@ comments:
   modified_at: 2026-11-28T04:42:30.291796489Z
   session_id: 01a22073d460
   harness_version: 2.1.319 (Claude Code)
+- id: 01a22082-1d05-7252-a5a2-0febf49b9647
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: db76bf1756 (git diff origin/main...HEAD, 5 files).
+    Acceptance evidence: AC1 + AC2 [behavioral-test] aida-cli/tests/task_3957_fresh_init_commit_hook.rs runs the real aida init (hooks on) in an isolated HOME + new repo, commits 'Configurable greeting', asserts exit 0, no fail/error/rejected/✗ wording, no red ANSI, and exactly one 'hint:' line (proves the hook ran). Passed via lane runner (1 passed). Existing shell tests tests/test_multi_agent_commit_tag.sh and tests/test_release_skip_ai_warnings.sh still pass (they grep 'conventional format', which the hint keeps). make check-ci-fast exit 0.
+    Probe findings: (1) in permissive mode only the format check adds to ERRORS, so the hint fires exactly when the subject is not conventional; (3) ERRORS + WARNINGS together print the yellow warnings plus the hint, unchanged otherwise; (5) the strict refusal path is unchanged and still covered by aida-core store_hook_tests (AIDA_COMMIT_STRICT=true refuses, stderr has 'conventional'); no test weakened.
+    Fixes: showcase drift from the getting-started note was regenerated (docs/showcase/build.py).
+    Residual risks: the permissive output no longer names AIDA_COMMIT_STRICT; repos with an already-installed hook keep the old text until hooks are refreshed.
+  created_at: 2026-11-28T04:55:27.749936363Z
+  modified_at: 2026-11-28T04:55:27.749936363Z
+  session_id: 01a22073d460
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a22035-c5e0-7e70-a058-780324cd7502
   author: joe
@@ -53,6 +66,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a22082-7720-7283-8649-6e752fb95f8a
+  author: dirtlab
+  timestamp: 2026-11-28T04:55:50.816803096Z
+  session_id: 01a22073d460
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
   branch: main
@@ -60,3 +82,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: f0ad200d8c6
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-28T04:55:50.738857615Z
+  implemented_by: dirtlab
