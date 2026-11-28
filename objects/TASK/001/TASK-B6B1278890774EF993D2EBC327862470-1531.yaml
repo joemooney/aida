@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 1eba036e95ffbc060aba8b5844232897f0def674
 
   aida-cli-lib/src/review_watch.rs:1970: the reclaim runs whenever an exited held-tree attempt exists. That includes after pickup_retries >= 3 and while the watcher is paused (pause::current is checked after the reclaim). In the capped case the checkout is ended, but pickup_retry still returns 'pickup retry cap reached' with retained=false. The PR stays held until someone runs `aida review watch --release`, and it never reaches the AC3 retained/doctor surface. PRs that hit the cap before this lands (the live #4638/#4634/#4627 shape) get no automatic dispatch. Follow-up: skip the reclaim when the retry is capped or the watcher is paused, or reset/release the cap once a reclaim succeeds.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T18:42:34.367203642Z
-modified_at: 2026-11-28T01:13:19.516392617Z
+modified_at: 2026-11-28T01:13:21.470825235Z
 req_type: Task
 tags:
 - carried-from:BUG-2776
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21fb6-c53e-7ae3-82d6-444f218f8952
+  author: joe
+  timestamp: 2026-11-28T01:13:21.470822885Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 1eba036e95ffbc060aba8b5844232897f0def674
   branch: pr-4678
