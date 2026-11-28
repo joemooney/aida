@@ -355,10 +355,18 @@ fn write_aborts_on_an_unreadable_settings_file_and_leaves_it_untouched() {
     use std::os::unix::fs::PermissionsExt;
     let dir = seeded_repo();
     let path = dir.path().join(".claude/settings.json");
+    let report = build_allowlist_report(
+        claude_and_codex(),
+        forge_hosts_from_remotes(&read_git_remotes(dir.path())),
+    );
+    let edits = plan_allowlist_writes(dir.path(), &report).unwrap();
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).unwrap();
     // Root reads a 0000 file anyway, so there is no read error to provoke.
     if std::fs::read(&path).is_err() {
         let err = run_report_allowlists(dir.path(), Some("claude"), false, true).unwrap_err();
+        assert!(format!("{err:#}").contains("Permission denied"), "{err:#}");
+        // Unreadable only once planned: the writer itself still refuses.
+        let err = apply_allowlist_writes(dir.path(), &edits).unwrap_err();
         assert!(
             format!("{err:#}").contains("nothing was written"),
             "{err:#}"
