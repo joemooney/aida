@@ -24,6 +24,8 @@
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 // mandate-gate
 
+// trace:BUG-2786 | ai:claude — expire an exited reviewer's pending sweep.
+pub(crate) mod abandoned_sweep;
 // trace:BUG-2531 | ai:claude — write-ahead spec-to-change bindings.
 pub(crate) mod bindings;
 // trace:BUG-2403 | ai:claude
@@ -277,6 +279,10 @@ pub(crate) fn record_verdict_at(
         let mut pending = record.clone();
         // Explicit delivery state: readiness blocks, refusal history skips it.
         pending.insert("sweep_pending".into(), true.into());
+        // trace:BUG-2786 | ai:claude — the barrier keeps the verdict it hides.
+        if let Some(word) = verdict.kind.canonical() {
+            pending.insert(super::review_verdict::BARRIER_OF.into(), word.into());
+        }
         pending.insert("verdict".into(), "request-changes".into());
         record_verdict_at_inner(path, &pending, spec, None)?;
         // trace:BUG-2564 | ai:claude — a one-shot, thread-local test fault:
@@ -299,6 +305,7 @@ pub(crate) fn record_verdict_at(
                 ))
             })?;
         let mut delivered = record.clone();
+        delivered.remove(super::review_verdict::BARRIER_OF);
         delivered.insert("sweep_pending".into(), false.into());
         delivered.insert("verdict".into(), "approved".into());
         return record_verdict_at_inner(path, &delivered, spec, Some(&pending));
@@ -471,6 +478,14 @@ pub(crate) fn record_collected_verdict(
     {
         let pending = |body: &crate::gate::review_verdict::JsonObj| {
             let mut body = body.clone();
+            body.remove(super::review_verdict::BARRIER_OF);
+            // trace:BUG-2786 | ai:claude — the pre-barrier verdict, so expiry
+            // never finalizes a non-approval (a rejected record with deferred
+            // findings is barriered here too). Read before the barrier
+            // flag, which makes every disposition read request-changes.
+            if let Some(word) = super::review_verdict::disposition_verdict(&body).canonical() {
+                body.insert(super::review_verdict::BARRIER_OF.into(), word.into());
+            }
             // Explicit delivery state, including the same handoff origin.
             body.insert("sweep_pending".into(), true.into());
             body.insert("verdict".into(), "request-changes".into());

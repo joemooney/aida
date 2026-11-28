@@ -921,6 +921,11 @@ pub(crate) fn approval_refusal(
     ))
 }
 
+/// The verdict word a delivery barrier stood in for. Only an `approved`
+/// barrier may ever be finalized from the barrier alone.
+// trace:BUG-2786 | ai:claude
+pub(crate) const BARRIER_OF: &str = "barrier_of";
+
 // trace:STORY-2698 | ai:codex
 /// A durable delivery barrier, never an act of review refusal.
 pub(crate) fn delivery_pending(record: &serde_json::Value) -> bool {
@@ -939,14 +944,26 @@ fn same_pending_delivery(pending: &JsonObj, approval: &JsonObj) -> bool {
     let clean = |body: &JsonObj| {
         let mut body = body.clone();
         body.remove("sweep_pending");
+        body.remove(BARRIER_OF);
         body.remove("verdict");
         body
     };
     clean(pending) == clean(approval)
 }
 
+/// An exited reviewer's expired delivery barrier: "needs review", which is
+/// neither an approval nor a refusal ([`crate::gate::ledger::abandoned_sweep`]).
+// trace:BUG-2786 | ai:claude
+pub(crate) fn sweep_abandoned(record: &serde_json::Value) -> bool {
+    record.get("sweep_abandoned").and_then(|v| v.as_bool()) == Some(true)
+}
+
 // trace:STORY-2698 | ai:codex
 pub(crate) fn disposition_verdict(obj: &JsonObj) -> VerdictKind {
+    // trace:BUG-2786 | ai:claude — never approval, never request-changes.
+    if obj.get("sweep_abandoned").and_then(|v| v.as_bool()) == Some(true) {
+        return VerdictKind::Unknown;
+    }
     let kind = VerdictKind::parse(obj.get("verdict").and_then(|v| v.as_str()).unwrap_or(""));
     if obj.get("sweep_pending").and_then(|v| v.as_bool()) == Some(true) {
         return VerdictKind::RequestChanges;
@@ -1307,7 +1324,10 @@ pub(crate) fn effective_recordings_for_sha<'a>(
                 .filter(|v| !v.is_empty())
                 .ok_or_else(|| "review recording has no verdict".to_string())?;
             let kind = disposition_verdict(recording);
-            if kind == VerdictKind::Unknown {
+            // trace:BUG-2786 | ai:claude — an expired barrier is a recognised
+            // act that displaces the barrier and votes nothing ("needs review").
+            let abandoned = sweep_abandoned(&serde_json::Value::Object(recording.clone()));
+            if kind == VerdictKind::Unknown && !abandoned {
                 return Err(format!("review recording has unrecognised verdict `{raw}`"));
             }
             let reviewer = recording
@@ -1404,6 +1424,8 @@ pub(crate) fn effective_recordings_for_sha<'a>(
     if effective.is_empty() && !at_head.is_empty() {
         return Err("conflicting review append histories have no effective recording".to_string());
     }
+    // trace:BUG-2786 | ai:claude — an abandoned sweep is no verdict.
+    effective.retain(|r| !sweep_abandoned(&serde_json::Value::Object(r.clone())));
     Ok(effective)
 }
 
@@ -2452,6 +2474,7 @@ pub(crate) fn build_verdict_object_with_effective(
     // A fresh reviewer act retries a pending delivery rather than inheriting it.
     if verdict.is_some() {
         obj.remove("sweep_pending");
+        obj.remove(BARRIER_OF);
     }
     if !findings.is_empty() {
         obj.insert("finding_dispositions".into(), metadata.into());

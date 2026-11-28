@@ -448,6 +448,10 @@ fn ledger_at_head(
     let Some((at, record)) = latest else {
         return Ok(AtHead::Missing);
     };
+    // An exited reviewer's expired sweep needs a review. trace:BUG-2786 | ai:claude
+    if crate::gate::review_verdict::sweep_abandoned(&serde_json::Value::Object(record.clone())) {
+        return Ok(AtHead::Missing);
+    }
     let verdict = parse_ledger_record(&record).context("invalid ledger verdict")?;
     let at_head = verdict
         .reviewed_sha

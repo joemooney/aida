@@ -1873,6 +1873,51 @@ mod standalone_review_verdict_parent_tests {
             before
         );
     }
+    /// BUG-2786 AC1: the same failed-delivery barrier, its reviewer gone and
+    /// no retry coming, is finalized by the watcher's expiry pass through the
+    /// normal writer: the approval and its deferred findings land.
+    // trace:BUG-2786 | ai:claude
+    #[test]
+    fn bug_2786_exited_reviewers_complete_barrier_is_finalized_by_the_expiry_pass() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let f = Fixture::new();
+        let launch = LaunchDraft::prepare_local(&f.root, 59, f.head.clone()).unwrap();
+        let draft = approved_with_deferred(&f, &launch);
+        let reviewer = f.reviewer().unwrap().with_draft(&launch, &draft).unwrap();
+        crate::gate::ledger::FAIL_NEXT_FINDING_DELIVERY.with(|c| c.set(true));
+        assert!(f
+            .record(&draft.verdict, &draft.findings, Some(&reviewer))
+            .is_err());
+        let change = crate::gate::ledger::ChangeKey::pr(59);
+        let pending = crate::gate::ledger::project::newest_verdict(&f.root, "PR-59").unwrap();
+        assert!(rv::delivery_pending(&serde_json::Value::Object(
+            pending.clone()
+        )));
+        assert_eq!(pending[rv::BARRIER_OF], "approved");
+        // No lease is registered for the reviewer's session: it has ended.
+        use crate::gate::ledger::abandoned_sweep as sweep;
+        assert!(sweep::reviewer_session_ended(&f.root, &pending));
+        let finalize = |event: &crate::gate::ledger::GateEvent, approval: &rv::JsonObj| {
+            sweep::finalize_via_writer(&f.root, event, approval)
+        };
+        let later = chrono::Utc::now() + sweep::SWEEP_ABANDON_AFTER + chrono::Duration::minutes(1);
+        let done = sweep::expire_with(
+            &f.root,
+            change,
+            later,
+            sweep::SWEEP_ABANDON_AFTER,
+            &crate::gate::kernel_deps::review_blocking::from_config_text(""),
+            &|r| sweep::reviewer_session_ended(&f.root, r),
+            &finalize,
+        )
+        .unwrap();
+        assert!(done.finalized >= 1 && done.abandoned == 0, "{done:?}");
+        let recorded = rv::read_recorded_verdict(&f.root, "PR-59").unwrap();
+        assert_eq!(recorded.kind, rv::VerdictKind::Approved);
+        assert_eq!(recorded.findings, ["P3 follow-up 1", "P3 follow-up 2"]);
+    }
     /// One contract on both sides: the approved draft with plain p3 and style
     /// findings that the submission refuses is the draft the recorder
     /// refuses (nothing recorded), and the deferred approval the submission
