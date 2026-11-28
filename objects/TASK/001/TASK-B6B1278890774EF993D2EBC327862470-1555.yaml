@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-27T04:36:47.480552120Z
-modified_at: 2026-11-27T04:36:47.480552120Z
+modified_at: 2026-11-28T00:37:20.845957480Z
 req_type: Task
 tags:
 - carried-from:BUG-2782
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a21adf-7a78-7cf2-aad6-77755aa68799
   created_at: 2026-11-27T04:37:07.580972778Z
+comments:
+- id: 01a21f95-cd4e-75b2-9917-071f33a51517
+  author: joe
+  content: 'MERGED into TASK-3538 (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Same docs sync: check-ci-fast timing/semantics text in CLAUDE.md, discipline and ci-test-shards.md.'
+  created_at: 2026-11-28T00:37:20.845957480Z
+  modified_at: 2026-11-28T00:37:20.845957480Z
 history:
 - id: 01a21b5f-6cb9-7be0-9d0a-76efe5c09166
   author: joe
