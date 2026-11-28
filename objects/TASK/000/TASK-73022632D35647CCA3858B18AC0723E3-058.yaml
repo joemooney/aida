@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:42:51.691935317Z
-modified_at: 2026-11-28T01:46:33.780723425Z
+modified_at: 2026-11-28T02:05:27.606453046Z
 req_type: Task
 tags:
 - ci-gates
@@ -28,6 +28,21 @@ comments:
   content: 'APPROVED (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): check-ci-fast builds nothing after BUG-2782 but still queues behind compile slot; exempt fast_gate_job.'
   created_at: 2026-11-28T00:37:16.381286864Z
   modified_at: 2026-11-28T00:37:16.381286864Z
+- id: 01a21fe6-78b6-7573-911b-6a82337f7a6b
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 1112f734e4 (diff origin/main...HEAD: lane_admission.rs, lane_job.rs).
+
+    Acceptance evidence (the spec has no formal AC list; reviewed against the description): [evidence: behavioral-test] lane_admission::tests::task_3537_non_compiling_job_skips_full_compile_slots holds every compile slot and shows (a) a non-compiling job is admitted at once without a slot, (b) it still waits on the job memory floor, (c) a compiling job still queues ('all 1 host compile slots'). lane_job.rs passes compiles = !fast_gate_job(&job) into admit_lane_job. Targeted run: cargo test --profile agent -p aida-cli-lib --lib -- lane_admission, 10 passed, 0 failed (lane job j20261128T014937348-5-0).
+
+    Probes: (1) the call site uses the same fast_gate_job predicate as timeout_for/job_env, so they agree. (3) Slot reservation is skipped whatever N is. CARGO_BUILD_JOBS and the memory floor are unchanged. (5) Authority: seats can only submit the exact argv make check-ci-fast with empty env (validate). /bin/sh -c is host_gate only. Residual risk: a seat could edit its own Makefile so check-ci-fast compiles, skipping the lane compile cap. That only bypasses a host-health throttle, not an authority check: the job still runs in bubblewrap, offline, under the memory floor, and any cargo it runs still sees the host cargo-slot wrapper paths.
+
+    Fixes during self-review: the first fast-gate run failed only on Check formatting (one assert line); fixed in 1112f734e4.
+  created_at: 2026-11-28T02:05:27.606453046Z
+  modified_at: 2026-11-28T02:05:27.606453046Z
+  session_id: 01a21fd4d589
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21b5f-6b8b-71d2-8aa7-afa09d55128b
   author: joe
