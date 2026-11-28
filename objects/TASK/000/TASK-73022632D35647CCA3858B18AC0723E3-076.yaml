@@ -1,5 +1,6 @@
 id: 01a221f2-e14d-77f3-bed2-ae751165bd95
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-076
+agreed_id: TASK-3625
 title: 'BUG-2788 PR #4815 is ~310 changed lines vs the brief''s 200-line budget'
 description: |
   The brief capped BUG-2788 at <=200 changed lines. PR #4815 has about 310: scripts/ci-live-test-watchdog.py (~160) plus its fixture test (~130). libtest has no stable per-test timeout, and nextest is not installed in the gates shard (its result format would also change the step's ok-line counting). So a small per-process harness with a hang-fixture proof was the smallest change that meets AC2-AC4.
@@ -17,6 +18,13 @@ tags:
 - from-implementer:BUG-2788
 - kind:deviation
 - severity:cosmetic
+history:
+- id: 01a22237-2220-71d3-aad2-71ffc451c3e0
+  author: joe
+  timestamp: 2026-11-28T12:52:48.288439457Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes: []
 filed_at:
   code_sha: c69eb5939c5b2b4ac8074fd3b609b915466f66c5
   branch: bug-2788-bwrap-step-timeout

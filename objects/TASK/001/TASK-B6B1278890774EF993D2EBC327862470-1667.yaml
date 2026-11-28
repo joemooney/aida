@@ -1,5 +1,6 @@
 id: 01a2221d-3a1a-7be1-93ae-7aa8394096a6
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1667
+agreed_id: TASK-3626
 title: 'Review follow-up: The E2 re-check in Rust (gate/train_generated.rs ledger_violation) and in the Python drive'
 description: |-
   From TASK-3963
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a22146-3192-7311-ba67-22c16846dd7c
   created_at: 2026-11-28T12:24:48.124769798Z
+history:
+- id: 01a22237-68b3-7a93-ba59-e5965681fd76
+  author: joe
+  timestamp: 2026-11-28T12:53:06.355947345Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 3ab9a48e3ebcd6e6204749eaf43e97be4758351a
   branch: pr-4808

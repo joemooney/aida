@@ -1,5 +1,6 @@
 id: 01a221f1-4305-70c0-8f55-9dc173638cdf
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-444
+agreed_id: STORY-3272
 title: 'Review PR-4815: [AI:claude] chore(ci): inventory the live-test watchdog''s log writes (BUG-2788)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a221df`) for branch `bug-2788-bwrap-step-timeout`.
@@ -47,6 +48,12 @@ history:
   timestamp: 2026-11-28T11:36:43.352155318Z
   session_id: 01a221df696f
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a22239-0f86-74b2-9f91-90ab0cddeda2
+  author: joe
+  timestamp: 2026-11-28T12:54:54.598842536Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
   changes: []
 filed_at:
   code_sha: c69eb5939c5b2b4ac8074fd3b609b915466f66c5

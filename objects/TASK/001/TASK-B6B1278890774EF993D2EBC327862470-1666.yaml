@@ -1,5 +1,6 @@
 id: 01a2220a-ef2a-7701-8952-5bfa7a830b0f
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1666
+agreed_id: TASK-3630
 title: 'Review follow-up: scripts/ci-live-test-watchdog.py kill(): after SIGTERM it returns as soon as the group lea'
 description: |-
   From BUG-2788
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a221b1-4d25-72d2-b640-0e69f626c22f
   created_at: 2026-11-28T12:04:50.976249645Z
+history:
+- id: 01a22238-7f8d-7a20-b836-e892b099258e
+  author: joe
+  timestamp: 2026-11-28T12:54:17.741113673Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes: []
 filed_at:
   code_sha: c69eb5939c5b2b4ac8074fd3b609b915466f66c5
   branch: pr-4815
