@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T04:52:28.064803162Z
-modified_at: 2026-11-28T06:22:36.697085978Z
+modified_at: 2026-11-28T06:22:39.708361869Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -83,6 +83,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: TASK-3961 meets its four acceptance criteria in its own tests, but it breaks two existing tests that still expect the old output. That matches the red CI at this head (cli-1, fast compile, Build). AC1 is verified by lane_host::task3961_first_run_summary_is_one_line_without_fail and aida-cli/tests/task_3961_init_output_short.rs: no FAIL lines, no UsernsBlocked, exactly one `aida doctor --lane-host` pointer, advisory checks not counted. AC2 is verified by the same integration test: the advisor hint is removed, and the implementer sentence, global-roles lines and bypass line now print only under --verbose. BUG-585 is not reopened, because punt_done.rs:582''s off-TTY refusal still names `aida role enter advisor`. AC3 is verified by task3961_code_spans_are_unpadded_unless_needed and task3961_missing_acceptance_is_a_visible_note. The padding rule follows CommonMark: pad only for backtick-edged, space-wrapped or blank content. AC4 is verified by task_3961_init_output_short.rs. Blocking: (1) bug_2752_codex_init_and_advisor_launch (aida-cli/tests/support/codex_init.py:99) runs `aida init` without --verbose and asserts that ''global roles installed'' is printed. init_cmd.rs:5320 now hides that line, so the test fails. (2) review_prepare.rs:3595 (s5_comment_over_cap_goes_on_stdin_truncated_with_fences_balanced) asserts the truncation note ends with ''` report.md `''. The note is built with code_span (review_prepare.rs:1716), which now prints ''`report.md`'', so the test fails. Both need updating to the new output, for example by passing --verbose to the codex_init.py init call or dropping that assertion, and by changing the s5 expectation to ''`report.md`''. After that, re-check CI for anything else these jobs hid.. No triage reason was given.'
   created_at: 2026-11-28T06:22:36.697081620Z
   modified_at: 2026-11-28T06:22:36.697081620Z
+- id: 01a220d1-f1bc-7ec2-b083-ed959191b3de
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3961):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5739c066c3c3
+    Recorded: 2026-11-28T06:21:48.240600474+00:00
+    Findings:
+    1. [blocking_tier: p1] Regression in an existing test: aida-cli/tests/bug_2752_codex_init.rs runs aida-cli/tests/support/codex_init.py, whose last step (line 99) runs `aida init --footprint full --agent codex ...` without --verbose and asserts that 'global roles installed' is in the output. This PR adds `Ok(_) if !*verbose => {}` (aida-cli-lib/src/init_cmd.rs:5320), which hides that line, so bug_2752_codex_init_and_advisor_launch fails. This is consistent with the red CI (cli-1) job at 5739c066. Fix: update codex_init.py to the new contract, for example by adding --verbose to the init tuple or by dropping or inverting that assertion.
+    2. [blocking_tier: p1] Regression in an existing lib test: review_prepare.rs:3595 (s5_comment_over_cap_goes_on_stdin_truncated_with_fences_balanced) asserts that the posted comment ends with 'findings omitted; full report at ` report.md `'. The note is built with code_span(full_report) (review_prepare.rs:1716), and the new code_span prints '`report.md`' without padding, so the assertion fails. This is consistent with the red CI (fast compile, exit 101) job. Fix: change the expected note to '`report.md`'. Also scan the other prepare and comment tests for padded-span expectations.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-28T06:22:39.548770793Z
+  modified_at: 2026-11-28T06:22:39.548770793Z
 history:
 - id: 01a22080-0acd-7123-bb30-50e7fe96392e
   author: joe
