@@ -1,0 +1,25 @@
+id: 01a21f7a-5390-7213-be48-1a18a4be7589
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1593
+agreed_id: TASK-3937
+title: 'check-ratchets.py --only-set: a no-build check that the ratchet-set manifest matches the #[test] fns in its listed modules'
+description: |-
+  Advisor aida-d3 2026-11-27 17:12 (filed by product-15). Today three rework rounds (#4751 r2, #4758, #4764) went red on CI's 'Ratchet set' step with 'ratchets: expected N executed tests, got M': a PR added/removed a #[test] in a ratchet-listed module without updating scripts/ratchet-set.json. scripts/check-ratchets.py only detects this after building (cargo test), which is why briefs can't afford it per lane (BUG-2782 removed the ~18-min compile).
+
+  ## Acceptance
+  - AC1: `python3 scripts/check-ratchets.py --only-set` (no cargo) parses the Rust sources of every module in ratchet-set.json (shared_modules + groups) and fails, naming the module and test, when the #[test] fns found differ from the manifest's entries (added, removed, renamed).
+  - AC2: wired into make check-ci-fast (or check-ci-source) so lanes catch it before push.
+  - AC3: unit test in tests/test_ratchet_set.py with a fixture module that gains an unregistered test.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T00:07:20.208196382Z
+modified_at: 2026-11-28T00:07:20.208196382Z
+req_type: Task
+filed_at:
+  code_sha: 82c120dd1cf960e4272004b5cae7243b8d45aa67
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0fba3d42ee9
+  vendor: claude
