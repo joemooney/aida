@@ -53,7 +53,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T03:41:07.856444039Z
-modified_at: 2026-11-28T03:17:01.458527654Z
+modified_at: 2026-11-28T03:34:41.775896166Z
 req_type: Story
 tags:
 - containment
@@ -69,6 +69,19 @@ comments:
   modified_at: 2026-11-15T20:48:12.887094282Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a22038-2b6f-7950-a646-08f5649b1bfb
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: f350b9edd4 (branch story-2838-s1-init-detect, base origin/integration). Slice 1 only (Refs): read-only `aida init --report-allowlists` (human + global --format json).
+
+    Acceptance evidence (S1 brief): [behavioral-test] github remote + claude/codex selection names github.com/api.github.com/objects.githubusercontent.com/codeload.github.com in claude sandbox.network.allowedDomains and in codex contained.allowed_hosts (github_remote_with_claude_and_codex_names_github_hosts_per_agent); no remote leaves forge hosts and entries empty (no_remote_reports_no_forge_hosts); the human text has no spec-ID-shaped tokens (asserted in both). Lane run: 5 passed (4 new + help golden).
+    Probes: (1) host case: remotes lowercased before validation; uppercase scp remote covered. (2) URL forms: scp, ssh with port, https, file://, local paths, IP literals and single-label hosts are dropped (local_and_malformed_remotes_contribute_no_hosts). (3) multiplicity: 0 remotes, N remotes, fetch/push duplicates deduped, a host shared by several remotes lists each once. (4) fix: `aida init DIR --report-allowlists` ignored DIR; it now reports on DIR.
+    Residual risks: a DIR that exists inside a parent repo without its own .git reports the parent's remotes. Only git remotes are probed (env vars, insteadOf and gh/glab host configs are later slices). S2 writes the configs. Diff is ~450 lines (about 175 tests, 10 golden), over the 250-line budget.
+  created_at: 2026-11-28T03:34:41.775896166Z
+  modified_at: 2026-11-28T03:34:41.775896166Z
+  session_id: 01a220272d08
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e0f7-c069-77f2-b73d-5d3a4f0f8d52
   author: joe
