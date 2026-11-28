@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-27T08:08:28.082155163Z
-modified_at: 2026-11-27T08:08:28.082155163Z
+modified_at: 2026-11-28T00:38:39.440590514Z
 req_type: Task
 tags:
 - carried-from:BUG-2781
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a21ad3-97f1-7170-87b7-1ded18a206f6
   created_at: 2026-11-27T08:08:50.506254905Z
+comments:
+- id: 01a21f97-0050-7762-8674-9d74de5fa1f8
+  author: joe
+  content: 'MERGED into STORY-3235 (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Open PR #4756 adds the red fast-gate salvage veto (failed_receipt not yet on main).'
+  created_at: 2026-11-28T00:38:39.440590514Z
+  modified_at: 2026-11-28T00:38:39.440590514Z
 history:
 - id: 01a21c80-7d1d-76a2-8ca8-e3b5e1d49aa9
   author: joe
