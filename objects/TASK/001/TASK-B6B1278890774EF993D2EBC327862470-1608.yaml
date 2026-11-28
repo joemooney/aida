@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T02:34:53.162188563Z
-modified_at: 2026-11-28T03:03:54.086635361Z
+modified_at: 2026-11-28T03:11:56.962810309Z
 req_type: Task
 comments:
 - id: 01a2200f-db24-7cf2-a87f-8c1f60fffe2a
@@ -54,6 +54,12 @@ comments:
   modified_at: 2026-11-28T03:03:39.178603836Z
   session_id: 01a2200f0895
   harness_version: 2.1.319 (Claude Code)
+- id: 01a22023-5822-7a73-bce5-da0852c6014b
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3951-fresh-user-walkthrough` at head `90e882584b307eb7a328fe16d269762da3a3d5ad`.'
+  created_at: 2026-11-28T03:11:56.962806914Z
+  modified_at: 2026-11-28T03:11:56.962806914Z
+  session_id: 01a2200f0895
 history:
 - id: 01a2200f-5afa-7d03-93b1-a07aad176f28
   author: aida-session-start
