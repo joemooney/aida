@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-product-01a220f0-c72f-7d83-a083-1ba2be4c7784",
+  "thread_id": "deputy-01a220f0-c72f-7d83-a083-1ba2be4c7784",
+  "from": "deputy-shell:product",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-15"
+  },
+  "timestamp": 1795849049038,
+  "body": "Script deputy \"product\" finished script job 01a220f0-c72f-7d83-a083-1ba2be4c7784: rc 0 (ok).\nScript: cd /home/joe/ai/aida && aida queue rework TASK-3933 --for implementer && aida comment add TASK-3933 \"r2 @3219c6fe FAST compile red (product-15 00:00): story_1888 gate_authority_code_is_on_the_floor: role_cmd.rs defines fn seat_probe_refusal outside aida-cli-lib/src/gate/. r3 moves it under gate/ (needs a human merge).\"\nTranscript: /home/joe/.aida/deputy-shell/product/jobs/01a220f0-c72f-7d83-a083-1ba2be4c7784/transcript.log\nRead it with `aida deputy shell log 01a220f0-c72f-7d83-a083-1ba2be4c7784 --name product`.\n",
+  "subject": "deputy script job 01a220f0 done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
