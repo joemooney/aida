@@ -15,12 +15,36 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T04:52:28.064803162Z
-modified_at: 2026-11-28T05:38:17.475291695Z
+modified_at: 2026-11-28T05:40:29.733144866Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a22014-1672-7093-9f8f-09bbbefcbf09
   created_at: 2026-11-28T04:52:47.991774315Z
+comments:
+- id: 01a220ab-57a5-7a01-8b4f-1f7cced0bf7e
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - AC1 [behavioral-test, unit + command-level]: `lane_host::first_run_summary` folds the per-vendor readiness checks (and the separate bwrap block) into one line pointing at `aida doctor --lane-host`; unit tests in lane_host.rs pin the ready / needs-setup lines, and `aida-cli/tests/task_3961_init_output_short.rs` runs `aida init` in a fresh HOME + repo and asserts no line starts with FAIL.
+    - AC2 [behavioral-test, command-level]: drop the `aida role enter advisor` hint (the `aida done` refusal already names it at the point of need), and print the implementer-role sentence, global-roles install lines and bypass-confirmation line only under `--verbose`. Same integration test asserts their absence.
+    - AC3 [behavioral-test, unit]: `code_span` pads only when CommonMark needs it (content starts/ends with a backtick, or is space-wrapped/empty); a linked spec with no acceptance prints a visible note instead of an empty fence. Unit tests in review_prepare.rs.
+    - AC4: the integration test above.
+
+    ### Expected files
+    - aida-cli-lib/src/init_cmd.rs
+    - aida-cli-lib/src/lane_host.rs
+    - aida-cli-lib/src/review_prepare.rs
+    - aida-cli/tests/task_3961_init_output_short.rs (+ ratchet-set if required)
+
+    ### Ambiguities / conflicts as questions
+    - None; full detail remains in `aida doctor --lane-host` and `aida init --verbose`.
+  created_at: 2026-11-28T05:40:29.733144866Z
+  modified_at: 2026-11-28T05:40:29.733144866Z
+  session_id: 01a220a91a56
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a22080-0acd-7123-bb30-50e7fe96392e
   author: joe
