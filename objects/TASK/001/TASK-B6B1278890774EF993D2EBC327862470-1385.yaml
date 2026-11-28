@@ -9,12 +9,12 @@ description: |
   - AC1: `aida doctor heal repair-reservations` can release, WITHOUT a per-ID attestation, a reservation whose PR the forge reports CLOSED or MERGED, whose lane has no live process, and whose tree has first been salvaged to ~/salvage when it holds uncommitted or unique commits. Tests.
   - AC2: an audit line per release (id, PR state, salvage path or "nothing to salvage"). Test.
   - AC3: anything else (OPEN PR, unknown or unreachable forge state, live lane) still requires the attested path. Test.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T01:24:58.703993536Z
-modified_at: 2026-11-28T03:32:39.261735645Z
+modified_at: 2026-11-28T03:53:33.939702629Z
 req_type: Task
 tags:
 - leases
@@ -88,6 +88,12 @@ comments:
   created_at: 2026-11-28T03:29:44.756163240Z
   modified_at: 2026-11-28T03:29:44.756163240Z
   session_id: 01a22017cfa4
+- id: 01a22049-738e-7730-823e-1d08984c8e78
+  author: aida-orchestrator
+  content: 'Shelved by leases::shelve_spec_on_failure during reviewer: verdict:request-changes'
+  created_at: 2026-11-28T03:53:34.350453122Z
+  modified_at: 2026-11-28T03:53:34.350453122Z
+  session_id: 01a220439a66
 history:
 - id: 01a2104e-a7aa-72b2-9133-1db6dc6cea6c
   author: joe
@@ -119,6 +125,14 @@ history:
   author: dirtlab
   timestamp: 2026-11-28T03:32:43.133532693Z
   changes: []
+- id: 01a22049-738e-7730-823e-1cf31067564c
+  author: aida-orchestrator
+  timestamp: 2026-11-28T03:53:34.350446928Z
+  session_id: 01a220439a66
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: dc27cf1f4cb49a050002334062efb59fe7d2b914
@@ -131,3 +145,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-28T03:21:41.845884504Z
   implemented_by: dirtlab
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'TASK-3891 adds an unattested sweep, `aida doctor heal repair-reservations` with no --id/--attest, behind RepairGuard::release_dead_reservations. The core logic is sound and fails closed. OPEN, unknown or unreachable forge state, a live or unverified lease, an unreadable tree and a failed salvage all keep the reservation. Forge and salvage run unlocked and are re-proven under the journal lock, and ReleasedMerge is recorded, so require_validated_merges still fences the published repair merge. AC1: behavior verified by task_3891_releases_closed_and_merged_dead_lanes_after_salvage, but the salvage destination is <main>/.aida/salvage/<tree>/, not the ~/salvage the AC names (implementer-flagged deviation; unmet as worded). AC2: verified by the same test (printed line and journal ReservationRelease reason carry id, PR state, salvage path or ''nothing to salvage''). AC3: verified at unit level by task_3891_open_unknown_or_live_keeps_attested_path. Blocking: this is a new authority path that releases without attestation, and nothing tests its operator gate or the production forge-state mapping (ADR-76 strict tier). CI pending at review time.'
+  recovery_hint: address the review findings, move TASK-3891 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-28T03:53:33.939702629Z
