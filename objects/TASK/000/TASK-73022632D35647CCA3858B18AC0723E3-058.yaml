@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:42:51.691935317Z
-modified_at: 2026-11-28T02:15:32.841589686Z
+modified_at: 2026-11-28T02:16:35.754936857Z
 req_type: Task
 tags:
 - ci-gates
@@ -48,6 +48,12 @@ comments:
   content: Implementer push 1112f734e4ea declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-28T02:15:32.841589144Z
   modified_at: 2026-11-28T02:15:32.841589144Z
+  session_id: 01a21fd4d589
+- id: 01a21ff0-aaaa-7e11-8e31-8e8120d678d3
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3537-fast-gate-no-slot` at head `1112f734e4eae5a04a8f339bf0f1d0b6f5381f98`.'
+  created_at: 2026-11-28T02:16:35.754933580Z
+  modified_at: 2026-11-28T02:16:35.754933580Z
   session_id: 01a21fd4d589
 history:
 - id: 01a21b5f-6b8b-71d2-8aa7-afa09d55128b
