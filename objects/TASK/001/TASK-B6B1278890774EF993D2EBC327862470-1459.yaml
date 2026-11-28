@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 9a05bbe93970190e13a9f010fd8e9d0d78128a91
 
   Test gap: no test drives ci_cache_findings / disk_headroom_light_report to an above-cap finding end to end (aida-cli-lib/src/tests/task_3910_ci_cache_tests.rs only checks cap=0 and an under-cap cache), and nothing pins that the extend() in disk_headroom_light_report recomputes report.total. A small threshold seam (e.g. a byte-cap helper taking bytes instead of GiB) would let a KB fixture prove the wiring. Reporting code, not gate code.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T22:32:34.349014476Z
-modified_at: 2026-11-28T01:02:11.903313697Z
+modified_at: 2026-11-28T01:02:14.005795886Z
 req_type: Task
 tags:
 - carried-from:TASK-3910
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-26T00:12:50.361735490Z
   changes: []
+- id: 01a21fac-95f5-78e3-8c84-60f834002e3d
+  author: joe
+  timestamp: 2026-11-28T01:02:14.005793668Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 9a05bbe93970190e13a9f010fd8e9d0d78128a91
   branch: pr-4596
