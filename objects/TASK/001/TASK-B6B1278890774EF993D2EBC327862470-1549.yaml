@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: cbaddf47705827f69c721df0d82dfa12c11cc558
 
   Abandoned waiter blocks the auto-train for up to WAITER_TTL_SECS (15 min): admission_owner.rs record_waiter persists after a manual train gives up, and an operator who never retries leaves the auto-train yielding every pass with no clear/cancel surface other than deleting .aida/admission/manual-train.waiter. Consider a release command or naming the file/expiry in the status line.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-27T03:09:01.390243560Z
-modified_at: 2026-11-28T01:16:39.848235905Z
+modified_at: 2026-11-28T01:16:41.714791552Z
 req_type: Task
 tags:
 - carried-from:BUG-2771
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21fb9-d372-7272-9cdc-7671976b050b
+  author: joe
+  timestamp: 2026-11-28T01:16:41.714789277Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: cbaddf47705827f69c721df0d82dfa12c11cc558
   branch: pr-4711
