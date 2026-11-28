@@ -33,7 +33,7 @@ print("running " + name, flush=True)
 kind = TESTS[name]
 if kind == "hang":
     child = subprocess.Popen(["sleep", "1000"])
-    open(os.environ["FAKE_PID_FILE"], "w").write(str(child.pid))
+    open(os.path.join(os.path.dirname(sys.argv[0]), "grandchild.pid"), "w").write(str(child.pid))
     print("SKIP? no: stalled inside bwrap", flush=True)
     time.sleep(10**6)
 if kind == "fail":
@@ -56,9 +56,8 @@ class WatchdogTest(unittest.TestCase):
     def run_watchdog(self, *extra):
         cmd = [sys.executable, str(SCRIPT), "--binary", str(self.binary), "--log", str(self.log),
                "--results", str(self.results), *extra, "mod::"]
-        env = dict(os.environ, FAKE_PID_FILE=str(self.pid_file))
         started = time.monotonic()
-        proc = subprocess.run(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               text=True, timeout=60)
         return proc, time.monotonic() - started
 
