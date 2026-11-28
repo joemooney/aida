@@ -9,12 +9,12 @@ description: |-
   - AC1: the Python contract tests that create temp AIDA projects either set the env that disables the deferred cache refresh, or stop/wait for the worker before removing the project (one shared fixture helper).
   - AC2: a test-only repro: a project whose cache worker is mid-write is torn down cleanly (no ENOTEMPTY), run in a loop.
   - AC3: test-only; no product behaviour change.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T06:28:56.284634899Z
-modified_at: 2026-11-28T07:03:56.961107642Z
+modified_at: 2026-11-28T07:33:06.420297750Z
 req_type: Task
 relationships:
 - rel_type:
@@ -70,6 +70,12 @@ comments:
   created_at: 2026-11-28T06:59:49.371524274Z
   modified_at: 2026-11-28T06:59:49.371524274Z
   session_id: 01a220dbd847
+- id: 01a22112-7464-7c43-b053-99c4fe26e925
+  author: aida-orchestrator
+  content: 'Shelved by leases::shelve_spec_on_failure during reviewer: verdict:request-changes'
+  created_at: 2026-11-28T07:33:07.300246028Z
+  modified_at: 2026-11-28T07:33:07.300246028Z
+  session_id: 01a2210ef8fd
 history:
 - id: 01a220dc-1247-73d3-8df8-5bfbbcb2c451
   author: aida-session-start
@@ -91,6 +97,14 @@ history:
   author: dirtlab
   timestamp: 2026-11-28T07:04:00.041231776Z
   changes: []
+- id: 01a22112-7464-7c43-b053-99b509fb8461
+  author: aida-orchestrator
+  timestamp: 2026-11-28T07:33:07.300241498Z
+  session_id: 01a2210ef8fd
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 4b06a37b464472f759637aecf25042f98a4e33c2
   branch: main
@@ -102,3 +116,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-28T06:51:55.775113432Z
   implemented_by: dirtlab
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'TASK-3962 (completing). AC1 partial: tests/fixture_teardown.py adds one shared temp_project/wait_for_fixture_processes helper, and seven CLI contract tests use it (cache_refresh_outputs, gitlab_review_handoff, pr_ship_preflight, seat_takeover_lifecycle, skill_discovery, status_cold_cache, plus show_latency and origin_prompt through the moved wait helper). But tests/test_work_ci_relay.py, a contracts-shard CLI contract test, still creates temp AIDA projects (`aida init` plus `awaiting`/`ci process` reads) and removes them with a plain TemporaryDirectory.cleanup() at line 104, which does not wait. AC2 verified: tests/test_fixture_teardown.py has a 25-iteration loop where a worker shaped like the real one is still writing under .aida/cache-db at teardown, plus a check that the wait still runs when the body raised. scripts/discover-python-tests.py picks it up and runs it in the gates shard, which passed at this head. AC3 verified: the diff only touches tests/. CI at the head: contracts, gates, lib-0/1, cli-1 and rest are green. cli-0 failed only its ''Test time budget'' step, on Rust test timings that this Python-only diff cannot affect. The ''Build (ubuntu-latest)'' failure is the ''Require every CI lane'' aggregate reacting to cli-0. The base is 3 commits ahead of the head; the finding holds on the landed tree, where test_work_ci_relay.py is unchanged.'
+  recovery_hint: address the review findings, move TASK-3962 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-28T07:33:06.420297750Z
