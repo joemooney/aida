@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T15:22:22.271678976Z
-modified_at: 2026-11-26T15:22:22.271678976Z
+modified_at: 2026-11-28T00:29:01.771722386Z
 req_type: Task
 tags:
 - carried-from:BUG-2738
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a20b16-0a8e-7413-abc1-7f3194759828
   created_at: 2026-11-26T15:22:39.570872204Z
+comments:
+- id: 01a21f8e-2fcb-7261-b750-727629d88f5a
+  author: joe
+  content: 'MERGED into TASK-3501 (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Same BUG-2738 landed-spec guard hardening: merged/closed detection via forge abstraction.'
+  created_at: 2026-11-28T00:29:01.771722386Z
+  modified_at: 2026-11-28T00:29:01.771722386Z
 history:
 - id: 01a21877-115f-7f63-9882-81085c7cd21e
   author: joe
