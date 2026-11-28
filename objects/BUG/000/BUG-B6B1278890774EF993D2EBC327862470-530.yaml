@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T08:25:33.453173985Z
-modified_at: 2026-11-26T12:45:16.582123240Z
+modified_at: 2026-11-28T01:07:28.492465854Z
 req_type: Bug
 tags:
 - admission
@@ -176,6 +176,11 @@ comments:
   content: 'DEFERRED (advisor-122 2026-11-26 04:50, approval of #4640 @ 9b9aa8a6): (1, p2, EARLY follow-up) the pre-scan train_wanted uses the legacy eligible gate while the real pass uses typed_gate_member_with + ownership; they can disagree (the worst case is an extra empty poll, not a wrong landing). Align them to ONE predicate. (2) A test for the running-train and recovery AC4 phases. (3) Reset TEST_HOLD_WARN_MS after the bug2769 tests (a test-isolation leak). Also still open from the 02:27 ruling: dedupe or cache the pre-scan forge reads (the shared gh budget).'
   created_at: 2026-11-26T11:47:48.704116205Z
   modified_at: 2026-11-26T11:47:48.704116205Z
+- id: 01a21fb1-626c-7d31-b74b-84feff44d680
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3484): AC4 phase coverage: bug2769_a_long_hold_is_reported_while_it_is_held covers only ''phase assembly''. The ''running train'' branch (admission_train_running reads the run.lock) and the ''recovery'' branch (automatic_recovery_needed) of watch_hold have no test. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:07:28.492465854Z
+  modified_at: 2026-11-28T01:07:28.492465854Z
 history:
 - id: 01a216f9-22fb-70e0-8a0d-85c17cff229f
   author: joe
