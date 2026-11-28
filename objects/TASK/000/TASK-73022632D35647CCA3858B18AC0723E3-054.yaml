@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:26:51.396539455Z
-modified_at: 2026-11-28T02:15:57.694715168Z
+modified_at: 2026-11-28T05:26:26.434269285Z
 req_type: Task
 tags:
 - from-implementer:BUG-2775
@@ -91,6 +91,11 @@ history:
   author: dirtlab
   timestamp: 2026-11-28T02:15:59.855889072Z
   changes: []
+- id: 01a2209e-79d8-75c3-a6ea-e333f6d219f7
+  author: joe
+  timestamp: 2026-11-28T05:26:26.520542509Z
+  changes: []
+execution_mode: drain
 filed_at:
   code_sha: 46793d2c72c82cc39b20ba2ae9a81b17ebc8cd17
   branch: bug-2775-run-review-errors
