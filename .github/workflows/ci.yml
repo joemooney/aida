@@ -828,6 +828,9 @@ jobs:
           python3 tests/test_pr_ship_preflight.py --aida target/debug/aida
           python3 tests/test_seat_takeover_lifecycle.py "$PWD/target/debug/aida"
           python3 tests/test_skill_discovery.py --aida target/debug/aida
+          # The getting-started first spec and first review, as written.
+          # trace:TASK-3960 | ai:claude
+          python3 tests/test_getting_started_commands.py --aida target/debug/aida
 
       # trace:BUG-1801 | ai:codex
       - name: Run single-spec show latency regression
