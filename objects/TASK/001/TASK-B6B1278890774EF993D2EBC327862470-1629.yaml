@@ -8,12 +8,12 @@ description: |-
   - AC2: a doc test or script runs the documented commands in a throwaway repo (where feasible without network/vendor sign-in) to keep them from drifting.
 
   Source: docs/plans/2026-11-27-fresh-user-walkthrough.md, sections F1 (on main after #4782). Advisor aida-d3 2026-11-27 20:30 priority (g); grouped by area by product-15 for laning now.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T04:51:24.867906703Z
-modified_at: 2026-11-28T05:30:45.820396333Z
+modified_at: 2026-11-28T05:35:58.318503980Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -47,6 +47,32 @@ comments:
   modified_at: 2026-11-28T05:30:45.820396333Z
   session_id: 01a2208e549e
   harness_version: 2.1.319 (Claude Code)
+- id: 01a220a7-1b10-7a12-a2f9-bdd5ecfb6671
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 0e08e12c1a (PR #4798).
+
+    **Acceptance evidence**
+    - AC1 [documentation-inspection]: docs/getting-started.md §3 "Record your first spec" (aida add with ## Acceptance, aida list, aida show <ID>, plus a note on long node-local IDs) and §4 "Prepare your first review" (branch, commit, aida review prepare --from main --specs <ID>, what each report section means, and that --run-review needs a signed-in agent CLI). Reproduced in a clean HOME and new repo; the commands run as written.
+    - AC2 [behavioral-test]: tests/test_getting_started_commands.py runs the marked bash blocks in a throwaway repo (PASS against the live binary). It also checks that every documented report section appears in the real output. Mutation-checked: a renamed section label fails it, and so does `aida show TASK-1`. Wired into CI contracts shard; registered in scripts/discover-python-tests.py CLI set.
+
+    **Probe findings and fixes**
+    - `git commit -am` skips new files → the doc now says to `git add` first.
+    - `--from main` on a master-default repo → the doc now names the default-branch caveat.
+    - Direct os.environ read tripped the ExecContext ratchet → switched to tempfile.gettempdir().
+    - The showcase generated output drifted → regenerated.
+
+    **Residual risks**
+    - --run-review is not executed (vendor sign-in and network).
+    - On hosted runners the CI step is gated on full_ci, so a docs-only edit to the page skips it. Self-hosted always runs it.
+    - <ID> is a placeholder; pasting it literally gives a bash redirect error.
+
+    make check-ci-fast: exit 0 at 0e08e12c1a. No cargo test was run: no Rust changed.
+  created_at: 2026-11-28T05:35:52.080193913Z
+  modified_at: 2026-11-28T05:35:52.080193913Z
+  session_id: 01a2208e549e
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a2207e-8ed6-78c3-a21e-b686755e363f
   author: joe
@@ -59,6 +85,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a220a7-3396-7d12-80b1-15ecd76721a8
+  author: dirtlab
+  timestamp: 2026-11-28T05:35:58.358736715Z
+  session_id: 01a2208e549e
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 4b06a37b464472f759637aecf25042f98a4e33c2
   branch: main
@@ -66,3 +101,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: f0ad200d8c6
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-28T05:35:58.318503980Z
+  implemented_by: dirtlab
