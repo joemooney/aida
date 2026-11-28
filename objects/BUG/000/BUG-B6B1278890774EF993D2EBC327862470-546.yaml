@@ -14,7 +14,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T06:14:41.499443358Z
-modified_at: 2026-11-28T01:18:23.602079547Z
+modified_at: 2026-11-28T01:18:28.330107980Z
 req_type: Bug
 tags:
 - lanes
@@ -91,6 +91,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3559): Criteria tracing: the three rework_approval_gate tests carry no per-criterion trace, so `aida criteria` still lists BUG-2785 AC1-AC3 as untraced although tests cover them. Add AC trace comments to the tests. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T01:18:12.311934674Z
   modified_at: 2026-11-28T01:18:12.311934674Z
+- id: 01a21fbb-73ea-76b0-8e14-c53ecd7ce6a8
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3561): Test gap (AC2 wiring): the launch-time call in aida-cli-lib/src/queue_cmd/work.rs (handle_queue_work, after refuse_waiting_pickup) and rework_approval_gate::check_launch have no behavioral test; the module tests exercise evaluate/apply only, so a... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:18:28.330107980Z
+  modified_at: 2026-11-28T01:18:28.330107980Z
 history:
 - id: 01a21e6d-63f2-7bd0-8149-5657f75e0428
   author: aida-session-start
