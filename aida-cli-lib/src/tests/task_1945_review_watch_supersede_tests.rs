@@ -953,3 +953,39 @@ fn story2691_reaped_cancellation_requires_matching_attempt_receipt() {
     assert_eq!(outcomes.len(), 1);
     assert!(outcomes[0].as_ref().unwrap().contains("dispatcher exited"));
 }
+
+// Landing-drought reads each change's latest attempt: only a held one stops
+// the watcher. trace:STORY-3131 | ai:claude
+#[test]
+fn story_3131_review_heads_classify_the_latest_attempt() {
+    let (temp, store) = fixture();
+    let c = change(7, 1);
+    reserve(&store, &c);
+    let heads = |root: &Path| review_heads(root);
+    assert_eq!(
+        heads(temp.path()),
+        [("PR-7".to_string(), c.head.clone(), ReviewWatch::InFlight)]
+    );
+    for (phase, want) in [
+        (Phase::Running, Some(ReviewWatch::InFlight)),
+        (Phase::RemoteHeld, Some(ReviewWatch::InFlight)),
+        (Phase::Superseding, Some(ReviewWatch::InFlight)),
+        (Phase::Failed, Some(ReviewWatch::Held)),
+        (Phase::Exited, Some(ReviewWatch::Held)),
+        (Phase::Completed, Some(ReviewWatch::Held)),
+        (Phase::Superseded, None),
+    ] {
+        // Classified in memory: the store validates each phase's receipts.
+        let mut state = store.load().unwrap();
+        state.entries.get_mut("PR-7").unwrap().attempts[0].phase = phase.clone();
+        let got: Vec<_> = latest_watch(&state)
+            .into_iter()
+            .map(|(_, _, w)| w)
+            .collect();
+        assert_eq!(got, want.into_iter().collect::<Vec<_>>(), "{phase:?}");
+    }
+    assert!(
+        heads(tempfile::tempdir().unwrap().path()).is_empty(),
+        "no watcher state"
+    );
+}

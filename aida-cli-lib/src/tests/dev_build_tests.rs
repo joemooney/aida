@@ -1772,6 +1772,7 @@ fn meta(sha: &str, allow_dirty: bool) -> PromotionMeta {
         promoted_at: "2026-10-12T00:00:00Z".into(),
         repo: None,
         ci_comparison: None,
+        provisional: None,
     }
 }
 
@@ -2762,4 +2763,193 @@ fn story2912_swap_recheck_and_staged_build_fail_closed() {
     let err = format!("{:#}", r.unwrap_err());
     assert!(err.contains("does not override"), "{err}");
     assert!(err.contains("no-new-failures"), "{err}");
+}
+
+// --- STORY-3148: aida dev provisional ------------------------------------------
+// trace:STORY-3148 | ai:claude
+
+fn provisional_marker() -> crate::dev_provisional::ProvisionalMarker {
+    crate::dev_provisional::ProvisionalMarker {
+        pr: Some(4615),
+        branch: Some("fix-landing".into()),
+        head: HEAD.into(),
+        operator: "joe".into(),
+        reason: "landing outage".into(),
+        at: "2026-11-25T21:30:00Z".into(),
+    }
+}
+
+/// The fresh detached worktree the provisional build runs in.
+fn provisional_checkout() -> CheckoutState {
+    CheckoutState {
+        is_linked_worktree: true,
+        head: Some(HEAD.into()),
+        ..Default::default()
+    }
+}
+
+fn run_provisional(f: &Fixture, steps: &mut FakeSteps) -> (Result<BuildOutcome>, String) {
+    let mut out = Vec::new();
+    let marker = provisional_marker();
+    let r = run_dev_build_with(
+        &f.layout,
+        &DevBuildOptions::default(),
+        Some(&marker),
+        steps,
+        &mut out,
+    );
+    (r, String::from_utf8(out).unwrap())
+}
+
+#[test]
+fn story3148_provisional_promote_writes_the_marker_and_keeps_prev() {
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    let mut steps = FakeSteps::new(provisional_checkout());
+    steps.staged_sha = Some("abc1234567".into());
+    // A red CI must not gate an unlanded head.
+    steps.green = vec![Some("CI failed".into()), Some("CI failed".into())];
+    let (r, out) = run_provisional(&f, &mut steps);
+    assert_eq!(r.unwrap(), BuildOutcome::Promoted, "{out}");
+    for n in LIVE_BINARIES {
+        assert_eq!(read(&f.layout.live(n)), format!("NEW-{n}"));
+        assert_eq!(read(&f.layout.prev(n)), format!("OLD-{n}"));
+    }
+    assert!(!steps.calls.iter().any(|c| c.starts_with("green:")));
+    let meta = read_promotion_meta(&f.layout.live_dir).unwrap();
+    assert_eq!(meta.sha, HEAD);
+    assert_eq!(meta.provisional, Some(provisional_marker()));
+    let line = crate::dev_provisional::status_line(meta.provisional.as_ref().unwrap());
+    assert!(line.starts_with("PROVISIONAL:") && line.contains("PR #4615 (fix-landing)"));
+    assert!(
+        line.contains("joe") && line.contains("landing outage"),
+        "{line}"
+    );
+}
+
+#[test]
+fn story3148_provisional_refuses_a_dirty_or_other_head_and_a_dirty_build() {
+    for state in [
+        CheckoutState {
+            head: Some("def1234567890def1234567890abc1234567890d".into()),
+            ..provisional_checkout()
+        },
+        CheckoutState {
+            tracked_changes: vec!["Cargo.toml".into()],
+            ..provisional_checkout()
+        },
+    ] {
+        let f = fixture();
+        put_live(&f.layout, "OLD");
+        let (r, _) = run_provisional(&f, &mut FakeSteps::new(state));
+        assert!(r
+            .unwrap_err()
+            .to_string()
+            .contains("refusing the provisional promote"));
+        assert_eq!(read(&f.layout.live("aida")), "OLD-aida");
+    }
+    // The default fake banner is `+dirty`: never promoted provisionally.
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    let (r, _) = run_provisional(&f, &mut FakeSteps::new(provisional_checkout()));
+    assert!(format!("{:#}", r.unwrap_err()).contains("uncommitted changes"));
+    assert_eq!(read(&f.layout.live("aida")), "OLD-aida");
+    assert!(read_promotion_meta(&f.layout.live_dir).is_none());
+}
+
+#[test]
+fn story3148_rollback_clears_the_provisional_marker() {
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    write_meta(&f.layout.live_dir, &meta(HEAD, false));
+    let mut steps = FakeSteps::new(provisional_checkout());
+    steps.staged_sha = Some("abc1234567".into());
+    run_provisional(&f, &mut steps).0.unwrap();
+    let mut out = Vec::new();
+    run_dev_rollback(&f.layout, false, true, &mut steps, &mut out).unwrap();
+    let out = String::from_utf8(out).unwrap();
+    assert_eq!(read(&f.layout.live("aida")), "OLD-aida");
+    assert_eq!(
+        read_promotion_meta(&f.layout.live_dir).unwrap().provisional,
+        None
+    );
+    assert!(out.contains("PROVISIONAL marker cleared"), "{out}");
+    // The marker stays with its build in prev/, so rolling forward shows it again.
+    assert_eq!(
+        read_promotion_meta(&f.layout.prev_dir())
+            .unwrap()
+            .provisional,
+        Some(provisional_marker())
+    );
+}
+
+#[test]
+fn story3148_only_an_operator_with_a_reason_may_promote_provisionally() {
+    use crate::dev_provisional::operator_refusal as refusal;
+    assert_eq!(refusal(true, false, false, "advisor", "outage"), None);
+    assert_eq!(refusal(true, false, false, "operator", "outage"), None);
+    for (tty, headless, lane, role) in [
+        (false, false, false, "advisor"),
+        (true, true, false, "advisor"),
+        (true, false, true, "advisor"),
+        (true, false, false, "implementer"),
+        (true, false, false, "reviewer"),
+    ] {
+        let why = refusal(tty, headless, lane, role, "outage").expect("refused");
+        assert!(why.contains("only an operator"), "{why}");
+    }
+    assert!(refusal(true, false, false, "advisor", "  ")
+        .unwrap()
+        .contains("--reason"));
+}
+
+#[test]
+fn story3148_target_parses_a_pr_or_a_safe_branch() {
+    use crate::dev_provisional::{parse_target, Target};
+    assert_eq!(parse_target("4615").unwrap(), Target::Pr(4615));
+    assert_eq!(parse_target("#4615").unwrap(), Target::Pr(4615));
+    assert_eq!(
+        parse_target("fix/landing").unwrap(),
+        Target::Branch("fix/landing".into())
+    );
+    for bad in ["", "-x", "a b", "HEAD~1", "x:y", "a^"] {
+        assert!(parse_target(bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
+fn story3148_head_moved_since_review_is_refused_and_live_untouched() {
+    use crate::dev_provisional::{expect_head_refusal, promote_expected};
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    let mut steps = FakeSteps::new(provisional_checkout());
+    steps.staged_sha = Some("abc1234567".into());
+    let reviewed = "def1234567890def1234567890abc1234567890d";
+    let mut out = Vec::new();
+    for expect in [Some(reviewed), None, Some(&HEAD[..12])] {
+        let err = promote_expected(
+            &f.layout,
+            &provisional_marker(),
+            expect,
+            &mut steps,
+            &mut out,
+        );
+        assert!(err.unwrap_err().to_string().contains("Nothing was changed"));
+    }
+    assert!(steps.calls.is_empty(), "{:?}", steps.calls);
+    assert_eq!(read(&f.layout.live("aida")), "OLD-aida");
+    assert!(read_promotion_meta(&f.layout.live_dir).is_none());
+    assert_eq!(expect_head_refusal(false, None, HEAD), None);
+    let upper = HEAD.to_ascii_uppercase();
+    let r = promote_expected(
+        &f.layout,
+        &provisional_marker(),
+        Some(&upper),
+        &mut steps,
+        &mut out,
+    );
+    assert_eq!(r.unwrap(), BuildOutcome::Promoted);
+    assert!(String::from_utf8(out)
+        .unwrap()
+        .contains(&format!("Resolved head: {HEAD}")));
 }

@@ -152,6 +152,8 @@ pub(crate) struct ReworkFlags<'a> {
     pub status: Option<&'a str>,
     pub reason: Option<&'a str>,
     pub ruling: Option<&'a str>,
+    /// BUG-2785: rework although the open PR is approved at its head.
+    pub despite_approval: Option<&'a str>,
     pub resume: bool,
     pub force: bool,
     pub steal: bool,
@@ -178,6 +180,9 @@ impl ReworkFlags<'_> {
         }
         if self.ruling.is_some() {
             v.push("--ruling");
+        }
+        if self.despite_approval.is_some() {
+            v.push("--despite-approval");
         }
         if self.resume {
             v.push("--resume");
@@ -214,6 +219,14 @@ pub(crate) fn handle_rework_entry(
 ) -> Result<()> {
     refuse_retired_steal(flags.steal)?;
     if let Some(id) = id {
+        // BUG-2785: refuse a stale round before the ruling or any other write.
+        // trace:BUG-2785 | ai:claude
+        crate::rework_approval_gate::check_rework(
+            storage,
+            id,
+            flags.for_role,
+            flags.despite_approval,
+        )?;
         // The ruling is recorded first so a chained `--work` launch reads it
         // into its pickup prompt. trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
         if let Some(ruling) = flags.ruling {
@@ -1240,6 +1253,11 @@ pub(crate) struct ReworkArgs {
     // trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
     #[clap(long, allow_hyphen_values = true, value_name = "TEXT")]
     pub ruling: Option<String>,
+    /// Rework although the open PR is already approved at its current head.
+    /// The reason is recorded on the spec.
+    // trace:BUG-2785 | ai:claude
+    #[clap(long, allow_hyphen_values = true, value_name = "REASON")]
+    pub despite_approval: Option<String>,
     /// Chain `aida queue work --resume`.
     #[clap(long)]
     pub resume: bool,
@@ -1285,6 +1303,7 @@ pub(crate) fn run_rework(
                     status,
                     reason,
                     ruling,
+                    despite_approval,
                     resume,
                     force,
                     steal,
@@ -1304,6 +1323,7 @@ pub(crate) fn run_rework(
                             status: status.as_deref(),
                             reason: reason.as_deref(),
                             ruling: ruling.as_deref(),
+                            despite_approval: despite_approval.as_deref(),
                             resume: *resume,
                             force: *force,
                             steal: *steal,
@@ -1333,6 +1353,7 @@ pub(crate) fn run_rework(
                     status,
                     reason,
                     ruling,
+                    despite_approval,
                     resume,
                     force,
                     steal,
@@ -1351,6 +1372,7 @@ pub(crate) fn run_rework(
                             status: status.as_deref(),
                             reason: reason.as_deref(),
                             ruling: ruling.as_deref(),
+                            despite_approval: despite_approval.as_deref(),
                             resume: *resume,
                             force: *force,
                             steal: *steal,
@@ -1400,6 +1422,7 @@ pub(super) fn handle_queue_command(
             status,
             reason,
             ruling,
+            despite_approval,
             resume,
             force,
             steal,
@@ -1426,6 +1449,7 @@ pub(super) fn handle_queue_command(
                     status: status.as_deref(),
                     reason: reason.as_deref(),
                     ruling: ruling.as_deref(),
+                    despite_approval: despite_approval.as_deref(),
                     resume: *resume,
                     force: *force,
                     steal: *steal,

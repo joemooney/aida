@@ -163,6 +163,8 @@ mod dev_autopromote;
 mod dev_cmd;
 // trace:TASK-3812 | ai:claude
 mod dev_fresh;
+// trace:STORY-3148 | ai:claude
+mod dev_provisional;
 mod digest;
 mod digest_cmd;
 mod digest_throughput;
@@ -559,6 +561,8 @@ mod agy_outcome;
 mod headless_tail;
 mod headless_tee;
 mod vendor_activity;
+// trace:STORY-3134 | ai:claude
+mod vendor_outage;
 // trace:BUG-2396 | ai:claude — vendor-aware next-step hints.
 mod vendor_hints;
 // trace:STORY-2539 | ai:codex
@@ -729,6 +733,8 @@ mod review_risk;
 mod review_verdict_display;
 // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude — what a rework pickup prompt leads with.
 mod rework_direction;
+// BUG-2785: refuse a rework round whose PR is approved at its head. trace:BUG-2785 | ai:claude
+mod rework_approval_gate;
 mod role_cmd;
 // trace:TASK-3119 | ai:codex
 mod role_renew_parent;

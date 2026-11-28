@@ -466,6 +466,14 @@ pub(crate) fn build_focus_display_subtree(
     Some(display)
 }
 
+// trace:BUG-2735 | ai:codex
+pub(crate) fn integrate_discovery_backoff(root: &std::path::Path, watch: bool) -> Option<String> {
+    if !watch {
+        return None;
+    }
+    crate::forge::watcher_backoff(root, crate::forge::resolve_forge_kind(root), None)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn handle_queue_integrate(
     storage: &Storage,
@@ -607,6 +615,16 @@ pub(crate) fn handle_queue_integrate(
             }
         }
 
+        if let Some(reason) = integrate_discovery_backoff(&project_root, watch) {
+            println!("integrator pass {pass}: {reason}");
+            event_wait::wait_for_actionable(
+                &project_root,
+                &mut event_offset,
+                idle_backstop_secs,
+                focus_subtree.as_ref(),
+            );
+            continue;
+        }
         let mut candidates: Vec<integrate::IntegrationCandidate> = Vec::new();
         // STORY-335: keep each candidate's PR branch (for the dry-run forecast)
         // and PR number (for the --rebase step) per ready member. trace:STORY-335

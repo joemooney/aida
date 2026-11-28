@@ -3854,6 +3854,71 @@ pub(crate) fn shelve_status_flip(req: &mut aida_core::Requirement) -> bool {
     req.status != from
 }
 
+/// BUG-2738: why a refusing verdict must not shelve its spec — the spec has
+/// already landed: it is Completed, or its PR is merged. Anything else shelves,
+/// including Done with an open PR (published and awaiting review) and a closed
+/// unmerged PR. `pr_merged` is false whenever the forge could not say.
+// trace:BUG-2738 | ai:claude
+pub(crate) fn landed_refusal(status: &RequirementStatus, pr_merged: bool) -> Option<&'static str> {
+    if matches!(status, RequirementStatus::Completed) {
+        Some("the spec is already Completed")
+    } else if pr_merged {
+        Some("its PR is already merged")
+    } else {
+        None
+    }
+}
+
+/// BUG-2738: record a refusing verdict on a landed spec without shelving it.
+/// The verdict itself is already in the gate ledger (written by `aida review
+/// record` before any spec side effect); this adds only a spec comment naming
+/// the writer and the verdict, and leaves status and `failure_reason` alone.
+/// The landed check is repeated on the copy read under the store lock, so a
+/// concurrent status change is judged on what is written. Returns the landed
+/// reason when it applied, `None` when the caller should shelve as before.
+// trace:BUG-2738 | ai:claude
+pub(crate) fn record_refusal_on_landed_spec(
+    project_root: &std::path::Path,
+    spec: &str,
+    pr_merged: bool,
+    writer: &str,
+    verdict: &str,
+) -> anyhow::Result<Option<&'static str>> {
+    let Some(store_path) = detect_distributed_store_from(project_root) else {
+        return Ok(None);
+    };
+    let dispenser = load_dispenser(&store_path)?;
+    let inner = aida_core::GitBackend::new(&store_path)?.with_dispenser(dispenser);
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+    let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
+    let Some(req) = backend.get_requirement_unambiguous(spec)? else {
+        return Ok(None);
+    };
+    if landed_refusal(&req.status, pr_merged).is_none() {
+        return Ok(None);
+    }
+    let mut landed = None;
+    backend.update_spec_atomically(&req, |req| {
+        landed = landed_refusal(&req.status, pr_merged);
+        let Some(reason) = landed else { return };
+        req.add_comment(aida_core::Comment::new(
+            writer.to_string(),
+            format!(
+                "{verdict} verdict recorded by {writer}; not shelved because {reason} \
+                 (status left {}).",
+                req.status
+            ),
+        ));
+        req.modified_at = chrono::Utc::now();
+    })?;
+    Ok(landed)
+}
+
+// trace:BUG-2738 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2738_landed_refusal_tests.rs"]
+mod bug_2738_landed_refusal_tests;
+
 /// BUG-1637: the PR-open Done assertion's status write. Automated, and only
 /// ever In Progress -> Done, so it never leaves a terminal status. Recorded
 /// under [`aida_core::conflict::PR_OPEN_AUTHOR`]. Returns whether it moved.

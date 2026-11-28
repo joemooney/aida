@@ -1286,7 +1286,7 @@ fn recover_closed_reviews(root: &Path) -> Result<()> {
     }
     let repo = forge::Repository::load(root)?;
     let open = repo
-        .discover(root)?
+        .discover_for_watch(root)?
         .iter()
         .map(forge::Change::key)
         .collect();

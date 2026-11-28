@@ -1,7 +1,9 @@
 // trace:TASK-3428 | ai:codex
+use std::time::{Duration, Instant};
+
 use crate::{
     ci_probe_with_forge, detect_open_pr_for_branch, find_project_root, first_run_id_from_gh_json,
-    resolve_forge_cli, wait_for_ci_terminal, CiProbe, Colorize, PrLookup, RetryEtxtbsy,
+    wait_for_ci_terminal, CiProbe, Colorize, PrLookup, RetryEtxtbsy,
 };
 
 /// TASK-233: `--watch-ci` — stream live CI progress via `gh run watch`
@@ -11,11 +13,21 @@ use crate::{
 /// loop when `gh` is missing or no run id resolves. trace:TASK-233
 // trace:TASK-1165 | ai:claude
 pub(crate) fn watch_ci_terminal(project_root: Option<&std::path::Path>, branch: &str) -> CiProbe {
-    let Some(gh) = resolve_forge_cli(crate::forge::ForgeKind::GitHub) else {
-        return wait_for_ci_terminal(project_root, branch);
+    stream_ci(project_root, branch).unwrap_or_else(|| wait_for_ci_terminal(project_root, branch))
+}
+
+pub(crate) fn stream_ci(project_root: Option<&std::path::Path>, branch: &str) -> Option<CiProbe> {
+    let root = project_root.unwrap_or_else(|| std::path::Path::new("."));
+    let command = crate::forge::watcher_command(root)?;
+    let backoff = || {
+        crate::forge::watcher_api_backoff(root, crate::forge::ForgeKind::GitHub, || Some(command()))
     };
+    if let Some(reason) = backoff() {
+        eprintln!("CI watcher: {reason}");
+        return None;
+    }
     // Resolve the latest workflow run id for this branch.
-    let run_id = std::process::Command::new(&gh)
+    let run_id = command()
         .args([
             "run",
             "list",
@@ -29,12 +41,7 @@ pub(crate) fn watch_ci_terminal(project_root: Option<&std::path::Path>, branch: 
         .output_retrying_etxtbsy()
         .ok()
         .filter(|o| o.status.success())
-        .and_then(|o| first_run_id_from_gh_json(&String::from_utf8_lossy(&o.stdout)));
-    let Some(run_id) = run_id else {
-        // No resolvable run — degrade to the silent poll loop rather
-        // than failing the session-end.
-        return wait_for_ci_terminal(project_root, branch);
-    };
+        .and_then(|o| first_run_id_from_gh_json(&String::from_utf8_lossy(&o.stdout)))?;
     eprintln!(
         "  {} streaming `gh run watch {}`",
         crate::glyph(crate::glyphs::Glyph::FlowActive).cyan(),
@@ -43,9 +50,24 @@ pub(crate) fn watch_ci_terminal(project_root: Option<&std::path::Path>, branch: 
     // Inherit stdio so gh's live-updating display renders straight to
     // the user's terminal. `gh run watch` returns when the run reaches
     // a terminal state.
-    let _ = std::process::Command::new(&gh)
+    if let Ok(mut stream) = command()
         .args(["run", "watch", &run_id])
-        .status_retrying_etxtbsy();
+        .spawn_retrying_etxtbsy()
+    {
+        let mut checked = Instant::now();
+        while matches!(stream.try_wait(), Ok(None)) {
+            std::thread::sleep(Duration::from_secs(1));
+            if checked.elapsed() >= Duration::from_secs(60) {
+                if let Some(reason) = backoff() {
+                    eprintln!("CI watcher: {reason}");
+                    let _ = stream.kill();
+                    let _ = stream.wait();
+                    return None;
+                }
+                checked = Instant::now();
+            }
+        }
+    }
     // Re-probe to classify Green/Red for the end-session decision tree.
     // Keep the re-probe on the caller-injected root. Re-deriving from the
     // process cwd can silently route a GitLab branch through GitHub when the
@@ -56,7 +78,11 @@ pub(crate) fn watch_ci_terminal(project_root: Option<&std::path::Path>, branch: 
         .map(std::path::Path::to_path_buf)
         .unwrap_or_else(|| find_project_root().unwrap_or_else(|_| std::path::PathBuf::from(".")));
     let forge_kind = crate::forge::resolve_forge_kind(&probe_root);
-    ci_probe_with_forge(&probe_root, forge_kind, branch) // STORY-516: forge-routed
+    if let Some(reason) = crate::forge::watcher_backoff(&probe_root, forge_kind, None) {
+        eprintln!("CI watcher: {reason}");
+        return None;
+    }
+    Some(ci_probe_with_forge(&probe_root, forge_kind, branch)) // STORY-516: forge-routed
 }
 
 #[cfg(all(test, unix))]

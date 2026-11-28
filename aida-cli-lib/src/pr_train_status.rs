@@ -152,6 +152,72 @@ fn live_driver(dir: &Path, probes: &Probes<'_>) -> Result<Option<DriverView>> {
     }))
 }
 
+/// What the landing-drought watchdog reads about a held train lock.
+// trace:STORY-3131 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LockEvidence {
+    /// `None` when the recorded driver is dead or unidentified.
+    pub(crate) pid: Option<u32>,
+    /// From the record's `since`, so an orphaned lock is measurable too.
+    pub(crate) held_secs: Option<u64>,
+    /// Since any journaled train last changed step or checkpointed; `None`
+    /// with no journal.
+    pub(crate) idle_secs: Option<u64>,
+    /// The train PRs whose CI can show the run is still working.
+    pub(crate) train_prs: Vec<u64>,
+    /// Seconds past runs held the lock, oldest first.
+    pub(crate) history_secs: Vec<u64>,
+}
+
+fn lock_evidence(dir: &Path, probes: &Probes<'_>) -> Result<Option<LockEvidence>> {
+    let status = collect(dir, probes)?;
+    let Some(driver) = status.driver else {
+        return Ok(None);
+    };
+    let held_secs = driver
+        .running_secs
+        .or_else(|| journal::driver_record(dir).and_then(|r| secs_since(probes.now, &r.since)));
+    let idle_secs = status
+        .trains
+        .iter()
+        .filter_map(|t| match (t.time_in_step_secs, t.last_checkpoint_secs) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        })
+        .min();
+    Ok(Some(LockEvidence {
+        pid: driver.pid,
+        held_secs,
+        idle_secs,
+        train_prs: status.trains.iter().filter_map(|t| t.train_pr).collect(),
+        history_secs: journal::run_history(dir),
+    }))
+}
+
+/// The train-lock evidence at `now`; `None` when no process holds the lock.
+// trace:STORY-3131 | ai:claude
+pub(crate) fn lock_driver(
+    root: &Path,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<Option<LockEvidence>> {
+    lock_evidence(
+        &root.join(".aida/train"),
+        &Probes {
+            now,
+            observe: &|holder| holder.observe().ok(),
+            ci: &|_| Ok(Vec::new()),
+        },
+    )
+}
+
+/// Whether the train PR still has CI jobs pending; `None` when unreadable.
+// trace:STORY-3131 | ai:claude
+pub(crate) fn train_ci_live(root: &Path, pr: u64) -> Option<bool> {
+    read_ci_rows(root, pr)
+        .ok()
+        .map(|rows| ci_view(&rows).pending > 0)
+}
+
 fn ci_view(rows: &[crate::ci_gate::CheckRow]) -> CiView {
     let count = |bucket: &[&str]| {
         rows.iter()

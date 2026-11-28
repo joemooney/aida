@@ -1597,6 +1597,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 &change,
                 std::time::Duration::from_secs(60),
                 std::time::Duration::from_secs(10),
+                ci_gate::seat_budget(&self.project_root, self.lifecycle_forge),
             )
             .map_err(|error| {
                 auto_complete::PhaseFailure::of(
@@ -1692,6 +1693,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                         hold_label_present,
                         std::time::Duration::from_secs(20 * 60),
                         ci_red_refine_poll_interval(),
+                        ci_gate::seat_budget(&self.project_root, self.lifecycle_forge),
                     ) {
                         Ok(r) if !r.is_real() && !r.has_pending() => {
                             if !self.json {
@@ -1739,6 +1741,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                                 ),
                             )
                             .with_hint_override(hint));
+                        }
+                        Err(error) if error.is::<ci_gate::WatcherThrottled>() => {
+                            return Err(auto_complete::PhaseFailure::of(
+                                auto_complete::FailureKind::CiTimeout,
+                                error.to_string(),
+                            ));
                         }
                         Err(error) if hold_present || hold_label_present => {
                             self.ci_run_id = latest_run_id_for_branch(&branch);

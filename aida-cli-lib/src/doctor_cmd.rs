@@ -138,7 +138,7 @@ pub(crate) fn handle_doctor_command(
                 let (report, reason) = if lone.as_deref() == Some("landing-drought") {
                     let (policy, findings) = crate::landing_drought::scan(&exec)?;
                     let reason = fail_on_findings
-                        .then(|| policy.fail_reason(findings.len()))
+                        .then(|| policy.fail_reason(crate::landing_drought::failing(&findings)))
                         .flatten();
                     (DoctorReport::from_findings(findings), reason)
                 } else {

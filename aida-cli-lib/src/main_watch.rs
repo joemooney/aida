@@ -97,6 +97,9 @@ pub(crate) struct JobReport {
 /// the real one; tests use a fake.
 pub(crate) trait Ports {
     fn now(&self) -> DateTime<Utc>;
+    fn watcher_backoff(&self) -> Option<String> {
+        None
+    }
     /// The freshly fetched default branch's newest first-parent commits.
     fn recent(&mut self, max: usize) -> Result<Vec<Commit>>;
     /// First-parent commits after `cursor`, oldest first, at most `max`;
@@ -484,6 +487,34 @@ fn read_state(land: &Path) -> Result<State> {
         .with_context(|| format!("{STATE} is not valid; fix or remove it"))
 }
 
+// trace:STORY-2897 | ai:codex
+pub(crate) fn open_episode(root: &Path) -> Option<(String, Vec<String>)> {
+    open_episode_at(&watch_root(root).ok()?)
+}
+
+/// [`open_episode`] at a resolved watch root. trace:STORY-2897 | ai:claude
+fn open_episode_at(watch_root: &Path) -> Option<(String, Vec<String>)> {
+    let dir = watch_directory(watch_root, false).ok()?;
+    let episode = read_state(&dir).ok()?.episode?;
+    if episode.failed.is_empty()
+        || episode.red_sha.len() != 40
+        || !episode.red_sha.bytes().all(|b| b.is_ascii_hexdigit())
+    {
+        return None;
+    }
+    let names: Vec<_> = episode
+        .failed
+        .into_iter()
+        .chain(episode.contributing)
+        .map(|c| c.name)
+        .chain(episode.diagnostics)
+        .collect();
+    if names.iter().any(|name| name.trim().is_empty()) {
+        return None;
+    }
+    Some((episode.red_sha, names))
+}
+
 fn write_state(land: &Path, state: &State) -> Result<()> {
     failpoint("state")?;
     let bytes = serde_json::to_vec_pretty(state)?;
@@ -746,6 +777,10 @@ pub(crate) fn pass(
         flush(&land, &mut state)?;
     }
     deliver(&land, &mut state, ports, &mut notes)?;
+    if let Some(reason) = ports.watcher_backoff() {
+        notes.push(format!("red-main watch: {reason}"));
+        return Ok(notes);
+    }
     let scan = scan_history(&land, &mut state, required, window, ports, &mut notes);
     let deadline = scan.as_ref().is_err_and(|error| error.is::<PassDeadline>());
     if deadline {
@@ -1630,6 +1665,10 @@ impl Live {
 }
 
 impl Ports for Live {
+    fn watcher_backoff(&self) -> Option<String> {
+        crate::forge::main_watch_backoff(&self.root, self.forge.kind())
+    }
+
     fn now(&self) -> DateTime<Utc> {
         Utc::now()
     }

@@ -109,3 +109,50 @@ fn story_3095_green_since_last_completion() {
     rows[1]["completedAt"] = serde_json::Value::Null;
     assert!(crate::land::green_rollup_at(&rows).is_none());
 }
+
+// A rework lane covers a spec by queued work, or a retained implementer
+// lease by scope (any ID spelling) or by the PR's branch.
+// trace:STORY-3131 | ai:claude
+#[test]
+fn story_3131_rework_lanes_cover_queued_or_leased_work() {
+    let req = |spec: &str| {
+        let mut r = aida_core::models::Requirement::new(format!("Title {spec}"), String::new());
+        r.spec_id = Some(spec.into());
+        r
+    };
+    let mut store = aida_core::models::RequirementsStore::new();
+    let queued = req("STORY-1");
+    store.requirements.push(queued.clone());
+    store.requirements.push(req("STORY-2"));
+    let lease = |scope: &str, branch: &str| -> crate::leases::SessionLease {
+        serde_json::from_value(serde_json::json!({
+            "id": "abc123abc123", "scope": scope, "slug": scope, "owner": "t",
+            "worktree_path": "/fixture", "branch": branch,
+            "started_at": "2026-11-26T00:00:00Z", "hostname": "h",
+        }))
+        .unwrap()
+    };
+    let lanes = ReworkLanes {
+        queued: [queued.id].into_iter().collect(),
+        active: vec![
+            lease("story-3", "story-3-work"),
+            lease("TASK-9", "fix-branch"),
+        ],
+    };
+    assert!(lanes.covers(&store, "STORY-1", "x"), "queued work");
+    assert!(!lanes.covers(&store, "STORY-2", "x"), "known spec, no lane");
+    assert!(
+        lanes.covers(&store, "STORY-3", "x"),
+        "lease scope, any case"
+    );
+    assert!(
+        lanes.covers(&store, "STORY-4", "fix-branch"),
+        "lease branch"
+    );
+    assert!(!lanes.covers(&store, "STORY-4", "other"));
+    let none = ReworkLanes {
+        queued: Default::default(),
+        active: Vec::new(),
+    };
+    assert!(!none.covers(&store, "STORY-1", "story-3-work"));
+}

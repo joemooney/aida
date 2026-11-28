@@ -43,7 +43,6 @@ const RAW_GH_ALLOWLIST: &[(&str, usize)] = &[
     ("aida-cli-lib/src/history_timeline.rs", 1),
     ("aida-cli-lib/src/kernel.rs", 1),
     ("aida-cli-lib/src/lane_liveness.rs", 1),
-    ("aida-cli-lib/src/ci_watch.rs", 1),
     ("aida-cli-lib/src/forge_lookup.rs", 4),
     ("aida-cli-lib/src/orchestrator_leases.rs", 1),
     ("aida-cli-lib/src/ownership/migrate.rs", 1),

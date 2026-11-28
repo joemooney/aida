@@ -2402,6 +2402,44 @@ pub(crate) fn held_slots(root: &Path) -> Vec<(String, String)> {
         .collect()
 }
 
+/// Where the watcher stands on a change's latest attempt (landing-drought).
+// trace:STORY-3131 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ReviewWatch {
+    /// Reserved, running, owned by a peer hub, or being superseded by a
+    /// newer head: the review is coming.
+    InFlight,
+    /// Failed, exited or completed without a verdict: the watcher will not
+    /// review this head again until an operator releases it.
+    Held,
+}
+
+/// Each (change key, head, state) by its latest attempt, read without
+/// changing watcher state. A superseded attempt confirmed gone is omitted:
+/// the change's new head is merely waiting for capacity.
+// trace:STORY-3131 | ai:claude
+pub(crate) fn review_heads(root: &Path) -> Vec<(String, String, ReviewWatch)> {
+    read_only_state(root).map_or_else(Vec::new, |state| latest_watch(&state))
+}
+
+fn latest_watch(state: &State) -> Vec<(String, String, ReviewWatch)> {
+    state
+        .entries
+        .iter()
+        .filter_map(|(key, entry)| {
+            let attempt = entry.attempts.last()?;
+            let watch = match attempt.phase {
+                Phase::RemoteHeld | Phase::Reserved | Phase::Running | Phase::Superseding => {
+                    ReviewWatch::InFlight
+                }
+                Phase::Failed | Phase::Exited | Phase::Completed => ReviewWatch::Held,
+                Phase::Superseded => return None,
+            };
+            Some((key.clone(), attempt.head.clone(), watch))
+        })
+        .collect()
+}
+
 /// The watcher state of the project `root` belongs to, read without creating
 /// or changing anything; `None` when there is none or it is unreadable.
 // trace:TASK-1945 | ai:claude
@@ -3267,7 +3305,7 @@ pub(crate) fn run_with_program(
             idle_yielding(&root, &store, args.interval, &mut admission)?;
             continue;
         }
-        let changes = match observe_pass_input(&root, "discovery", repo.discover(&root)) {
+        let changes = match observe_pass_input(&root, "discovery", repo.discover_for_watch(&root)) {
             Ok(changes) => changes,
             Err(error) if !args.once => {
                 eprintln!("review-watch discovery refused: {error:#}");
@@ -4897,7 +4935,11 @@ fn report(
             None,
         ),
     };
-    let line = bounded_diagnostic(&readiness.line(change));
+    let mut line = readiness.line(change);
+    if let Some(info) = approval.as_ref().and_then(|a| a.ci_info.as_deref()) {
+        line.push_str(&format!("; {info}"));
+    }
+    let line = bounded_diagnostic(&line);
     eprintln!("{key} at {}: {line}", &change.head[..12]);
     let wake = store.transaction(&key, |state| {
         let repository = state.repository.clone();

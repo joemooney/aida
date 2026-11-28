@@ -83,6 +83,7 @@
         "t3869_non_regular_entries_skipped_with_named_reason",
         "t3869_pinned_root_survives_concurrent_symlink_swap",
         "t3869_specs_resolve_only_through_store_and_refuse_unknown",
+        "bug2783_unconfined_runner_review_is_never_posted",
         "forge_head_and_shallow_parent",
         "git_inventory_and_content_errors_propagate",
         "invalid_review_rules_errors",

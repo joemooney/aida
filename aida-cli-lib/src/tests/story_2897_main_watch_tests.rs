@@ -1483,3 +1483,38 @@ fn task_3859_watch_propagates_gh_auth_errors_but_waits_on_transient_reads() {
         "{status}"
     );
 }
+
+/// `open_episode` reports an episode only with a full red SHA, at least one
+/// failed check and no blank check name; anything else reads as none.
+// trace:STORY-2897 | ai:claude
+#[test]
+fn open_episode_refuses_a_short_sha_an_empty_failed_list_and_a_blank_name() {
+    let (dir, mut fake) = red_on_green();
+    run(dir.path(), &mut fake);
+    fake.at(5);
+    run(dir.path(), &mut fake);
+    let root = dir.path();
+    let (red, names) = open_episode_at(root).expect("open episode");
+    assert_eq!(red, sha(2));
+    assert!(names.iter().any(|n| n == BUILD), "{names:?}");
+    let good = state(root);
+    let rewrite = |edit: &dyn Fn(&mut Episode)| {
+        let mut changed = good.clone();
+        edit(changed.episode.as_mut().unwrap());
+        write_state(&root.join(".aida/land"), &changed).unwrap();
+        open_episode_at(root)
+    };
+    assert!(rewrite(&|e| e.red_sha = sha(2)[..12].to_string()).is_none());
+    assert!(rewrite(&|e| e.red_sha = "g".repeat(40)).is_none());
+    assert!(rewrite(&|e| e.failed.clear()).is_none());
+    assert!(rewrite(&|e| e.failed[0].name = "  ".into()).is_none());
+    assert!(rewrite(&|e| e.diagnostics.push(String::new())).is_none());
+    assert!(
+        rewrite(&|_| ()).is_some(),
+        "the unedited episode still reads"
+    );
+    let mut closed = good.clone();
+    closed.episode = None;
+    write_state(&root.join(".aida/land"), &closed).unwrap();
+    assert!(open_episode_at(root).is_none());
+}

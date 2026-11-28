@@ -2463,6 +2463,105 @@ impl GitHubForge {
     }
 }
 
+// Resolve a repository-qualified route for interactive GitHub watchers.
+fn watcher_repo(root: &Path, gh: &Path) -> Option<String> {
+    if let Ok(repo) = aida_core::exec_context::Environment::capture().var("GH_REPO") {
+        if !repo.is_empty() {
+            return Some(repo.to_owned());
+        }
+    }
+    // Let gh select its base repository and print its URL. With several
+    // remotes and no default set, gh's resolution may issue a GraphQL
+    // repo-network query; that does not draw on the core REST budget.
+    // trace:BUG-2735 | ai:claude
+    let mut cmd = Command::new(gh);
+    cmd.current_dir(root).args(["browse", "--no-browser"]);
+    let out = crate::forge_lookup::deadline_output(cmd, Command::output_retrying_etxtbsy).ok()?;
+    let url = std::str::from_utf8(&out.stdout)
+        .ok()?
+        .trim()
+        .strip_prefix("https://")?;
+    out.status.success().then(|| url.to_owned())
+}
+
+pub(crate) fn watcher_command(root: &Path) -> Option<impl Fn() -> Command + '_> {
+    let (gh, repo) =
+        crate::forge_lookup::with_forge_lookup_deadline(std::time::Duration::from_secs(5), || {
+            let gh = crate::resolve_gh_binary()?;
+            let repo = watcher_repo(root, gh.as_ref())?;
+            Some((gh, repo))
+        })?;
+    Some(move || {
+        let mut command = Command::new(&gh);
+        command.current_dir(root);
+        if let [host, _, _] = repo.split('/').collect::<Vec<_>>().as_slice() {
+            command.env("GH_HOST", host);
+        }
+        command.env("GH_REPO", &repo);
+        command
+    })
+}
+
+/// gh caches the authenticated GET across processes for one minute. A missing
+/// budget observation preserves the poller's existing forge error handling.
+/// Apply only at watcher boundaries so a train can still read exact-head CI.
+// trace:BUG-2735 | ai:codex
+pub(crate) fn watcher_backoff(
+    root: &Path,
+    kind: ForgeKind,
+    pinned: Option<&crate::review_watch::forge::Repository>,
+) -> Option<String> {
+    watcher_api_backoff(root, kind, || {
+        if let Some(repo) = pinned {
+            let mut command = Command::new("gh"); // Repository::discover uses PATH directly.
+            repo.pin_command(&mut command);
+            Some(command)
+        } else {
+            Some(watcher_command(root)?())
+        }
+    })
+}
+
+pub(crate) fn main_watch_backoff(root: &Path, kind: ForgeKind) -> Option<String> {
+    // Main watch uses gh api on the configured API host.
+    watcher_api_backoff(root, kind, || crate::resolve_gh_binary().map(Command::new))
+}
+
+pub(crate) fn watcher_api_backoff(
+    root: &Path,
+    kind: ForgeKind,
+    prepare: impl FnOnce() -> Option<Command>,
+) -> Option<String> {
+    use crate::bounded_process::{command_output_with_timeout_capped, BoundedCommandOutput};
+    if kind != ForgeKind::GitHub {
+        return None;
+    }
+    let out =
+        crate::forge_lookup::with_forge_lookup_deadline(std::time::Duration::from_secs(5), || {
+            let mut command = prepare()?;
+            command
+                .current_dir(root)
+                .args(["api", "rate_limit", "--cache", "60s"])
+                .stdin(std::process::Stdio::null());
+            let remaining = crate::forge_lookup::forge_lookup_deadline()?
+                .checked_duration_since(std::time::Instant::now())?;
+            match command_output_with_timeout_capped(command, remaining, 65536) {
+                BoundedCommandOutput::Completed(out) => Some(out),
+                _ => None,
+            }
+        })?;
+    if !out.status.success() {
+        return None;
+    }
+    let value: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
+    let core = value.pointer("/resources/core")?;
+    let limit = core.get("limit")?.as_u64()?;
+    let remaining = core.get("remaining")?.as_u64()?;
+    (u128::from(remaining) * 5 < u128::from(limit)).then(|| format!(
+        "backing off: GitHub core budget {remaining}/{limit} remaining (below 20%); reserving requests for train CI"
+    ))
+}
+
 // trace:BUG-2690 | ai:codex
 fn landing_github_call(
     root: &Path,
@@ -2616,7 +2715,8 @@ pub(crate) fn github_open_changes_detailed(
             "--repo",
             slug,
             "--json",
-            "number,title,headRefOid,headRefName,baseRefName,isDraft,labels,statusCheckRollup,updatedAt",
+            // `mergeable` names conflicts for landing-drought. trace:STORY-3131 | ai:claude
+            "number,title,headRefOid,headRefName,baseRefName,isDraft,labels,mergeable,statusCheckRollup,updatedAt",
         ])
         .current_dir(root)
         .stdin(std::process::Stdio::null());
@@ -2918,7 +3018,7 @@ impl Forge for GitHubForge {
     }
     // trace:STORY-1166 | ai:claude
     fn ci_progress_snapshot(&self, branch: &str) -> String {
-        crate::ci_rollup_json_for_branch(branch)
+        crate::ci_rollup_json_for_branch(&self.project_root, branch)
     }
 
     fn supports_delegated_review(&self) -> bool {
@@ -7850,9 +7950,9 @@ pub(crate) fn github_startup_api(root: &Path, endpoint: &str) -> Result<std::pro
     github_startup_output(root, &["api", endpoint])
 }
 pub(crate) fn github_startup_output(root: &Path, args: &[&str]) -> Result<std::process::Output> {
-    let gh = crate::resolve_gh_binary().context("gh unavailable")?;
-    let mut command = std::process::Command::new(gh);
-    command.current_dir(root).args(args);
+    let prepare = watcher_command(root).context("gh unavailable")?;
+    let mut command = prepare();
+    command.args(args);
     match crate::command_output_with_timeout_capped(
         command,
         std::time::Duration::from_secs(3),

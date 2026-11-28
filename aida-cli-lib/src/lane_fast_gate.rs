@@ -1098,6 +1098,36 @@ pub(crate) fn refuse_failed_gate(main: &Path, branch: &str) -> Result<()> {
     Ok(())
 }
 
+/// Why the branch's receipt vetoes moving its PR branch: it reads `fail`, or
+/// it cannot be read (fail closed). The path is relative to `main`. For a
+/// caller that routes around a red gate instead of refusing.
+// trace:TASK-3928 | ai:claude
+pub(crate) fn failed_receipt(main: &Path, branch: &str) -> Option<String> {
+    let full = path(main, branch);
+    let shown = full.strip_prefix(main).unwrap_or(&full).display();
+    match read(main, branch) {
+        Ok(None) => None,
+        Ok(Some(r)) if r.marker != "fail" => None,
+        Ok(Some(_)) => Some(format!(
+            "red fast-gate receipt {shown} for {branch} reads fail"
+        )),
+        Err(e) => Some(format!(
+            "unreadable fast-gate receipt {shown} for {branch} ({e:#})"
+        )),
+    }
+}
+
+/// Record `marker` as the branch's settled receipt, for tests elsewhere.
+// trace:TASK-3928 | ai:claude
+#[cfg(test)]
+pub(crate) fn set_marker_for_test(main: &Path, branch: &str, marker: &str) {
+    begin(main, branch).unwrap();
+    let mut receipt = read(main, branch).unwrap().unwrap();
+    receipt.marker = marker.into();
+    receipt.pending = false;
+    write(main, &receipt).unwrap();
+}
+
 /// Publication must still name the commit which the sandbox checked.
 // trace:STORY-2640 | ai:codex
 pub(crate) fn publication_ready(main: &Path, tree: &Path, branch: &str) -> Result<()> {

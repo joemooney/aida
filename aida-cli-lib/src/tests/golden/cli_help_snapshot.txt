@@ -12614,6 +12614,10 @@ Commands:
   rollback     Swap the previous live binaries (`live/prev/`) back in, in one step. Running it again
                rolls forward. Refuses while a live drain wave is pinned to the live binary unless
                --after-wave or --force
+  provisional  Outage use only: build and smoke-test a PR's or branch's head in a fresh worktree,
+               then promote it as the live binary before it lands, marked PROVISIONAL (the previous
+               build stays in `live/prev/`; `aida dev rollback` restores it). Operator only: run it
+               from a terminal or an operator deputy job
   deactivate   Emit shell code that undoes a previous `aida dev activate`. Use as: `eval "$(aida dev
                deactivate)"`
   serve        Run aida-server (REST/gRPC) and the React dev server (vite) in the foreground. Ctrl+C
@@ -12773,6 +12777,41 @@ Options:
 
       --force
           Swap even while a live drain wave is pinned to the live binary
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida dev provisional
+Outage use only: build and smoke-test a PR's or branch's head in a fresh worktree, then promote it
+as the live binary before it lands, marked PROVISIONAL (the previous build stays in `live/prev/`;
+`aida dev rollback` restores it). Operator only: run it from a terminal or an operator deputy job
+
+Usage: aida dev provisional [OPTIONS] --reason <REASON> <TARGET>
+
+Arguments:
+  <TARGET>
+          PR number (`4615` or `#4615`) or branch name on `origin`
+
+Options:
+      --reason <REASON>
+          Why this head runs live before review (recorded in the marker)
+
+      --expect-head <EXPECT_HEAD>
+          The full 40-hex SHA you reviewed; refused unless the fetched head is exactly it. Required
+          for a PR
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -22943,6 +22982,9 @@ Options:
       --summary <TEXT>
           One-line rationale stored with the verdict and shown wherever the verdict surfaces
 
+      --needs <KIND:DETAIL>
+          Dependency for this verdict. Repeat for multiple dependencies
+
       --finding <TEXT>
           Concrete review finding to hand to the rework implementer. Repeat for multiple findings;
           omitted findings preserve any existing findings[] in the verdict record. Pass --finding ""
@@ -22966,12 +23008,12 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
-      --pr <PR>
-          Change number. Must match the reviewer lease; otherwise the review stays spec-only
-
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --pr <PR>
+          Change number. Must match the reviewer lease; otherwise the review stays spec-only
 
   -h, --help
           Print help (see a summary with '-h')
@@ -27002,13 +27044,10 @@ Options:
           Record an advisor ruling on the spec. The next pickup prompt leads with the latest ruling,
           so a relaunched lane works from it rather than from the description alone
 
-      --resume
-          Chain `aida queue work --resume` to resume a prior claude session for this spec instead of
-          cold-launching. Implies `--work`
-
-      --force
-          Bypass the terminal-status guard (Completed/Rejected) and the "already in progress" guard.
-          Mirrors `queue add --force`
+      --despite-approval <REASON>
+          Rework although the spec's open PR is already approved at its current head. Without it
+          such a rework is refused, because its push would void the approval. The reason is recorded
+          on the spec
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -27020,9 +27059,17 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
+      --resume
+          Chain `aida queue work --resume` to resume a prior claude session for this spec instead of
+          cold-launching. Implies `--work`
+
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --force
+          Bypass the terminal-status guard (Completed/Rejected) and the "already in progress" guard.
+          Mirrors `queue add --force`
 
       --steal
           Retired. Refuses explicitly when chaining `--work`; ownership handles proven-dead reclaim
@@ -27705,11 +27752,9 @@ Options:
       --ruling <TEXT>
           Record an advisor ruling the next pickup prompt leads with
 
-      --resume
-          Chain `aida queue work --resume`
-
-      --force
-          Bypass terminal-status / already-in-progress guards
+      --despite-approval <REASON>
+          Rework although the open PR is already approved at its current head. The reason is
+          recorded on the spec
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -27721,9 +27766,15 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
+      --resume
+          Chain `aida queue work --resume`
+
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --force
+          Bypass terminal-status / already-in-progress guards
 
       --steal
           Retired. Refuses explicitly; ownership handles proven-dead reclaim automatically
@@ -46028,6 +46079,42 @@ Working on aida itself
     "path": [
       "aida",
       "dev",
+      "provisional"
+    ],
+    "about": "Outage use only: build and smoke-test a PR's or branch's head in a fresh worktree, then promote it as the live binary before it lands, marked PROVISIONAL (the previous build stays in `live/prev/`; `aida dev rollback` restores it). Operator only: run it from a terminal or an operator deputy job",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "expect-head",
+        "takes_value": true,
+        "help": "The full 40-hex SHA you reviewed; refused unless the fetched head is exactly it. Required for a PR"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "reason",
+        "takes_value": true,
+        "help": "Why this head runs live before review (recorded in the marker)"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "dev",
       "build-guard"
     ],
     "about": "Internal pre-build safety gate used by `make build-fast`",
@@ -56523,6 +56610,11 @@ Working on aida itself
         "help": "Print help (see more with '--help')"
       },
       {
+        "name": "needs",
+        "takes_value": true,
+        "help": "Dependency for this verdict. Repeat for multiple dependencies"
+      },
+      {
         "name": "no-carry",
         "takes_value": false,
         "help": "Keep this approval valid only for the exact reviewed head"
@@ -60551,6 +60643,11 @@ Working on aida itself
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
       },
       {
+        "name": "despite-approval",
+        "takes_value": true,
+        "help": "Rework although the spec's open PR is already approved at its current head. Without it such a rework is refused, because its push would void the approval. The reason is recorded on the spec"
+      },
+      {
         "name": "for",
         "takes_value": true,
         "help": "Override the routing role. Default: existing queue route, falling back to implementer"
@@ -61266,6 +61363,11 @@ Working on aida itself
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "despite-approval",
+        "takes_value": true,
+        "help": "Rework although the open PR is already approved at its current head. The reason is recorded on the spec"
       },
       {
         "name": "for",
