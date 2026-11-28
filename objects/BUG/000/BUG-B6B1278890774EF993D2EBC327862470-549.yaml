@@ -18,17 +18,25 @@ description: |
   2. Each test in the live list has its own timeout, e.g. nextest `--slow-timeout` with `terminate-after`, or a per-test wrapper. A stalled test is killed and NAMED in the step output.
   3. On a stall, the step prints the currently running test(s) and the tail of the live-bwrap log BEFORE it fails, so the next occurrence identifies its culprit.
   4. A fixture or test proves a deliberately hanging live test is killed and named within the step timeout.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-28T10:26:37.477984708Z
-modified_at: 2026-11-28T10:26:37.477984708Z
+modified_at: 2026-11-28T10:28:55.251016344Z
 req_type: Bug
 tags:
 - ci
 - flaky
 - train
+history:
+- id: 01a221b3-6753-7fb2-add9-43dfca3c1423
+  author: joe
+  timestamp: 2026-11-28T10:28:55.251010374Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: fb1f8edfbad86ac5eac7132125376d2f410757b7
   branch: integration
