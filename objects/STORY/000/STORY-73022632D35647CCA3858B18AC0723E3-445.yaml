@@ -24,7 +24,17 @@ feature: Uncategorized
 created_at: 2026-11-28T12:42:54.276311859Z
 modified_at: 2026-11-28T12:42:54.276311859Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a22211-4d3c-7e41-960f-b5bcfa328950
+  created_at: 2026-11-28T12:43:00.965022272Z
+  created_by: dirtlab
 history:
+- id: 01a2222e-3a2f-7432-8007-2128ed36b5f3
+  author: dirtlab
+  timestamp: 2026-11-28T12:43:04.623138819Z
+  changes: []
 - id: 01a22239-5619-7463-b6ed-cfe2a57fb66c
   author: joe
   timestamp: 2026-11-28T12:55:12.665825910Z
