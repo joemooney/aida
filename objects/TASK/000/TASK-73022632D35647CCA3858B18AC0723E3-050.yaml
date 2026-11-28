@@ -9,12 +9,12 @@ description: |
 
   Raised by the implementer while working BUG-2770.
   Branch: bug-2770-gc-scope  ·  Commit: 820435a1f6  (PR-4645)
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T10:47:01.862391650Z
-modified_at: 2026-11-28T05:26:34.618722691Z
+modified_at: 2026-11-28T12:51:05.841432302Z
 req_type: Task
 tags:
 - from-implementer:BUG-2770
@@ -104,6 +104,22 @@ history:
   author: joe
   timestamp: 2026-11-28T05:26:34.751431308Z
   changes: []
+- id: 01a22235-91ab-7fe3-a1ab-e0b826c41482
+  author: aida-auto-bump
+  timestamp: 2026-11-28T12:51:05.771058945Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a22235-91f1-7bb3-b571-a405a54cec53
+  timestamp: 2026-11-28T12:51:05.841429550Z
+  agent: aida
+  commit_sha: c78528a300b5250eced2e2f6bf6baa50bceabbda
+  summary: 'TASK-3478 (completing). AC (grooming approval: owner record or age-floor reap path; testable) [evidence: behavioral-test]: verified by leftovers_tests::an_unattributed_anchor_temp_is_reaped_past_the_orphan_floor, which shows the anchor temp held as Unknown at +11m, kept under min_age 7d at +24h, reaped at +24h, and a live checkout''s temp kept and reported held. Implementation: Pass::admit_with in leftovers.rs reaps an Owner::Unattributed candidate past max(STALE_AFTER, min_age, ORPHAN_TEMP_AFTER=24h). Only scan_id_temps opts in. Tombs, staging dirs, asides and era markers keep admit() unchanged. A Dead owner is still judged first, and Checkout or Worktree owners still need a Dead verdict. The fail-open widening applies only to write_source_id temps that nothing reads, which matches the spec''s intent. The second paragraph of the description (collision-suffixed admin names) is explicitly out of scope per the grooming approval and is N/A here. No defects found. CI pending at review time; the fast gate passed at the head.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 820435a1f67ddeb186c7d21b0615ceaefe079160
@@ -114,3 +130,7 @@ filed_at:
   vendor: claude
   session: 01a21744104a
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-28T12:51:05.771051775Z
+  completion_sha: c78528a300b5250eced2e2f6bf6baa50bceabbda
