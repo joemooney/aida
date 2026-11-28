@@ -91,6 +91,24 @@ Implementers fix findings, repeat relevant checks, and add a spec comment headed
 also inspect uncommitted changes and new files before handing publication to the
 host. This comment records self-review and grants no independent review credit.
 
+<!-- trace:STORY-3183 | ai:claude -->
+**Shadow adversarial review.** Set `[review] shadow_adversarial = true` in
+`.aida/config.toml` to trial the automated adversarial review beside your normal
+reviewers. It defaults to false and takes effect after the config lands on the
+trusted default branch. For each review that `aida review watch` dispatches, the
+watcher also runs `aida review prepare --pr N --run-review --adversarial --agent
+claude --challenger-agent claude` in the background. A shadow run never records a
+verdict, never sets or clears a merge hold and never posts to the forge. It never
+delays the real review: at most two run at once, and only when the reviewer
+budget (`[review_watch] max_concurrent`) has a free slot. A one-shot watcher
+pass starts none. Failures, timeouts and partial runs are recorded and otherwise ignored.
+Each run appends one row to `.aida/review-shadow/runs.jsonl` (mode 0600, not
+tracked by git). A row holds the PR, the head, the finder and challenger
+vendors, a `same_vendor` flag (`vendor_pair` is `same-vendor` or
+`cross-vendor`), the exit code, the duration and every finding. A finding row
+holds the severity, the path and line, whether the challenger refuted it and
+why. Finding text is cut to 500 characters, and no file contents are stored.
+
 A pushed standalone lane result includes `self_review=recorded`,
 `self_review=missing-comment`, or `self_review=unknown` when enabled. A nonempty
 comment with the exact heading must have been created during this attempt;

@@ -996,6 +996,9 @@ confirm_bypass = "policy" # can only tighten; malformed means "on"
 [keys.trusted.review]
 # trace:TASK-3815 | ai:codex — shared trusted reader; optional prompt/report policy.
 implementer_self_review = "policy"
+# trace:STORY-3183 | ai:claude — opt-in shadow review trial; a bool, read only
+# from the default branch because it starts a background review agent.
+shadow_adversarial = "policy"
 # trace:STORY-2763 | ai:codex — shared trusted_config reader owns the path site.
 freshness = "policy"
 freshness_strict_paths = "policy"

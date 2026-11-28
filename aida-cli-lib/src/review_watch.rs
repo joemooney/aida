@@ -4752,6 +4752,11 @@ fn admit_change(
                         })?,
                     }
                     eprintln!("{key}: review admitted for {}", change.head);
+                    // A `--once` pass exits before a shadow could record.
+                    // trace:STORY-3183 | ai:claude
+                    if !args.once {
+                        launch_shadow(root, repo, store, &change, args.max_concurrent, program);
+                    }
                     return Ok(Admission::Admitted);
                 }
                 Err(error) => {
@@ -4762,6 +4767,38 @@ fn admit_change(
         }
     }
     Ok(Admission::Settled)
+}
+
+/// Start the opt-in shadow adversarial review beside a dispatched one. It
+/// only takes spare capacity and is never joined: whatever it does, the
+/// dispatched review is unaffected. trace:STORY-3183 | ai:claude
+fn launch_shadow(
+    root: &Path,
+    repo: &forge::Repository,
+    store: &Store,
+    change: &forge::Change,
+    max: Option<u8>,
+    program: Option<&Path>,
+) {
+    let real = match store.load() {
+        Ok(state) => (state.entries.values().flat_map(|e| &e.attempts))
+            .filter(|a| active(a))
+            .count(),
+        Err(error) => {
+            eprintln!("{}: shadow review skipped: {error:#}", change.key());
+            return;
+        }
+    };
+    let program = program
+        .map(Path::to_path_buf)
+        .unwrap_or_else(crate::aida_exe_path);
+    let launch = crate::review_shadow::Launch {
+        root: root.to_path_buf(),
+        command: watch_command(repo, root, &program),
+        pr: change.id,
+        head: change.head.clone(),
+    };
+    drop(crate::review_shadow::launch(launch, real, max.unwrap_or(1)));
 }
 
 // A hub failure must not prevent recording a proven local pre-spawn failure.
