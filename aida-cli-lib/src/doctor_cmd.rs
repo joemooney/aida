@@ -932,7 +932,13 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     // deleted binary: two receipt reads and a /proc probe. trace:BUG-2774 | ai:claude
     let deputy_binary = crate::review_watch::service::DEPUTY_BINARY_CATEGORY;
     if doctor_category_selected(opts.category.as_deref(), deputy_binary)? {
-        extend_deputy_binary_findings(&project_root, &mut findings);
+        extend_deputy_binary_findings(
+            &mut findings,
+            [
+                crate::review_watch::service::deputy_binary_finding(&project_root),
+                crate::review_watch::train_service::deputy_binary_finding(&project_root),
+            ],
+        );
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
@@ -2819,17 +2825,11 @@ mod bug_2486_tests;
 /// One deputy may host both fixed services; its `deputy:pid` finding is
 /// reported once. trace:BUG-2774 TASK-3936 | ai:claude
 fn extend_deputy_binary_findings(
-    project_root: &std::path::Path,
     findings: &mut Vec<DoctorFinding>,
+    candidates: impl IntoIterator<Item = Option<DoctorFinding>>,
 ) {
     let deputy_binary = crate::review_watch::service::DEPUTY_BINARY_CATEGORY;
-    for finding in [
-        crate::review_watch::service::deputy_binary_finding(project_root),
-        crate::review_watch::train_service::deputy_binary_finding(project_root),
-    ]
-    .into_iter()
-    .flatten()
-    {
+    for finding in candidates.into_iter().flatten() {
         if !findings
             .iter()
             .any(|f| f.category == deputy_binary && f.id == finding.id)
