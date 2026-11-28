@@ -1,5 +1,6 @@
 id: 01a22007-7d2b-7f31-963e-9e3c9f88d73c
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-066
+agreed_id: TASK-3573
 title: 'Orchestrator: a landed-spec refusal returns None from shelve_on_failure, so the drain treats it as un-shelved'
 description: |
   RealPhaseDriver::shelve_on_failure (phase_driver_trait.rs, TASK-3501 guard) returns Ok(None) when a request-changes/reject verdict arrives on a landed spec (Completed, or PR merged). drain callers in auto_complete.rs (~3288) treat None as "un-shelvable", so the batch drain may pause on that spec instead of moving past it. The PR already merged, so pausing is the conservative choice. If advancing is preferred, the drain needs a distinct "landed, skipped" outcome.
@@ -17,6 +18,11 @@ tags:
 - from-implementer:TASK-3501
 - kind:design-choice
 - severity:minor
+history:
+- id: 01a22077-10ab-7701-a4af-22fe0fd3af89
+  author: joe
+  timestamp: 2026-11-28T04:43:23.691442439Z
+  changes: []
 filed_at:
   code_sha: 7731f89c36f94df43f2990197bcd08e7ee8631c0
   branch: task-3501-landed-guard

@@ -1,5 +1,6 @@
 id: 01a2200d-8b39-7c70-81a9-65051804665e
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-420
+agreed_id: STORY-3254
 title: 'Review PR-4778: [AI:claude] fix(review): auto-queue-review links a review story only to specs still open (TASK-3518)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21ff4`) for branch `task-3518-review-story-links`.
@@ -33,6 +34,10 @@ history:
 - id: 01a2200d-d460-7591-9998-868a5fb1a830
   author: dirtlab
   timestamp: 2026-11-28T02:48:26.976501433Z
+  changes: []
+- id: 01a22077-171c-7bb0-8ca4-68b54f57b682
+  author: joe
+  timestamp: 2026-11-28T04:43:25.340656190Z
   changes: []
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c

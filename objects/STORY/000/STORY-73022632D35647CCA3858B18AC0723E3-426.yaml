@@ -1,5 +1,6 @@
 id: 01a22035-f072-7f62-b7b0-0e49bf44819e
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-426
+agreed_id: STORY-3251
 title: 'Review PR-4784: [AI:claude] fix(repair): release repair reservations for closed or merged PRs with dead lanes, salvage first (TASK-3891)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a22017`) for branch `task-3891-release-dead-reservations`.
@@ -33,6 +34,10 @@ history:
 - id: 01a22036-1ca1-7cd0-a456-12c71538e0c2
   author: dirtlab
   timestamp: 2026-11-28T03:32:26.913741850Z
+  changes: []
+- id: 01a22077-1686-7611-8c31-dcf51c1af754
+  author: joe
+  timestamp: 2026-11-28T04:43:25.190969343Z
   changes: []
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c

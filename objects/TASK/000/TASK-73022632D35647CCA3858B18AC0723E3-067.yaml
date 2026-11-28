@@ -1,5 +1,6 @@
 id: 01a2202c-6bf1-7543-8a67-1da5a7baa7fe
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-067
+agreed_id: TASK-3572
 title: Unattested repair-reservation release salvages to <main>/.aida/salvage, not ~/salvage as TASK-3891 AC1 words it
 description: |
   TASK-3891 AC1 says a tree is salvaged to ~/salvage before an unattested release. The implementation (aida-cli-lib/src/repair_journal.rs ForgeProbe::salvage) reuses seat_clone::salvage_complete, which writes a patch plus a bundle of unique commits to <main>/.aida/salvage/<tree dir>/. That is the existing complete-salvage format that seat teardown already uses. Each audit line and journal release record names the actual path. If the operator wants ~/salvage, either salvage_complete gets a destination parameter or the probe copies the result there.
@@ -17,6 +18,11 @@ tags:
 - from-implementer:TASK-3891
 - kind:deviation
 - severity:minor
+history:
+- id: 01a22077-1065-7981-9c39-3e3e9fbdccf6
+  author: joe
+  timestamp: 2026-11-28T04:43:23.621462355Z
+  changes: []
 filed_at:
   code_sha: 595589fc567535ce3403eca32af7ed18828f7180
   branch: task-3891-release-dead-reservations

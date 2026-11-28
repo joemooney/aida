@@ -1,5 +1,6 @@
 id: 01a21ffe-5d07-7192-bda5-e343f250c60b
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1607
+agreed_id: TASK-3588
 title: 'Review follow-up: Residual throttle bypass (named in the PR body): a seat controls its own Makefile and may '
 description: |-
   From TASK-3537
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a21b19-492b-72e0-a395-a6a9ff3d2457
   created_at: 2026-11-28T02:31:55.028083149Z
+history:
+- id: 01a22077-1363-75b0-b279-172d08c5a925
+  author: joe
+  timestamp: 2026-11-28T04:43:24.387351797Z
+  changes: []
 filed_at:
   code_sha: 1112f734e4eae5a04a8f339bf0f1d0b6f5381f98
   branch: pr-4776

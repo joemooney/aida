@@ -1,5 +1,6 @@
 id: 01a22014-1672-7093-9f8f-09bbbefcbf09
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-423
+agreed_id: STORY-3253
 title: 'Fresh-user onboarding: fix the friction a new user hits from getting started through a first review prepare run'
 description: |
   Found by the TASK-3951 fresh-user walkthrough (clean HOME, new git repo, docs/getting-started.md followed literally, aida 0.16.0 sha f0ad200d8c). Full transcript, output excerpts and expected behaviour per item: docs/plans/2026-11-27-fresh-user-walkthrough.md (F1-F15). One criterion per friction point; slice as needed.
@@ -82,6 +83,10 @@ history:
 - id: 01a22035-d881-7eb1-b13f-1132e6876e78
   author: joe
   timestamp: 2026-11-28T03:32:09.473495193Z
+  changes: []
+- id: 01a22077-16f4-7621-b410-ad07b5315acf
+  author: joe
+  timestamp: 2026-11-28T04:43:25.300835498Z
   changes: []
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c

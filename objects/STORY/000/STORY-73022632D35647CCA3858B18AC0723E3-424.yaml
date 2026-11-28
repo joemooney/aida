@@ -1,5 +1,6 @@
 id: 01a22025-a281-79a1-b984-9db1ff2c5e04
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-424
+agreed_id: STORY-3245
 title: 'Review PR-4782: [AI:claude] docs(plans): fresh-user walkthrough of getting started and review prepare (TASK-3951)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a2200f`) for branch `task-3951-fresh-user-walkthrough`.
@@ -47,6 +48,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a22077-15ce-79e1-afbc-9ba3d80d68a0
+  author: joe
+  timestamp: 2026-11-28T04:43:25.006536633Z
+  changes: []
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
   branch: main

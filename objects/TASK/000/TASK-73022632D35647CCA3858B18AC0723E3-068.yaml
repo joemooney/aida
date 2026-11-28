@@ -1,5 +1,6 @@
 id: 01a2205e-5bf3-7f12-ae21-6a1a9f7640ce
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-068
+agreed_id: TASK-3575
 title: 'First-run F5 remainder: init wires Codex/Antigravity hooks when those CLIs are absent, and ''1 files skipped'' never names the file'
 description: |
   F5 in docs/plans/2026-11-27-fresh-user-walkthrough.md (branch task-3951-fresh-user-walkthrough) expects three things. TASK-3952 covers only the commit: init now leaves its files uncommitted unless asked. Two remain, reproduced again on the TASK-3952 branch in a fresh repo with a clean HOME:
@@ -19,6 +20,11 @@ tags:
 - from-implementer:TASK-3952
 - kind:followup-suggestion
 - severity:minor
+history:
+- id: 01a22077-116d-7aa2-8bcb-83e231cc51be
+  author: joe
+  timestamp: 2026-11-28T04:43:23.885628595Z
+  changes: []
 filed_at:
   code_sha: c31bbff81575314d36adfad1472718b248eb446f
   branch: task-3952-init-no-auto-commit

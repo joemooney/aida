@@ -1,5 +1,6 @@
 id: 01a22073-1b45-7c73-a5d7-80711a6408f1
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1626
+agreed_id: TASK-3584
 title: 'Review follow-up: Test coverage for AC3''s ''existing callers pass --commit'' rests on a static search plus the'
 description: |-
   From TASK-3952
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a22031-10d7-7210-8479-73832a41a87f
   created_at: 2026-11-28T04:39:22.974328742Z
+history:
+- id: 01a22077-12e3-74a0-8fbe-5a8b534f65b1
+  author: joe
+  timestamp: 2026-11-28T04:43:24.259192992Z
+  changes: []
 filed_at:
   code_sha: 2c764ec06581bdf3bc0bc1f9cbad815646a0f5f0
   branch: pr-4791

@@ -1,5 +1,6 @@
 id: 01a21fef-e8c7-7460-aa03-94b1d57b0b16
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-417
+agreed_id: STORY-3244
 title: 'Review PR-4775: [AI:claude] fix(cli): agent-mode errors keep the full anyhow cause chain (TASK-3511)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21fcf`) for branch `task-3511-agent-error-chain`.
@@ -33,6 +34,10 @@ history:
 - id: 01a21ff0-0d3a-7b63-b523-053f66980b35
   author: dirtlab
   timestamp: 2026-11-28T02:15:55.450651071Z
+  changes: []
+- id: 01a22077-15bb-71d3-a276-842c8af32a69
+  author: joe
+  timestamp: 2026-11-28T04:43:24.987177526Z
   changes: []
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c

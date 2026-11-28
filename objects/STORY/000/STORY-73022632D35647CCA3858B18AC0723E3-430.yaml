@@ -1,5 +1,6 @@
 id: 01a22070-08b8-7242-bb46-547e7fe1517f
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-430
+agreed_id: STORY-3250
 title: 'Review PR-4791: [AI:claude] fix(init): aida init leaves its changes uncommitted unless asked (TASK-3952)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a2203a`) for branch `task-3952-init-no-auto-commit`.
@@ -23,6 +24,11 @@ feature: Uncategorized
 created_at: 2026-11-28T04:35:42.904674112Z
 modified_at: 2026-11-28T04:35:42.904674112Z
 req_type: Story
+history:
+- id: 01a22077-166b-71e2-8081-8513f324516c
+  author: joe
+  timestamp: 2026-11-28T04:43:25.163165606Z
+  changes: []
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
   branch: main

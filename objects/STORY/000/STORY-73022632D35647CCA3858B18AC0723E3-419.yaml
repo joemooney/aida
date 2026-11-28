@@ -1,5 +1,6 @@
 id: 01a2200c-f158-7c71-af22-57c63a437ebc
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-419
+agreed_id: STORY-3246
 title: 'Review PR-4777: [AI:claude] fix(agent): agent gc keeps unattributed anchor-level mailbox id temps (TASK-3478)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21ff8`) for branch `task-3478-gc-mailbox-temps`.
@@ -33,6 +34,10 @@ history:
 - id: 01a2200d-160d-71f1-b1cf-c64d8c690a5f
   author: dirtlab
   timestamp: 2026-11-28T02:47:38.253334597Z
+  changes: []
+- id: 01a22077-1610-79f2-9e10-24f8db6304ff
+  author: joe
+  timestamp: 2026-11-28T04:43:25.072310560Z
   changes: []
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c

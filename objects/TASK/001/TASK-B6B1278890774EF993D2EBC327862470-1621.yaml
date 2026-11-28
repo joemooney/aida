@@ -1,5 +1,6 @@
 id: 01a22071-b29a-7260-90f7-7c98efdfb663
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1621
+agreed_id: TASK-3578
 title: 'Review follow-up: Onboarding regression for agent-run inits (non-TTY, the path docs/getting-started.md has a'
 description: |-
   From TASK-3952
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a22031-10d7-7210-8479-73832a41a87f
   created_at: 2026-11-28T04:37:49.980913061Z
+history:
+- id: 01a22077-11ed-76d1-add3-845d27de5036
+  author: joe
+  timestamp: 2026-11-28T04:43:24.013284126Z
+  changes: []
 filed_at:
   code_sha: 2c764ec06581bdf3bc0bc1f9cbad815646a0f5f0
   branch: pr-4791

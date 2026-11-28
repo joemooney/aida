@@ -1,5 +1,6 @@
 id: 01a22012-4b97-7d71-85dc-564e58d434b7
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-422
+agreed_id: STORY-3257
 title: 'Review PR-4781: [AI:claude] fix(admission): manual-train waiters belong to the aida pr train process (TASK-3541)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21ff7`) for branch `task-3541-waiter-owner`.
@@ -33,6 +34,10 @@ history:
 - id: 01a22012-706a-7d33-b427-6cec093dd499
   author: dirtlab
   timestamp: 2026-11-28T02:53:29.066736882Z
+  changes: []
+- id: 01a22077-179f-7741-93da-1de200f1eb04
+  author: joe
+  timestamp: 2026-11-28T04:43:25.471469772Z
   changes: []
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c

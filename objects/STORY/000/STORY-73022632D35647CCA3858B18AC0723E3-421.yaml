@@ -1,5 +1,6 @@
 id: 01a2200f-d42b-74e1-bf46-221538084177
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-421
+agreed_id: STORY-3256
 title: 'Review PR-4780: [AI:claude] fix(review): review stranded --fix and the orchestrator shelve skip landed specs (TASK-3501)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a21ff2`) for branch `task-3501-landed-guard`.
@@ -33,6 +34,10 @@ history:
 - id: 01a22010-2a4f-79a2-a1e7-53d0a5cc2de3
   author: dirtlab
   timestamp: 2026-11-28T02:51:00.047562847Z
+  changes: []
+- id: 01a22077-1786-7f41-b676-159dba36921c
+  author: joe
+  timestamp: 2026-11-28T04:43:25.446260268Z
   changes: []
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c

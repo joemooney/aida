@@ -1,5 +1,6 @@
 id: 01a22072-8915-76c0-9feb-5b623d090daf
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1624
+agreed_id: TASK-3585
 title: 'Review follow-up: Onboarding-task fallback keys only on the --commit flag. When AIDA_INIT_COMMIT_SCAFFOLD=1 '
 description: |-
   From TASK-3952
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a22031-10d7-7210-8479-73832a41a87f
   created_at: 2026-11-28T04:38:45.102544881Z
+history:
+- id: 01a22077-12fc-7e20-9822-1da75f45452a
+  author: joe
+  timestamp: 2026-11-28T04:43:24.284746635Z
+  changes: []
 filed_at:
   code_sha: 2c764ec06581bdf3bc0bc1f9cbad815646a0f5f0
   branch: pr-4791
