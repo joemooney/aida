@@ -14,13 +14,12 @@
 
 use crate::{
     add_aida_gitignore_entries, attached_store_present, auto_allocate_initial_blocks,
-    auto_allocate_initial_blocks_with_scope, branch_exists_anywhere, bwrap_status_line,
-    bypass_confirm, cli, commit, config_cmd, config_commit, config_lookup, config_path_for_project,
-    confirm_destructive_reset, count_requirements_in_sqlite, count_requirements_in_store,
-    current_user_id, decide_init_push_plan, detect_distributed_store, dispatch,
-    ensure_discipline_pack_scaffold, ensure_ecosystem_watch_scaffold,
-    ensure_project_manifest_scaffold, first_run, focus, forge, git_init_decision,
-    gitlab_project_create, glyph, handle_init_minimal, history, hostname,
+    auto_allocate_initial_blocks_with_scope, branch_exists_anywhere, bypass_confirm, cli, commit,
+    config_cmd, config_commit, config_lookup, config_path_for_project, confirm_destructive_reset,
+    count_requirements_in_sqlite, count_requirements_in_store, current_user_id,
+    decide_init_push_plan, detect_distributed_store, dispatch, ensure_discipline_pack_scaffold,
+    ensure_ecosystem_watch_scaffold, ensure_project_manifest_scaffold, first_run, focus, forge,
+    git_init_decision, gitlab_project_create, glyph, handle_init_minimal, history, hostname,
     init_autopilot_config_section, init_bootstrap, init_capture_config_section, init_cmd,
     init_contained_config_section, init_intake_config_section, init_store_mirror_config_section,
     init_ultraplan_config_section, init_worktree_config_section, init_worktree_pool_config_section,
@@ -2150,14 +2149,9 @@ fn complete_init_scaffolding(
         "aida done TASK-1".cyan(),
         " ".repeat(14)
     );
-    // BUG-585: `aida done` is advisor-gated off a TTY, so a scripted/agent
-    // first-user (a primary intended caller) would hit the gate on this taught
-    // step. Name the non-interactive escape hatch inline so it doesn't
-    // dead-end. trace:BUG-585 | ai:claude
-    println!(
-        "    {}",
-        "      (enter advisor at a human TTY with `aida role enter advisor`)".dimmed()
-    );
+    // BUG-585's dead end is closed where it happens: off a TTY, `aida done`'s
+    // own refusal names the command that unblocks it, so the first-run guide
+    // stays free of role jargon. trace:BUG-585 trace:TASK-3961 | ai:claude
     println!(
         "    {}{}see your commit linked to the task — {}",
         "aida show TASK-1".cyan(),
@@ -2173,12 +2167,15 @@ fn complete_init_scaffolding(
     // window — but for a newcomer that's one gentle line, not a lecture on the
     // role model. The switch command + the advisor/reviewer seats surface later
     // (`aida role --help`, the discipline pack) once the project grows into them.
-    // trace:TASK-645 | ai:claude
-    println!();
-    println!(
-        "  You're set up as the {} (the default) — you can ignore roles until your project grows.",
-        "implementer".green().bold()
-    );
+    // TASK-3961: the default role needs no action, so a first run does not
+    // mention it; `--verbose` keeps the line. trace:TASK-645 trace:TASK-3961 | ai:claude
+    if verbose {
+        println!();
+        println!(
+            "  You're set up as the {} (the default) — you can ignore roles until your project grows.",
+            "implementer".green().bold()
+        );
+    }
 
     if !verbose {
         println!();
@@ -2212,44 +2209,12 @@ fn complete_init_scaffolding(
     }
     println!();
 
-    // TASK-865: report the bubblewrap OS-sandbox availability so a new user
-    // learns up front whether userns confinement is available on this host.
-    // Informational only — never a prompt, never blocks init, and never enables
-    // `os_wrap` (that knob is opt-in / off by default). trace:TASK-865 | ai:claude
-    {
-        let avail = crate::session::bwrap_availability();
-        let glyph = match avail {
-            crate::session::BwrapAvailability::Ok => {
-                crate::glyph(crate::glyphs::Glyph::Check).green()
-            }
-            crate::session::BwrapAvailability::NotInstalled => {
-                crate::glyph(crate::glyphs::Glyph::Bullet).dimmed()
-            }
-            crate::session::BwrapAvailability::UsernsBlocked { .. } => {
-                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
-            }
-        };
-        println!("  {} {}", glyph, bwrap_status_line());
-        // STORY-665: when confinement isn't ready, point at the guided setup
-        // command instead of just naming the knob — the operator needs a path,
-        // not a hint. trace:STORY-665 | ai:claude
-        if avail == crate::session::BwrapAvailability::Ok {
-            println!(
-                "    {}",
-                "OS sandbox is opt-in (off by default); enable via [contained] os_wrap".dimmed()
-            );
-        } else {
-            println!(
-                "    {}",
-                "OS sandbox is opt-in (off by default); run `aida doctor --fix-sandbox` for the setup steps"
-                    .dimmed()
-            );
-        }
-        println!();
-    }
-
-    // trace:STORY-2642 | ai:codex — report readiness without blocking project setup.
-    crate::lane_host::report(root);
+    // TASK-865 / STORY-2642: host sandbox and lane readiness are optional on
+    // a first run, so init prints one summary line and leaves the per-check
+    // list to `aida doctor --lane-host` (bwrap is one of its checks).
+    // Informational only — never a prompt, never blocks init.
+    // trace:TASK-865 trace:STORY-2642 trace:TASK-3961 | ai:claude
+    crate::lane_host::report_summary(root);
 
     // TASK-860: report the forge CLI (`gh`/`glab`) availability so a new user
     // learns up front whether PR/review automation will work — instead of the
@@ -5349,7 +5314,10 @@ fn run_init(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> an
     // A projected (adopted) clone was never asked the Setup style question;
     // don't ask it here either. trace:TASK-b6b1278890774ef993d2ebc327862470-036 | ai:claude
     if !*no_roles && init_footprint == cli::InitFootprint::Full {
+        // TASK-3961: the role set installs quietly; `--verbose` reports it.
+        // trace:TASK-3961 | ai:claude
         match scaffold_starter_roles(&statusline_project_root()) {
+            Ok(_) if !*verbose => {}
             Ok((created, skipped)) => {
                 println!(
                     "  {} global roles installed: implementer, product, advisor, reviewer, integrator",
@@ -5405,7 +5373,8 @@ fn run_init(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> an
             );
         }
     }
-    if init_footprint == cli::InitFootprint::Full {
+    // trace:TASK-3961 | ai:claude — a setting the user never chose: verbose only.
+    if *verbose && init_footprint == cli::InitFootprint::Full {
         let setting = bypass_confirm::load(&statusline_project_root());
         println!(
             "  Agent bypass confirmation: {} ({})",
