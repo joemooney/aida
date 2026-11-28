@@ -9,12 +9,12 @@ description: |
 
   Raised by the implementer while working BUG-2770.
   Branch: bug-2770-gc-scope  ·  Commit: 820435a1f6  (PR-4645)
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T10:47:01.862391650Z
-modified_at: 2026-11-28T00:26:42.196066403Z
+modified_at: 2026-11-28T00:27:18.579866409Z
 req_type: Task
 tags:
 - from-implementer:BUG-2770
@@ -33,6 +33,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21f8c-9cb3-77e3-a76f-c0c5aeb71cc3
+  author: joe
+  timestamp: 2026-11-28T00:27:18.579863378Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 820435a1f67ddeb186c7d21b0615ceaefe079160
   branch: bug-2770-gc-scope
