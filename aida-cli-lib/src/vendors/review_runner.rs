@@ -11,11 +11,18 @@ pub(crate) struct ReviewVendor {
     pub program: &'static str,
     pub argv: &'static [&'static str],
     pub auth: &'static [&'static str],
+    /// Fixed environment variables always set on this vendor's child process
+    /// (wins over `parent_env`), used to inject deny-all tool/permission config.
+    // trace:STORY-3120 | ai:antigravity
+    pub fixed_env: &'static [(&'static str, &'static str)],
     /// Reasoning-effort levels this vendor accepts.
     // trace:STORY-3120 | ai:claude
     pub efforts: &'static [&'static str],
-    /// Codex takes effort as a `-c` config override; the rest take `--effort`.
+    /// Codex takes effort as a `-c` config override; the rest take `effort_flag`.
     pub effort_as_config: bool,
+    /// Optional CLI flag for reasoning effort (`"--effort"` for Claude/Agy, `"--thinking"` for Pi, `None` for OpenCode).
+    // trace:STORY-3120 | ai:antigravity
+    pub effort_flag: Option<&'static str>,
     /// The vendor's own print-mode time limit, set inside the runner deadline
     /// so the CLI ends its turn before the group kill.
     // trace:STORY-3202 | ai:claude
@@ -105,7 +112,11 @@ impl ReviewVendor {
             Some(e) if self.effort_as_config => {
                 extra.extend(["-c".to_owned(), format!("model_reasoning_effort={e}")])
             }
-            Some(e) => extra.extend(["--effort".to_owned(), e.to_owned()]),
+            Some(e) => {
+                if let Some(flag) = self.effort_flag {
+                    extra.extend([flag.to_owned(), e.to_owned()]);
+                }
+            }
             None => {}
         }
         let mut argv: Vec<String> = self.argv.iter().map(|a| (*a).to_owned()).collect();
@@ -146,8 +157,10 @@ const CLAUDE: ReviewVendor = ReviewVendor {
         "CLAUDE_CODE_OAUTH_TOKEN",
         "CLAUDE_CONFIG_DIR",
     ],
+    fixed_env: &[],
     efforts: &["low", "medium", "high", "xhigh", "max"],
     effort_as_config: false,
+    effort_flag: Some("--effort"),
     print_timeout: None,
     auth_failure: &[],
     confinement_verified: true,
@@ -169,8 +182,10 @@ const CODEX: ReviewVendor = ReviewVendor {
         "-",
     ],
     auth: &["OPENAI_API_KEY", "CODEX_HOME"],
+    fixed_env: &[],
     efforts: &["low", "medium", "high", "xhigh"],
     effort_as_config: true,
+    effort_flag: None,
     print_timeout: None,
     // A rejected or unrefreshable token: inside bubblewrap its auth.json is a
     // read-only bind, so a refresh that must rewrite it fails. trace:BUG-2783 | ai:claude
@@ -212,8 +227,10 @@ pub(crate) const AGY: ReviewVendor = ReviewVendor {
         "--print=",
     ],
     auth: &["GEMINI_API_KEY"],
+    fixed_env: &[],
     efforts: &["low", "medium", "high", "xhigh", "max"],
     effort_as_config: false,
+    effort_flag: Some("--effort"),
     print_timeout: Some("--print-timeout"),
     auth_failure: &[
         "authentication failed",
@@ -229,6 +246,87 @@ pub(crate) const AGY: ReviewVendor = ReviewVendor {
         dir_env: None,
         files: &["antigravity-oauth-token", "settings.json"],
     }),
+    post_allowed: false,
+};
+
+/// OpenCode (`opencode run`): non-interactive run mode reading the prompt from stdin,
+/// with `OPENCODE_CONFIG_CONTENT` disabling every tool and denying every permission
+/// rule (v1 `permission` map, v2 `permissions` array, and `tools` booleans).
+/// Tool confinement and read restriction are not verified live and it does not use
+/// the BUG-2783 bwrap wrapper, so `confinement_verified`, `no_read`, and `post_allowed`
+/// stay `false`.
+// trace:STORY-3120 | ai:antigravity
+pub(crate) const OPENCODE: ReviewVendor = ReviewVendor {
+    program: "opencode",
+    argv: &["run"],
+    auth: &[
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "GEMINI_API_KEY",
+        "OPENCODE_API_KEY",
+    ],
+    fixed_env: &[("OPENCODE_CONFIG_CONTENT", OPENCODE_DENY_ALL_CONFIG)],
+    efforts: &["low", "medium", "high", "xhigh"],
+    effort_as_config: false,
+    effort_flag: None,
+    print_timeout: None,
+    auth_failure: &["authentication failed", "unauthorized", "api key"],
+    confinement_verified: false,
+    no_read: false,
+    confined_auth: None,
+    post_allowed: false,
+};
+
+/// OpenCode runtime configuration override (`OPENCODE_CONFIG_CONTENT`): disables
+/// every built-in tool (`tools`) and denies every permission in both OpenCode v1
+/// (`permission`) and v2 (`permissions`) schemas so a hostile prompt cannot run
+/// shell commands, edit files, read local files, or fetch URLs.
+const OPENCODE_DENY_ALL_CONFIG: &str = concat!(
+    r#"{"tools":{"bash":false,"shell":false,"edit":false,"write":false,"patch":false,"#,
+    r#""read":false,"glob":false,"grep":false,"list":false,"webfetch":false,"#,
+    r#""todowrite":false,"todoread":false,"task":false,"mcp":false},"#,
+    r#""permission":{"*":"deny","bash":"deny","shell":"deny","edit":"deny","write":"deny","#,
+    r#""patch":"deny","read":"deny","glob":"deny","grep":"deny","list":"deny","#,
+    r#""webfetch":"deny","todowrite":"deny","todoread":"deny","task":"deny","mcp":"deny"},"#,
+    r#""permissions":[{"action":"*","resource":"*","effect":"deny"},"#,
+    r#"{"action":"shell","resource":"*","effect":"deny"},"#,
+    r#"{"action":"bash","resource":"*","effect":"deny"},"#,
+    r#"{"action":"edit","resource":"*","effect":"deny"},"#,
+    r#"{"action":"write","resource":"*","effect":"deny"},"#,
+    r#"{"action":"read","resource":"*","effect":"deny"},"#,
+    r#"{"action":"webfetch","resource":"*","effect":"deny"}]}"#
+);
+
+/// Pi coding agent (`pi --print --no-tools --no-session --no-extensions --no-skills --no-prompt-templates`):
+/// non-interactive print mode reading the prompt from stdin with all tools, extensions,
+/// skills, and prompt templates disabled, taking reasoning effort via `--thinking <LEVEL>`.
+/// `confinement_verified`, `no_read`, and `post_allowed` stay `false` unless run through the BUG-2783 bwrap wrapper.
+// trace:STORY-3120 | ai:antigravity
+pub(crate) const PI: ReviewVendor = ReviewVendor {
+    program: "pi",
+    argv: &[
+        "--print",
+        "--no-tools",
+        "--no-session",
+        "--no-extensions",
+        "--no-skills",
+        "--no-prompt-templates",
+    ],
+    auth: &[
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "GEMINI_API_KEY",
+        "PI_CODING_AGENT_DIR",
+    ],
+    fixed_env: &[],
+    efforts: &["low", "medium", "high", "xhigh"],
+    effort_as_config: false,
+    effort_flag: Some("--thinking"),
+    print_timeout: None,
+    auth_failure: &["authentication failed", "unauthorized", "api key"],
+    confinement_verified: false,
+    no_read: false,
+    confined_auth: None,
     post_allowed: false,
 };
 
@@ -255,7 +353,7 @@ pub(crate) const DEFAULT_REVIEW_VENDOR: &ReviewVendor = &CLAUDE;
 
 /// Every vendor with a hardened review contract.
 // trace:STORY-3120 | ai:claude
-pub(crate) const REVIEW_VENDORS: [&ReviewVendor; 3] = [&CLAUDE, &CODEX, &AGY];
+pub(crate) const REVIEW_VENDORS: [&ReviewVendor; 5] = [&CLAUDE, &CODEX, &AGY, &OPENCODE, &PI];
 
 /// The review contract for `raw`. Unknown names are refused, never defaulted;
 /// every launch vendor has a hardened review contract.
@@ -266,4 +364,19 @@ pub(crate) fn review_vendor(raw: &str) -> Result<&'static ReviewVendor> {
         LaunchVendor::Codex => Ok(&CODEX),
         LaunchVendor::Agy => Ok(&AGY),
     }
+}
+
+/// Look up a review vendor by CLI name (`claude`, `codex`, `agy`/`antigravity`,
+/// `opencode`, or `pi`).
+// trace:STORY-3120 | ai:antigravity
+pub(crate) fn review_vendor_ext(raw: &str) -> Result<&'static ReviewVendor> {
+    let trimmed = raw.trim();
+    if trimmed.eq_ignore_ascii_case("opencode") {
+        return Ok(&OPENCODE);
+    }
+    if trimmed.eq_ignore_ascii_case("pi") {
+        return Ok(&PI);
+    }
+    review_vendor(trimmed)
+        .map_err(|_| anyhow!("`{trimmed}` is not a vendor AIDA can launch for code review; use claude, codex, antigravity, opencode or pi"))
 }

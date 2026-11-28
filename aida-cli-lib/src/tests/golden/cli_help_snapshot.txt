@@ -22917,7 +22917,8 @@ Options:
           settings come from the merge base
 
       --agent <AGENT>
-          Agent for `--run-review`: `claude` or `codex` (or set AIDA_REVIEW_RUNNER_CMD)
+          Agent for `--run-review`: `claude`, `codex`, `agy`, `opencode` or `pi` (or set
+          AIDA_REVIEW_RUNNER_CMD)
 
       --effort <LEVEL>
           Reasoning effort for `--run-review`: low, medium, high, xhigh (claude: max)
@@ -22931,11 +22932,13 @@ Options:
           did not write the change
 
       --challenger-effort <LEVEL>
-          Reasoning effort for the `--adversarial` challenger
+          Reasoning effort for the `--adversarial` challenger. When omitted in single-vendor mode,
+          AIDA automatically steps up Challenger effort by one tier (low -> medium -> high -> xhigh)
 
       --challenger-agent <AGENT>
-          Challenger agent for `--adversarial`: `claude`, `codex` or `agy`. Overrides the automatic
-          pick, which commit `[AI:<tool>]` tags steer and which never chooses agy
+          Challenger agent for `--adversarial`: `claude`, `codex`, `agy`, `opencode` or `pi`.
+          Overrides the automatic pick, which commit `[AI:<tool>]` tags steer and which never
+          chooses an unverified vendor
 
       --sarif <PATH>
           Write a SARIF 2.1.0 report inside the repository
@@ -22946,6 +22949,20 @@ Options:
       --post-comment
           Post the Markdown report as a comment on the `--pr` change. Off unless given; agent text
           in the comment is code-fenced so it renders inert
+
+      --record-telemetry
+          Persist review telemetry (`.aida/review-telemetry/reviews.jsonl`) and a SARIF 2.1.0
+          archive
+
+      --ab-arm <ARM>
+          Tag the review with an A/B experiment arm (`single-pass`, `adversarial`, or `auto`)
+
+      --telemetry-report
+          Aggregate `.aida/review-telemetry/reviews.jsonl` and print the A/B telemetry comparison
+          report
+
+      --no-codegraph
+          Disable automatic CodeGraph AST blast-radius and cross-file caller/callee enrichment
 
       --json
           Emit machine-readable JSON output
@@ -56448,6 +56465,11 @@ Working on aida itself
     "about": "Deterministically classify diff inventory, match path-scoped review playbooks, bundle token-budgeted review batches, verify 100% file coverage ledgers, and anchor quoted code snippets to exact 1-based line numbers",
     "flags": [
       {
+        "name": "ab-arm",
+        "takes_value": true,
+        "help": "Tag the review with an A/B experiment arm (`single-pass`, `adversarial`, or `auto`)"
+      },
+      {
         "name": "adversarial",
         "takes_value": false,
         "help": "Have a second agent reproduce or refute each finding. Refuted findings are listed apart and marked suppressed in SARIF, but still count for `--fail-on`. It prefers a vendor that did not write the change"
@@ -56455,7 +56477,7 @@ Working on aida itself
       {
         "name": "agent",
         "takes_value": true,
-        "help": "Agent for `--run-review`: `claude` or `codex` (or set AIDA_REVIEW_RUNNER_CMD)"
+        "help": "Agent for `--run-review`: `claude`, `codex`, `agy`, `opencode` or `pi` (or set AIDA_REVIEW_RUNNER_CMD)"
       },
       {
         "name": "anchor-findings",
@@ -56470,12 +56492,12 @@ Working on aida itself
       {
         "name": "challenger-agent",
         "takes_value": true,
-        "help": "Challenger agent for `--adversarial`: `claude`, `codex` or `agy`. Overrides the automatic pick, which commit `[AI:<tool>]` tags steer and which never chooses agy"
+        "help": "Challenger agent for `--adversarial`: `claude`, `codex`, `agy`, `opencode` or `pi`. Overrides the automatic pick, which commit `[AI:<tool>]` tags steer and which never chooses an unverified vendor"
       },
       {
         "name": "challenger-effort",
         "takes_value": true,
-        "help": "Reasoning effort for the `--adversarial` challenger"
+        "help": "Reasoning effort for the `--adversarial` challenger. When omitted in single-vendor mode, AIDA automatically steps up Challenger effort by one tier (low -> medium -> high -> xhigh)"
       },
       {
         "name": "commit",
@@ -56523,6 +56545,11 @@ Working on aida itself
         "help": "Model for `--run-review`"
       },
       {
+        "name": "no-codegraph",
+        "takes_value": false,
+        "help": "Disable automatic CodeGraph AST blast-radius and cross-file caller/callee enrichment"
+      },
+      {
         "name": "path",
         "takes_value": true,
         "help": "Target file or directory path(s) to scope `--scan` (or filter diff entries). Repeatable (`--path aida-core/src --path aida-cli-lib/src`)"
@@ -56536,6 +56563,11 @@ Working on aida itself
         "name": "pr",
         "takes_value": true,
         "help": "Pull spec IDs and base/head refs from PR/MR number N"
+      },
+      {
+        "name": "record-telemetry",
+        "takes_value": false,
+        "help": "Persist review telemetry (`.aida/review-telemetry/reviews.jsonl`) and a SARIF 2.1.0 archive"
       },
       {
         "name": "run-review",
@@ -56556,6 +56588,11 @@ Working on aida itself
         "name": "specs",
         "takes_value": true,
         "help": "Comma-separated list of AIDA spec IDs whose `## Acceptance` criteria should be injected into the review preparation bundle"
+      },
+      {
+        "name": "telemetry-report",
+        "takes_value": false,
+        "help": "Aggregate `.aida/review-telemetry/reviews.jsonl` and print the A/B telemetry comparison report"
       },
       {
         "name": "to",
