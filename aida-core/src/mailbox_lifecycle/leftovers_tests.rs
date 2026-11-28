@@ -637,3 +637,60 @@ fn older_than_scopes_mailbox_leftovers() {
     assert_eq!(reaped, want);
     assert!(!marker.exists() && !tomb.exists());
 }
+
+/// An id temp under the anchor belongs to no checkout, so a scoped scan
+/// cannot judge its owner: it is held while younger than
+/// `ORPHAN_TEMP_AFTER` and reaped once older, while a checkout's own temp
+/// still waits on its owner and `min_age` still scopes both.
+// trace:TASK-3478 | ai:claude
+#[test]
+fn an_unattributed_anchor_temp_is_reaped_past_the_orphan_floor() {
+    use super::leftovers::ORPHAN_TEMP_AFTER;
+    let dir = repo();
+    let root = dir.path().to_path_buf();
+    let anchor = source(&root).anchor;
+    let orphan = anchor.join(format!("{ID_TEMP_PREFIX}orphan.tmp"));
+    std::fs::write(&orphan, b"{").unwrap();
+    let owned = root
+        .join(".aida")
+        .join(format!("{ID_TEMP_PREFIX}owned.tmp"));
+    std::fs::write(&owned, b"0").unwrap();
+    // The `aida agent gc` judge: unattributed is Unknown; this checkout is live.
+    let judge = |owner: &Owner| match owner {
+        Owner::Unattributed => OwnerLiveness::Unknown,
+        _ => OwnerLiveness::Live,
+    };
+    let scope = Scope {
+        min_age: None,
+        owner: &judge,
+    };
+    let young = scan_scoped_at(&root, true, later(), &scope);
+    assert!(young.reapable.is_empty(), "{young:?}");
+    assert!(young.held.contains(&HeldLeftover {
+        path: orphan.clone(),
+        owner: OwnerLiveness::Unknown,
+    }));
+    assert!(orphan.is_file() && owned.is_file());
+
+    let aged = SystemTime::now() + ORPHAN_TEMP_AFTER + Duration::from_secs(60);
+    let week = Duration::from_secs(7 * 86_400);
+    let scoped = Scope {
+        min_age: Some(week),
+        owner: &judge,
+    };
+    let floored = scan_scoped_at(&root, true, aged, &scoped);
+    assert!(floored.reapable.is_empty(), "min_age still scopes it");
+    assert!(orphan.is_file());
+
+    let reaped = scan_scoped_at(&root, true, aged, &scope);
+    assert_eq!(reaped.reapable, [orphan.clone()]);
+    assert!(!orphan.exists());
+    assert!(owned.is_file(), "a live checkout's temp stays");
+    assert_eq!(
+        reaped.held,
+        [HeldLeftover {
+            path: owned.clone(),
+            owner: OwnerLiveness::Live,
+        }]
+    );
+}
