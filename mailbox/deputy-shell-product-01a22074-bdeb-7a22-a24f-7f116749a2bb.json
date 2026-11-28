@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-product-01a22074-bdeb-7a22-a24f-7f116749a2bb",
+  "thread_id": "deputy-01a22074-bdeb-7a22-a24f-7f116749a2bb",
+  "from": "deputy-shell:product",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-15"
+  },
+  "timestamp": 1795840853787,
+  "body": "Script deputy \"product\" finished script job 01a22074-bdeb-7a22-a24f-7f116749a2bb: rc 1 (exit).\nScript: cd /home/joe/ai/aida && aida comment add TASK-3952 \"$(cat /tmp/claude-1000/-home-joe-ai-aida/01a20440-f576-7051-ae10-3ab1f3514777/scratchpad/d4791.txt)\"\nTranscript: /home/joe/.aida/deputy-shell/product/jobs/01a22074-bdeb-7a22-a24f-7f116749a2bb/transcript.log\nRead it with `aida deputy shell log 01a22074-bdeb-7a22-a24f-7f116749a2bb --name product`.\n`aida awaiting` lists it until you run `aida deputy shell ack 01a22074-bdeb-7a22-a24f-7f116749a2bb --name product`.\n",
+  "subject": "deputy script job 01a22074 FAILED: rc 1",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
