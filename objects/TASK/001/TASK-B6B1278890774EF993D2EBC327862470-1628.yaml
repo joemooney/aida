@@ -14,12 +14,32 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T04:51:06.569070472Z
-modified_at: 2026-11-28T05:05:14.978702331Z
+modified_at: 2026-11-28T05:14:32.253472425Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a22014-1672-7093-9f8f-09bbbefcbf09
   created_at: 2026-11-28T04:51:14.244099178Z
+comments:
+- id: 01a22093-93bd-77b1-8e10-a1ea1e88898c
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit):** `aida --help` / `aida -h` (no other args) route to the short tiered overview instead of the clap wall; `review prepare` joins the Getting started set. Tests in `help_grouping_tests.rs`: the set holds init/add/list/show/review prepare, and the root-help-flag predicate matches `--help`/`-h` only when bare. The full list stays at `aida help --all` (unchanged, pointed at from the overview footer).
+    - **AC2 (unit):** `review prepare` gets a plain one-line about and a long help that opens with three examples (PR, range, local branch); dev-only flags move under an `Advanced` heading; `--path` example made neutral. Test renders the clap long help and checks example order, heading placement and absence of AIDA source paths.
+    - **AC3 (golden):** regenerate `cli_help_snapshot.txt`; spec-id leak test extended to the review prepare help.
+
+    ### Expected files
+    - `aida-cli-lib/src/help.rs`, `aida-cli-lib/src/cli_entry.rs`, `aida-cli-lib/src/review_cmd_args.rs`, `aida-cli-lib/src/review_prepare.rs`, `aida-cli-lib/src/tests/help_grouping_tests.rs`, golden snapshot.
+
+    ### Ambiguities / conflicts as questions
+    - None.
+  created_at: 2026-11-28T05:14:32.253472425Z
+  modified_at: 2026-11-28T05:14:32.253472425Z
+  session_id: 01a2208aaf73
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a2207e-45f1-7260-9bf3-397ff3a53977
   author: joe
