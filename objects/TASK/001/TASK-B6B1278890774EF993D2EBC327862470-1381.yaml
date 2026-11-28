@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: (F4) throttling restores the terminal with a bounded graceful stop before SIGKILL of the interactive gh child (ci_watch.rs:62); (F5) intentionally throttled time does not count toward CI inactivity (ci_probe.rs:658). Tests.
   - AC2: (F6) a throttle is reported as a distinct throttle state, not a generic discovery error (advisor_loop_service.rs:1183, review_watch.rs:2988); (F7) the review-watch fixture exercises the real throttled discovery path end to end (task_1993_review_watch_tests.rs:5709). Tests.
-status: NeedsAttention
+status: Approved
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T21:04:03.035149773Z
-modified_at: 2026-11-28T00:42:54.997190468Z
+modified_at: 2026-11-28T00:42:57.153406052Z
 req_type: Task
 tags:
 - forge
@@ -51,6 +51,11 @@ comments:
   content: 'RETURNED to Approved (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Parked on BUG-2735 #4464 (5bea72c), now on origin/main.'
   created_at: 2026-11-28T00:42:54.997190468Z
   modified_at: 2026-11-28T00:42:54.997190468Z
+- id: 01a21f9a-ef01-7ea3-8a12-16e61e618cd3
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: Both the seat HEAD 71bb63b62b and advertised integration e703bc469a lack the BUG-2735 interactive throttle and review-watch fixture. Restoring the prerequisite 1bfff1d02c would change protected ci_gate.rs and pr_train.rs outside the brief. Restore the prerequisite on integration and relaunch this native seat there.. No triage reason was given.'
+  created_at: 2026-11-28T00:42:57.153401886Z
+  modified_at: 2026-11-28T00:42:57.153401886Z
 history:
 - id: 01a20f5f-9bfc-71d2-8ab9-9a49e196522f
   author: joe
@@ -85,6 +90,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a21f9a-ef01-7ea3-8a12-16d5f722889d
+  author: joe
+  timestamp: 2026-11-28T00:42:57.153392303Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 95eaccf328557402d176c0b41983afe1b677965f
@@ -93,8 +105,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 8a4c9ba4ba5
   vendor: claude
-attention_reason:
-  category: blocked-dependency
-  detail: Both the seat HEAD 71bb63b62b and advertised integration e703bc469a lack the BUG-2735 interactive throttle and review-watch fixture. Restoring the prerequisite 1bfff1d02c would change protected ci_gate.rs and pr_train.rs outside the brief. Restore the prerequisite on integration and relaunch this native seat there.
-  raised_by: implementer
-  raised_at: 2026-11-25T00:15:34.888695791Z
