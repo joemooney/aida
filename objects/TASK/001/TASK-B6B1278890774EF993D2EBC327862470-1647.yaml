@@ -1,0 +1,31 @@
+id: 01a22154-ce18-7623-8fcc-5aef38e29378
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1647
+title: 'Review follow-up: PR #4792 body is stale: its Follow-up section says the challenger pass is not checked and '
+description: |-
+  From TASK-3955
+  Reviewed sha: 599da2b8eaaac5c918d6637858036272a16c7624
+
+  PR #4792 body is stale: its Follow-up section says the challenger pass is not checked and still waits out the deadline, but commit aa819cccf5 added the challenger sign-in check and test; update the PR description so the landing record matches the code.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-28T08:45:35.640825244Z
+modified_at: 2026-11-28T08:45:35.640825244Z
+req_type: Task
+tags:
+- carried-from:TASK-3955
+- finding-hash:ea471b68
+- from-review:TASK-3955
+relationships:
+- rel_type: References
+  target_id: 01a22034-b4f5-7082-b5b6-0805f7b1c1f7
+  created_at: 2026-11-28T08:45:55.541126393Z
+filed_at:
+  code_sha: 599da2b8eaaac5c918d6637858036272a16c7624
+  branch: pr-4792
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0039f0fc146
+  vendor: claude
+  session: 01a22152d531
