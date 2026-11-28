@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 7ba7fc3512b200ca1bfed3d6a56f31b75e78d42e
 
   aida-cli-lib/src/lane_salvage.rs guarded_push: the veto message always says "red fast-gate receipt <path> for <branch> reads fail", including when failed_receipt returned Some because the receipt could not be read. The salvage note and PR comment then misstate why the PR branch was not moved. Distinguish an unreadable receipt from one that reads fail, either in the message or by having failed_receipt return the reason with the path.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-27T20:50:07.190260829Z
-modified_at: 2026-11-28T00:40:55.062018028Z
+modified_at: 2026-11-28T00:40:58.146421825Z
 req_type: Task
 tags:
 - carried-from:TASK-3928
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-27T23:19:10.736217649Z
   changes: []
+- id: 01a21f99-1e22-7882-9e8e-c446dcd9c0c5
+  author: joe
+  timestamp: 2026-11-28T00:40:58.146419022Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 7ba7fc3512b200ca1bfed3d6a56f31b75e78d42e
   branch: pr-4756
