@@ -368,7 +368,8 @@ fn regenerate_tree(
     let generators = pin_generators(repo, base, selected, dir.path(), &wt)?;
     let (mounts, path) = toolchain();
     let names = serde_json::to_string(selected).map_err(|e| e.to_string())?;
-    let mut cmd = std::process::Command::new(&launch.program);
+    let bwrap = &launch.program;
+    let mut cmd = std::process::Command::new(bwrap);
     cmd.args(sandbox_args(&wt, &mounts, &path, &generators, tip, &names))
         .stdin(std::process::Stdio::null());
     let out = match crate::command_output_with_timeout_capped(cmd, launch.timeout, OUTPUT_CAP) {
