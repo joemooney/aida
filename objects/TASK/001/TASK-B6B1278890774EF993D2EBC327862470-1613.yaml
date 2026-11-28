@@ -1,0 +1,24 @@
+id: 01a22034-b4f5-7082-b5b6-0805f7b1c1f7
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1613
+agreed_id: TASK-3955
+title: 'First-run: a signed-out Codex fails fast with the sign-in hint instead of hanging (F14)'
+description: |-
+  ## Acceptance
+  - AC1: when codex is not signed in, aida review prepare --run-review (and lanes using codex) detect the auth prompt / auth error within a bounded time and fail with 'codex is not signed in: run codex login' (the same class as BUG-2775's vendor preflight).
+  - AC2: never hangs silently; a test with a fake codex that waits on an auth prompt asserts the bounded failure and message.
+
+  Source: docs/plans/2026-11-27-fresh-user-walkthrough.md (on branch task-3951-fresh-user-walkthrough / PR #4782), section F14. Advisor aida-d3 2026-11-27 20:30 priority order; filed by product-15 for laning now (one spec per lane).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T03:30:54.837993440Z
+modified_at: 2026-11-28T03:30:54.837993440Z
+req_type: Task
+filed_at:
+  code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c6
+  vendor: claude
