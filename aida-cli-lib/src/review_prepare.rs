@@ -3592,7 +3592,7 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             "summary and findings first"
         );
         assert!(!body.contains("file_01499.rs"), "inventory trimmed first");
-        let note = "findings omitted; full report at ` report.md `";
+        let note = "findings omitted; full report at `report.md`";
         assert!(
             body.trim_end().ends_with(note),
             "{}",
