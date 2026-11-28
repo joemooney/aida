@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: aeb25528590f62531a8b19593e3fc98c019b71fe
 
   Stale claims approximate the 'idle driver >= N days' in AC3 with the spec's modified_at (backlog_report.rs stale_claims). Any comment or edit, including automated lane-recovery or auto-bump comments, resets the clock, and a spec whose driver idles while bots touch it never counts as stale. Consider using the last driver/session activity (lease or session history) instead.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T09:31:31.047949077Z
-modified_at: 2026-11-28T00:27:31.396609637Z
+modified_at: 2026-11-28T00:27:42.467125348Z
 req_type: Task
 tags:
 - carried-from:STORY-3143
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21f8c-fa03-77a0-899c-6f3170d35ec0
+  author: joe
+  timestamp: 2026-11-28T00:27:42.467123337Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: aeb25528590f62531a8b19593e3fc98c019b71fe
   branch: pr-4641
