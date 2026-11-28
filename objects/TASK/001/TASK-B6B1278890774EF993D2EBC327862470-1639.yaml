@@ -1,0 +1,31 @@
+id: 01a220af-2509-7fe3-8708-a51323b10f45
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1639
+title: 'Review follow-up: A signed-out challenger CLI still surfaces through runner_failure''s ''<vendor> challenger p'
+description: |-
+  From TASK-3958
+  Reviewed sha: 657cb6ce4fd5ba03ba98bf30ccc299d54d46b85e
+
+  A signed-out challenger CLI still surfaces through runner_failure's '<vendor> challenger pass, batch N: ...' prefix (review_prepare.rs runner_failure only unwraps AuthRequired for pass == "finder"), so that path keeps 'pass'/'batch' wording a new user would not know. Consider unwrapping AuthRequired for the challenger too (keeping the --challenger-agent hint).
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-28T05:44:38.921043072Z
+modified_at: 2026-11-28T05:44:38.921043072Z
+req_type: Task
+tags:
+- carried-from:TASK-3958
+- finding-hash:570523a5
+- from-review:TASK-3958
+relationships:
+- rel_type: References
+  target_id: 01a2207d-d156-7d60-81ac-71693e9f5cd0
+  created_at: 2026-11-28T05:44:56.990764823Z
+filed_at:
+  code_sha: 657cb6ce4fd5ba03ba98bf30ccc299d54d46b85e
+  branch: pr-4796
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4b06a37b464
+  vendor: claude
+  session: 01a220ad0411
