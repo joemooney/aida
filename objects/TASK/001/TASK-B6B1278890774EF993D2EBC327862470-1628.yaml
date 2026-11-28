@@ -79,6 +79,10 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a2209f-0ae9-7342-9c94-b82a014d15e3
+  author: joe
+  timestamp: 2026-11-28T05:27:03.657297407Z
+  changes: []
 - id: 01a220a1-994f-74c3-8af4-c641c9c64d95
   author: dirtlab
   timestamp: 2026-11-28T05:29:51.183355940Z
@@ -97,6 +101,7 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+execution_mode: drain
 filed_at:
   code_sha: 4b06a37b464472f759637aecf25042f98a4e33c2
   branch: main
