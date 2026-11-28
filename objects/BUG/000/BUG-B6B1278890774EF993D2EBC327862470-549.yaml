@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T10:26:37.477984708Z
-modified_at: 2026-11-28T11:38:04.219900062Z
+modified_at: 2026-11-28T11:45:09.063743604Z
 req_type: Bug
 tags:
 - ci
@@ -84,6 +84,12 @@ comments:
   modified_at: 2026-11-28T11:36:08.124400426Z
   session_id: 01a221df696f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a221f9-31c7-7bf3-ba58-5c86b36b55fc
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-2788-bwrap-step-timeout` at head `c69eb5939c5b2b4ac8074fd3b609b915466f66c5`.'
+  created_at: 2026-11-28T11:45:09.063740295Z
+  modified_at: 2026-11-28T11:45:09.063740295Z
+  session_id: 01a221df696f
 history:
 - id: 01a221b3-6753-7fb2-add9-43dfca3c1423
   author: joe
