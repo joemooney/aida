@@ -1,0 +1,43 @@
+id: 01a22014-1672-7093-9f8f-09bbbefcbf09
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-423
+title: 'Fresh-user onboarding: fix the friction a new user hits from getting started through a first review prepare run'
+description: |
+  Found by the TASK-3951 fresh-user walkthrough (clean HOME, new git repo, docs/getting-started.md followed literally, aida 0.16.0 sha f0ad200d8c). Full transcript, output excerpts and expected behaviour per item: docs/plans/2026-11-27-fresh-user-walkthrough.md (F1-F15). One criterion per friction point; slice as needed.
+
+  ## Acceptance
+  - AC1 (F1): docs/getting-started.md has a "first spec" step (aida add / list / show) and a "review a change" step (`aida review prepare --run-review --from main`), naming which agent CLI must be installed and signed in.
+  - AC2 (F2): the documented install pipeline uses `curl -fsSL` so a failed download fails loudly, and the page names an offline path (release tarball plus install.sh) for hosts without GitHub access.
+  - AC3 (F3): `aida --help` leads with the short Getting-started set (or a pointer to it at the top) instead of a 491-line list with `init` at line 325.
+  - AC4 (F4): a successful `aida init` in a plain project prints no FAIL lines for optional lane-host readiness (containment, bubblewrap/sysctl, vendor auth, sccache build cache); at most one line pointing at `aida doctor`. No debug-formatted enums (`UsernsBlocked { hint: ... }`) in user output.
+  - AC5 (F5): `aida init` states what it writes and commits, does not scaffold agents that are not detected, names any skipped file, and asks before, or clearly reports, the 247-file "chore: scaffold AIDA" commit on the user's current branch.
+  - AC6 (F6): in a fresh local-only project the first `aida add` returns the short ID init's example promises (TASK-1), or init's example matches what add returns; no unexplained "node-local ID", "upstream" or "(agreed id pending)" in first-run output, and suggested commands use the same ID casing as the "Added:" line.
+  - AC7 (F7): init's first-run guide drops the stray `aida role enter advisor` line and the role/bypass lines unless the user opts into roles.
+  - AC8 (F8): in permissive mode the default commit-msg hook does not print a red "✗ Commit message validation failed" for an ordinary commit, and its example uses this project's ID style rather than FR-0042; getting started mentions the hook and `--no-hooks`.
+  - AC9 (F9): `aida review prepare --help` opens with a plain one-line description, includes 2-3 usage examples, uses a neutral `--path` example (not aida-core/src), and explains `--run-review` without "merge base" jargon.
+  - AC10 (F10): `aida review prepare --run-review` with uncommitted changes either reviews the working tree or the error tells the user to commit and run `--from main`.
+  - AC11 (F11): an empty review range with a dirty working tree warns and does not report `Passed: true (100% of 0 reviewable files)`.
+  - AC12 (F12): a missing agent CLI is detected before any review work, with plain text naming the install or `--agent` fix; no "finder pass", "review batch" or "[agents] vendor" wording.
+  - AC13 (F13): a signed-out agent CLI surfaces the vendor's own message (Claude prints "Not logged in · Please run /login" on stdout) and the sign-in fix, instead of "review runner failed (exit status: 1); stderr: (empty)".
+  - AC14 (F14): `--agent codex` (signed out) prints a start/progress line, checks sign-in before reviewing, and fails within a bounded time with a message, instead of 55+ s of silence.
+  - AC15 (F15): the prepare Markdown report uses consistent unpadded code spans, and a linked spec with no acceptance criteria produces a visible note instead of an empty text block.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T02:55:17.106712440Z
+modified_at: 2026-11-28T02:55:17.106712440Z
+req_type: Story
+tags:
+- from-implementer:TASK-3951
+- onboarding
+- review-prepare
+- ux
+filed_at:
+  code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
+  branch: task-3951-fresh-user-walkthrough
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c
+  vendor: claude
+  session: 01a2200f0895
+  harness_version: 2.1.319 (Claude Code)
