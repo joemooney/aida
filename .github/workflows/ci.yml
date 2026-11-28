@@ -1334,6 +1334,14 @@ jobs:
           python3 -m unittest tests/test_ci_structural_guards.py
           cargo test -p aida-ci-guards --lib
 
+      # The ratchet set's test lists, checked from source with no build, so
+      # check-ci-fast catches an unlisted ratchet test before push.
+      # trace:TASK-3937 | ai:claude
+      - name: Ratchet-set manifest source check
+        if: matrix.shard == 'gates'
+        timeout-minutes: 2
+        run: python3 scripts/check-ratchets.py --only-set
+
       # trace:TASK-3785 | ai:codex
       - name: Gate downward dependency ratchet
         if: matrix.shard == 'gates'

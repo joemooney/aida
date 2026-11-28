@@ -47,6 +47,7 @@
 [tiers]
 # trace:TASK-3791 | ai:codex
 "Rust structural ratchets" = "fast"
+"Ratchet-set manifest source check" = "fast" # trace:TASK-3937 | ai:claude
 # Application Cargo checks belong to the compile/full path.
 # trace:STORY-2735 | ai:codex
 "CI tier policy fixtures" = "fast"
