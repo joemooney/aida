@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T21:56:31.367154426Z
-modified_at: 2026-11-28T01:03:11.323999685Z
+modified_at: 2026-11-28T01:03:21.943068138Z
 req_type: Task
 tags:
 - dell1
@@ -28,6 +28,10 @@ relationships:
   target_id: 01a2164a-c7c6-7312-ade3-0e8f013521be
   created_at: 2026-11-26T05:19:01.467400880Z
   created_by: dirtlab
+- rel_type: Supersedes
+  target_id: 01a21642-abce-73c1-be4c-56296c3fe427
+  created_at: 2026-11-28T01:03:21.943001731Z
+  created_by: joe
 comments:
 - id: 01a214b7-02b8-7840-a6dc-950383dfcf5c
   author: joe
@@ -119,6 +123,10 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a21fad-a65a-70b3-9250-1ed3c91564b9
+  author: joe
+  timestamp: 2026-11-28T01:03:23.738693501Z
+  changes: []
 processing_record:
 - id: 01a216b4-5212-7cb3-bb19-f866be738321
   timestamp: 2026-11-26T07:14:05.970760274Z
