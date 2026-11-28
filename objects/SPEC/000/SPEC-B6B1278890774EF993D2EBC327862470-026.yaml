@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T08:49:25.240326961Z
-modified_at: 2026-11-19T03:55:02.368651894Z
+modified_at: 2026-11-28T00:42:38.336447410Z
 req_type: Task
 tags:
 - from-implementer:BUG-2531
@@ -69,6 +69,11 @@ comments:
   modified_at: 2026-11-19T03:55:02.368651894Z
   session_id: 01a1ef55-3ba5-7da3-8ef8-d8ebc6eb4186
   harness_version: 2.1.327 (Claude Code)
+- id: 01a21f9a-a580-7471-b13e-0d9ab6581f24
+  author: joe
+  content: 'RETURNED to Approved (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Blocker BUG-2531 completed; WIP branch task-3098-ledger-retention 610989dd0ec parked for S1c rework.'
+  created_at: 2026-11-28T00:42:38.336447410Z
+  modified_at: 2026-11-28T00:42:38.336447410Z
 history:
 - id: 01a1cef8-4538-71c2-a07d-81406a7925d4
   author: joe
