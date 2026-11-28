@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-3202",
+  "publishes": [
+    {
+      "at": "2026-11-28T00:50:28.338218121Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-27T03:50:13.321265187Z",
+      "spec": "STORY-3202",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4716,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "8f859ca83b5c46a23968295e90cec9f2eeba2928"
+      }
+    },
+    {
+      "ts": "2026-11-27T03:50:54.760153446Z",
+      "spec": "STORY-3202",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "REQUEST CHANGES at 8f859ca83b (14 behind integration; no finding depends on base changes. The base's runner commits are BUG-2775 and BUG-2779, not confinement). The head is unchanged since the integration pre-check MUST-1 and does not implement the binding advisor ruling: (a) no --sandbox in AGY argv; (c) agy is on the automatic challenger pick although the live probe shows plan+sandbox still allows reads anywhere; (b) the read-confinement residual is not recorded. AC status. AC1 sketch: not-applicable, because the advisor narrowed it to STORY-2460. AC2 lane canary: not-applicable, same reason. AC3 doctor --lane-host non-interactive agy auth probe naming the keyring-only fix: verified by story3202_agy_auth_probe_classifies_without_hanging (KeyringOnly/Rejected/Ready/Timeout/Failed plus fix text); the env -u DBUS fix itself is not verified live. AC4 agy as review runner via S3a spawn: the spawn contract is verified by s3a_runner_spawn_contract, story3202_agy_effort_mapping_and_print_timeout, story3202_agy_auth_failure_is_a_typed_cause and story3202_challenger_picks_agy_when_claude_finds, but it is unmet on the ruled confinement terms (findings 1-3). What passes: env allowlist (GEMINI_API_KEY only), empty cwd, stdin prompt via --print=, print_timeout never 0, AuthRequired only on a failed exit and only from stderr, the [AI:antigravity] alias, effort allowlist. CI: fast gates pass, fast compile pending at review time. Two p3 follow-ups are deferred.",
+        "recovery_hint": "address the review findings, move STORY-3202 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-27T05:16:31.622360001Z",
+      "spec": "STORY-3202",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4716,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "4c941fb51e4aa9816954d7bfe636d7187b84506a"
+      }
+    },
+    {
+      "ts": "2026-11-27T05:16:36.660414572Z",
+      "spec": "STORY-3202",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "STORY-3202 review at 4c941fb51e4a (base: integration, 5 commits behind; the finding is in run_review_agent, which the newer integration commits do not touch). Most of AC-A, AC-B and AC-C passes. The agy vendor goes through the hardened RunnerCall spawn: empty cwd, env allowlist with only GEMINI_API_KEY added, --print= reading stdin, --sandbox, --mode=plan, deny-all --settings, and --print-timeout set inside the deadline. A failed run with agy's sign-in stderr becomes a typed AuthRequired. The `agy models` lane-host probe returns typed Ready, KeyringOnly, Rejected, Timeout or Failed, is required only when agy is an enabled lane vendor, and is covered by fake-agy tests. The automatic challenger pick filters out agy (confinement_verified=false), and --post-comment refuses agy as finder or challenger before any runner starts. One blocking hole: confinement_verified says an unverified vendor runs only when named explicitly, but the finder is still chosen from `[agents] vendor`, which is read from the reviewed checkout. A PR under review can therefore switch the finder to agy. CI was pending at review time and is not the reason for this verdict.",
+        "recovery_hint": "address the review findings, move STORY-3202 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-27T05:35:30.020406404Z",
+      "spec": "STORY-3202",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4716,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "f5bc908438bae66ac8e8896cb04032db3bb9950c"
+      }
+    },
+    {
+      "ts": "2026-11-27T05:36:03.292241880Z",
+      "spec": "STORY-3202",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Advisor: r2 only fixed the golden snapshot; r3 must carry the 22:19 ruling.",
+        "recovery_hint": "address the review findings, move STORY-3202 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-27T08:01:59.314889858Z",
+      "spec": "STORY-3202",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4716,
+        "verdict": "APPROVED",
+        "reviewed_sha": "1783608c2a472560286c5a4445f3bf009084e080"
+      }
+    },
+    {
+      "ts": "2026-11-27T08:42:25.167768088Z",
+      "spec": "STORY-3202",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4736,
+        "verdict": "APPROVED",
+        "reviewed_sha": "e82f91c3ca988e163ee867fafd0651bab5ce57ee"
+      }
+    },
+    {
+      "ts": "2026-11-27T08:51:54.058492643Z",
+      "spec": "STORY-3202",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4736,
+        "verdict": "APPROVED",
+        "reviewed_sha": "e82f91c3ca988e163ee867fafd0651bab5ce57ee"
+      }
+    },
+    {
+      "ts": "2026-11-27T10:03:50.591070809Z",
+      "spec": "STORY-3202",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4736
+      }
+    },
+    {
+      "ts": "2026-11-27T21:45:49.937461538Z",
+      "spec": "STORY-3202",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4741,
+        "verdict": "APPROVED",
+        "reviewed_sha": "f3cb279191b4f509922736295eec16b033e5bf4c"
+      }
+    },
+    {
+      "ts": "2026-11-28T00:46:25.234316341Z",
+      "spec": "STORY-3202",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4741
+      }
+    },
+    {
+      "ts": "2026-11-28T00:50:28.085265742Z",
+      "spec": "STORY-3202",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "8eaf402cf537b81e1c23284c2ff379d7fafe396f",
+        "pr": 4741,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
