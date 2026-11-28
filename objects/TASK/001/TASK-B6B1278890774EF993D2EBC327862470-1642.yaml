@@ -9,13 +9,21 @@ description: |-
   - AC1: the Python contract tests that create temp AIDA projects either set the env that disables the deferred cache refresh, or stop/wait for the worker before removing the project (one shared fixture helper).
   - AC2: a test-only repro: a project whose cache worker is mid-write is torn down cleanly (no ENOTEMPTY), run in a loop.
   - AC3: test-only; no product behaviour change.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T06:28:56.284634899Z
-modified_at: 2026-11-28T06:28:56.284634899Z
+modified_at: 2026-11-28T06:33:43.239538554Z
 req_type: Task
+history:
+- id: 01a220dc-1247-73d3-8df8-5bfbbcb2c451
+  author: aida-session-start
+  timestamp: 2026-11-28T06:33:43.239537684Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 4b06a37b464472f759637aecf25042f98a4e33c2
   branch: main
