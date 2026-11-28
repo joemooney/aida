@@ -348,3 +348,44 @@ fn write_keeps_the_users_key_order_and_replaces_the_file_atomically() {
     let names: Vec<_> = std::fs::read_dir(root.join(".claude")).unwrap().collect();
     assert_eq!(names.len(), 1, "no staging file left behind");
 }
+
+#[cfg(unix)]
+#[test]
+fn write_aborts_on_an_unreadable_settings_file_and_leaves_it_untouched() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = seeded_repo();
+    let path = dir.path().join(".claude/settings.json");
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).unwrap();
+    // Root reads a 0000 file anyway, so there is no read error to provoke.
+    if std::fs::read(&path).is_err() {
+        let err = run_report_allowlists(dir.path(), Some("claude"), false, true).unwrap_err();
+        assert!(
+            format!("{err:#}").contains("nothing was written"),
+            "{err:#}"
+        );
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o000, "file not replaced");
+    }
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    assert_eq!(read(dir.path(), ".claude/settings.json"), USER_SETTINGS);
+}
+
+#[cfg(unix)]
+#[test]
+fn write_keeps_the_settings_mode_and_creates_a_new_file_0600() {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    let dir = seeded_repo();
+    let path = dir.path().join(".claude/settings.json");
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    let uid = std::fs::metadata(&path).unwrap().uid();
+    run_report_allowlists(dir.path(), Some("claude"), false, true).unwrap();
+    let meta = std::fs::metadata(&path).unwrap();
+    assert!(read(dir.path(), ".claude/settings.json").contains("api.github.com"));
+    assert_eq!(meta.mode() & 0o7777, 0o600, "0600 kept, not widened");
+    assert_eq!(meta.uid(), uid, "owner kept");
+
+    std::fs::remove_file(&path).unwrap();
+    run_report_allowlists(dir.path(), Some("claude"), false, true).unwrap();
+    let mode = std::fs::metadata(&path).unwrap().mode();
+    assert_eq!(mode & 0o7777, 0o600, "new settings file is owner-only");
+}

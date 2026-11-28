@@ -383,6 +383,44 @@ impl Serialize for Ordered {
     }
 }
 
+/// Atomically replace `path` with `body`, keeping the existing file's
+/// permission bits and owner; a new file is created 0600. A file owned by
+/// someone else is refused unless running as root (who can hand it back).
+/// trace:STORY-2838 | ai:claude
+fn write_settings_keeping_mode(path: &Path, body: String) -> Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt as _;
+        let old = match std::fs::metadata(path) {
+            Ok(m) => Some(m),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(e).with_context(|| format!("failed to read {}", path.display())),
+        };
+        // SAFETY: geteuid has no preconditions.
+        let me = unsafe { libc::geteuid() };
+        if let Some(m) = old.as_ref().filter(|m| m.uid() != me && me != 0) {
+            anyhow::bail!(
+                "{} belongs to another user (uid {}); edit it by hand (nothing was written)",
+                path.display(),
+                m.uid()
+            );
+        }
+        let mode = old.as_ref().map_or(0o600, |m| m.mode() & 0o7777);
+        aida_core::write_atomic_mode(path, body, mode)
+            .with_context(|| format!("failed to write {}", path.display()))?;
+        if let Some(m) = old {
+            std::os::unix::fs::chown(path, Some(m.uid()), Some(m.gid()))
+                .with_context(|| format!("failed to restore the owner of {}", path.display()))?;
+        }
+        Ok(())
+    }
+    #[cfg(not(unix))]
+    {
+        aida_core::write_atomic(path, body)
+            .with_context(|| format!("failed to write {}", path.display()))
+    }
+}
+
 /// Apply `edits`, keeping every other key, entry and comment. Checked before
 /// anything is written: a symlinked file (a link to a shared master) is
 /// refused rather than written through, and a missing project config means
@@ -426,9 +464,17 @@ pub(crate) fn apply_allowlist_writes(root: &Path, edits: &[PlannedEdit]) -> Resu
         let (tables, key) = e.key.rsplit_once('.').context("setting key has no table")?;
         let tables: Vec<&str> = tables.split('.').collect();
         if e.file.ends_with(".json") {
+            // Only a missing file starts empty: any other read error (an
+            // unreadable file) aborts, so the user's settings are never
+            // replaced by a file holding just our keys. trace:STORY-2838 | ai:claude
             let mut doc: Ordered = match std::fs::read_to_string(&path) {
                 Ok(body) => serde_json::from_str(&body)?,
-                Err(_) => Ordered::Obj(Vec::new()),
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ordered::Obj(Vec::new()),
+                Err(err) => {
+                    return Err(err).with_context(|| {
+                        format!("failed to read {} (nothing was written)", path.display())
+                    })
+                }
             };
             let mut node = &mut doc;
             for t in &tables {
@@ -444,9 +490,10 @@ pub(crate) fn apply_allowlist_writes(root: &Path, edits: &[PlannedEdit]) -> Resu
                 std::fs::create_dir_all(parent)?;
             }
             // Staged beside the file and renamed over it, so a reader never
-            // sees a half-written settings file. trace:STORY-2838 | ai:claude
-            aida_core::write_atomic(&path, serde_json::to_string_pretty(&doc)? + "\n")
-                .with_context(|| format!("failed to write {}", path.display()))?;
+            // sees a half-written settings file. The replacement keeps the
+            // file's mode and owner (it can hold keys); a new file is 0600.
+            // trace:STORY-2838 | ai:claude
+            write_settings_keeping_mode(&path, serde_json::to_string_pretty(&doc)? + "\n")?;
         } else if e.scalar {
             crate::config_edit::set_nested(&path, &tables, key, e.add[0].as_str().into())?;
         } else {
