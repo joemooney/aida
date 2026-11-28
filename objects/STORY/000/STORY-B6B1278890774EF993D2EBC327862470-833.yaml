@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T21:10:54.633999802Z
-modified_at: 2026-11-28T01:08:14.447906343Z
+modified_at: 2026-11-28T01:08:50.765756647Z
 req_type: Story
 tags:
 - planning
@@ -244,6 +244,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3486): backlog_report.rs driver_activity/stale_claims: lane logs are named <branch>-<session>.jsonl (standalone_implementer.rs:1621, queue_cmd/work.rs:7683), and a lane log only counts toward a spec when the branch name contains the spec ID. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T01:08:01.632801984Z
   modified_at: 2026-11-28T01:08:01.632801984Z
+- id: 01a21fb2-a3cd-75d2-8345-9785de762518
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3490): gather_signals IO is still not unit-tested: ledger to Verdict mapping, the lease/open-PR held-set fail-closed path (s.held = None), the git-log landing collection and landing_opened_since parsing. The pure helpers are covered. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:08:50.765756647Z
+  modified_at: 2026-11-28T01:08:50.765756647Z
 history:
 - id: 01a21493-c27a-7021-a48c-0648fcec1383
   author: joe
