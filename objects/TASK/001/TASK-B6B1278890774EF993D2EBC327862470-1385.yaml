@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T01:24:58.703993536Z
-modified_at: 2026-11-28T03:54:06.573367980Z
+modified_at: 2026-11-28T03:54:11.785426484Z
 req_type: Task
 tags:
 - leases
@@ -99,6 +99,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: TASK-3891 adds an unattested sweep, `aida doctor heal repair-reservations` with no --id/--attest, behind RepairGuard::release_dead_reservations. The core logic is sound and fails closed. OPEN, unknown or unreachable forge state, a live or unverified lease, an unreadable tree and a failed salvage all keep the reservation. Forge and salvage run unlocked and are re-proven under the journal lock, and ReleasedMerge is recorded, so require_validated_merges still fences the published repair merge. AC1: behavior verified by task_3891_releases_closed_and_merged_dead_lanes_after_salvage, but the salvage destination is <main>/.aida/salvage/<tree>/, not the ~/salvage the AC names (implementer-flagged deviation; unmet as worded). AC2: verified by the same test (printed line and journal ReservationRelease reason carry id, PR state, salvage path or ''nothing to salvage''). AC3: verified at unit level by task_3891_open_unknown_or_live_keeps_attested_path. Blocking: this is a new authority path that releases without attestation, and nothing tests its operator gate or the production forge-state mapping (ADR-76 strict tier). CI pending at review time.. No triage reason was given.'
   created_at: 2026-11-28T03:54:06.573365977Z
   modified_at: 2026-11-28T03:54:06.573365977Z
+- id: 01a2204a-04e8-7273-9158-3950fbdb4a31
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3891):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 595589fc5675
+    Recorded: 2026-11-28T03:51:38.196627523+00:00
+    Findings:
+    1. Untested authority gate on the new unattested release path. aida-cli-lib/src/doctor_cmd.rs:385 calls operator_only() before release_dead_reservations, but no test drives the bare `aida doctor heal repair-reservations` sweep through the CLI. Deleting that operator_only()? line, or the --yes/--json refusals for the bare form, passes every test. The existing CLI gate test (aida-cli/tests/support/repair_attestation.py test_real_terminal_gates_and_concurrent_change) runs only the --id/--attest branch, which calls operator_only() separately. Fix: extend that test, or add a sibling, to run the bare sweep with AIDA_AGENT_NAME, AIDA_AUTO_COMPLETE, AIDA_DEPUTY_JOB, no tty and --json against a journal holding a CLOSED-PR-shaped entry (or a forge stub). Assert a nonzero exit, the refusal text, and an unchanged journal.
+    2. Untested production evidence source for the attestation bypass. ForgeProbe::pr_state (aida-cli-lib/src/repair_journal.rs:157-170) maps only Observed::Known(Ok(status)) to a state and everything else to None (kept). This mapping is what lets a reservation skip attestation, and both new tests replace it with FakeProbe. A mutation that maps Transient, Pending or Known(Err) to a settled state, or that drops the Known(Ok) restriction, would survive. Fix: factor the mapping into a pure fn over Observed<Result<ChangeStatus,String>> and test Known(Ok) for Open, Closed and Merged, plus Known(Err) and Transient (and Pending if present) mapping to None. Alternatively, drive ForgeProbe through an in-memory forge.
+    3. AC1 names the salvage destination as ~/salvage. The implementation reuses seat_clone::salvage_complete, which writes <main>/.aida/salvage/<tree>/ (repair_journal.rs:171-173; docs/cli/07-project-setup.md documents .aida/salvage). The implementer flagged this as a deviation but it was not resolved. Reusing the existing patch-plus-bundle salvage is reasonable. Resolve either by salvaging to ~/salvage as specified, or by having the advisor amend TASK-3891 AC1 to name <main>/.aida/salvage/<tree>/ before re-review. As written, the claimed AC is not met.
+    4. The repair-reservations doctor finding still advertises only the attested path. RepairGuard::repair_findings (aida-cli-lib/src/repair_journal.rs:345-346) sets action to `aida doctor heal repair-reservations --id <id> --attest '<reason>'` for every held entry, so an operator looking at `aida doctor check repair-reservations` is never pointed at the new bare sweep. That sweep is the toil reduction TASK-3891 exists for. Suggest a summary or hint line naming the bare sweep for CLOSED/MERGED dead lanes.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-28T03:54:11.560560434Z
+  modified_at: 2026-11-28T03:54:11.560560434Z
 history:
 - id: 01a2104e-a7aa-72b2-9133-1db6dc6cea6c
   author: joe
