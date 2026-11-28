@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:26:56.215965481Z
-modified_at: 2026-11-28T05:28:03.738891660Z
+modified_at: 2026-11-28T05:35:36.794239651Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -148,6 +148,12 @@ comments:
   modified_at: 2026-11-28T05:27:57.263863662Z
   session_id: 01a22085a946
   harness_version: 2.1.319 (Claude Code)
+- id: 01a220a6-df5a-79f2-b2b3-edd1074b0427
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3952-init-no-auto-commit` at head `82035fe5d5daa592404613f40632668be5ba6ccd`.'
+  created_at: 2026-11-28T05:35:36.794236545Z
+  modified_at: 2026-11-28T05:35:36.794236545Z
+  session_id: 01a22085a946
 history:
 - id: 01a22031-de1f-7b30-a729-5d2554ae7cad
   author: joe
