@@ -19,7 +19,6 @@
 //!
 //! trace:STORY-537 | ai:claude
 
-use crate::process_retry::RetryEtxtbsy;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -366,12 +365,9 @@ fn is_interactive() -> bool {
     std::io::stdin().is_terminal() && std::io::stdout().is_terminal()
 }
 
+// trace:TASK-3965 | ai:claude
 fn is_on_path(bin: &str) -> bool {
-    Command::new(bin)
-        .arg("--version")
-        .output_retrying_etxtbsy()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    crate::version_probe_available(bin)
 }
 
 fn current_branch(project_root: &Path) -> String {

@@ -408,6 +408,18 @@
       "tests": [
         "every_time_bound_flag_is_classified"
       ]
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
+      "filter": "task_3965_no_unreviewed_version_spawn",
+      "source": "aida-cli-lib/src/tests/task_3965_version_probe_tests.rs",
+      "scope": "filter",
+      "tests": [
+        "task_3965_no_unreviewed_version_spawn_bypasses_the_bounded_probe"
+      ]
     }
   ],
   "shared_modules": {

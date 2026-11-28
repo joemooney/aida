@@ -641,12 +641,9 @@ pub(crate) fn parse_agent_selection(agent: &str) -> Result<AgentSelection> {
     Ok(sel)
 }
 
-fn agent_cli_detected(program: &str) -> bool {
-    std::process::Command::new(program)
-        .arg("--version")
-        .output_retrying_etxtbsy()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+// trace:TASK-3965 | ai:claude
+pub(crate) fn agent_cli_detected(program: &str) -> bool {
+    crate::version_probe_available(program)
 }
 
 pub(crate) const ANTIGRAVITY_AIDA_MCP_JSON: &str =
@@ -1977,11 +1974,8 @@ fn complete_init_scaffolding(
     // trace:BUG-2611 | ai:codex
     if with_mcp
         && codex_profile_selected
-        && std::process::Command::new("codex")
-            .arg("--version")
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
+        // trace:TASK-3965 | ai:claude
+        && crate::version_probe_available("codex")
     {
         // Check if already configured
         let mcp_list = std::process::Command::new("codex")

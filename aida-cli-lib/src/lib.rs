@@ -1008,8 +1008,8 @@ pub(crate) use ci_watch::watch_ci_terminal;
 mod bounded_process;
 pub(crate) use bounded_process::{
     command_output_with_timeout_capped, command_output_with_timeout_detail,
-    command_output_with_timeout_forwarding, kill_process_group, BoundedCommandOutput,
-    FORGE_CLI_CALL_TIMEOUT,
+    command_output_with_timeout_forwarding, kill_process_group, probe_version,
+    version_probe_available, BoundedCommandOutput, FORGE_CLI_CALL_TIMEOUT,
 };
 mod forge_lookup;
 pub(crate) use forge_lookup::{
@@ -1500,6 +1500,11 @@ use worker_gc::{run_worker_gc, worker_gc_target_still_dead};
 // trace:STORY-2539 | ai:codex
 #[path = "tests/story_2539_vendor_literal_ratchet_tests.rs"]
 mod story_2539_vendor_literal_ratchet_tests;
+
+#[cfg(test)]
+// trace:TASK-3965 | ai:claude
+#[path = "tests/task_3965_version_probe_tests.rs"]
+mod task_3965_version_probe_tests;
 
 // MCP application boundary; retain the established helper paths.
 // trace:TASK-3429 | ai:codex
