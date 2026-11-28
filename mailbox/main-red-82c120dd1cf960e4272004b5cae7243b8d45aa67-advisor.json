@@ -1,0 +1,18 @@
+{
+  "id": "main-red-82c120dd1cf960e4272004b5cae7243b8d45aa67-advisor",
+  "thread_id": "main-red-82c120dd1cf960e4272004b5cae7243b8d45aa67",
+  "from": "red-main-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795827550671,
+  "body": "Main is red at 82c120dd1cf960e4272004b5cae7243b8d45aa67 ([AI:claude] feat(land): enforce landing-mode readiness and WAITING dependencies (#4652)).\nPR: #4652\nSpecs: none named\nFailing:\n- Build (ubuntu-latest) (https://github.com/joemooney/aida/actions/runs/46081404319/job/140794008023)\n  failed steps: Require every CI lane\n  | (the job log could not be read yet: `/usr/bin/gh api repos/{owner}/{repo}/actions/jobs/140794008023/logs` failed (exit status: 1))\nThe live binary stays on the last green commit, 0fba3d42ee96.\n\nIf the red survives an independent re-run or 30 minutes it is confirmed. Merging continues meanwhile.",
+  "subject": "main is red at 82c120dd1cf9: Build (ubuntu-latest)",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
