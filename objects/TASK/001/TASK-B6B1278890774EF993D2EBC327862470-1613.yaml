@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:30:54.837993440Z
-modified_at: 2026-11-28T07:41:20.013992664Z
+modified_at: 2026-11-28T07:42:22.691835127Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -176,6 +176,12 @@ comments:
   content: Implementer push 599da2b8eaaa declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-28T07:41:20.013992Z
   modified_at: 2026-11-28T07:41:20.013992Z
+  session_id: 01a221066ea6
+- id: 01a2211a-ede3-70d0-bd4f-f12367f0ff07
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3955-codex-signed-out-fast-fail` at head `599da2b8eaaac5c918d6637858036272a16c7624`.'
+  created_at: 2026-11-28T07:42:22.691826690Z
+  modified_at: 2026-11-28T07:42:22.691826690Z
   session_id: 01a221066ea6
 history:
 - id: 01a22034-e919-78c1-a961-1cd42c78c571
