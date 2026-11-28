@@ -330,3 +330,9 @@
   added_at: 2026-11-28T10:53:52.691658250Z
   for_role: reviewer
   added_by_machine: disrad-dvp98b3puw
+- user_id: dirtlab
+  requirement_id: 01a221b1-4d25-72d2-b640-0e69f626c22f
+  position: 1650000
+  added_by: dirtlab
+  added_at: 2026-11-28T11:16:18.062280048Z
+  for_role: implementer
