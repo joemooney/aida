@@ -489,7 +489,9 @@ fn bwrap_live() -> bool {
         return true;
     }
     assert!(
-        std::env::var_os("AIDA_REQUIRE_BWRAP_LIVE").is_none(),
+        aida_core::exec_context::Environment::capture()
+            .get("AIDA_REQUIRE_BWRAP_LIVE")
+            .is_none(),
         "AIDA_REQUIRE_BWRAP_LIVE=1 but bwrap cannot run here"
     );
     eprintln!("SKIP (bwrap unavailable): task_3963 live regeneration");
