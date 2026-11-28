@@ -1,0 +1,18 @@
+{
+  "id": "advisor-loop-auto-train-96afc901-6a87-4d08-92f1-63d0aee6ca2b",
+  "thread_id": "advisor-loop-auto-train-96afc901-6a87-4d08-92f1-63d0aee6ca2b",
+  "from": "auto-train",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795862931643,
+  "body": "auto-train failed 3 consecutive times. Last failure: auto-train admission.lock busy; holder not verified: review-watch lock busy: admission.lock; last recorded activity auto-train supervising worker, age 1s; no live legacy auto-train holder verified; receipts: PID 1709429, start cbeb5f7c-e184-4cc3-887a-1c8c5d4b7d9b:244848126 (pidns 4026531836), purpose cooperative manual train: alive; PID 2269735, start cbeb5f7c-e184-4cc3-887a-1c8c5d4b7d9b:245414952 (pidns 4026531836), purpose legacy review-watch: alive: review-watch lock busy: admission.lock; last recorde.... Inspect aida advisor loops status and train-status, and .aida/auto-train/service.log; renew/rebind the advisor grant if authority ended.",
+  "subject": "auto-train: repeated service failure",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
