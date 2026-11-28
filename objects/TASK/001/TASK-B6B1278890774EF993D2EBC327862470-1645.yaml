@@ -11,12 +11,12 @@ description: |-
   - AC3: the advisor's 01:16 requirements hold: deterministic regeneration (run twice → identical bytes), only registered paths may change, and the PR's own non-generated diff is re-verified unchanged (patch-id over non-generated paths).
   - AC4: tests: regeneration on a clean tree is a no-op; each section-4 failure mode refuses.
   - Touches gate/: needs a human merge.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T08:29:38.066956Z
-modified_at: 2026-11-28T13:08:10.492616503Z
+modified_at: 2026-11-28T13:14:12.140639154Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -246,6 +246,12 @@ comments:
   modified_at: 2026-11-28T13:08:10.492616503Z
   session_id: 01a22220d306
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2224a-b92c-7ea3-96f9-a0643185f73c
+  author: aida-publication-done
+  content: Implementer push dd85481f4923 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-28T13:14:12.140638593Z
+  modified_at: 2026-11-28T13:14:12.140638593Z
+  session_id: 01a22220d306
 history:
 - id: 01a22146-948a-7032-ad96-95a74d9a14d6
   author: joe
@@ -338,6 +344,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a2224a-b92c-7ea3-96f9-a05c61844049
+  author: aida-publication-done
+  timestamp: 2026-11-28T13:14:12.140636294Z
+  session_id: 01a22220d306
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 6d3ca942ec2e4a042f45c48bc90773576e06ffdc
   branch: main
