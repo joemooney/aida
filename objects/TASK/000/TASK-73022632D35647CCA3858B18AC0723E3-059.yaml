@@ -9,12 +9,12 @@ description: |
 
   Raised by the implementer while working TASK-3924.
   Branch: task-3924-train-waiters  ·  Commit: a4f7da7206  ·  PR #4728
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T06:09:31.745784818Z
-modified_at: 2026-11-28T02:53:31.401738775Z
+modified_at: 2026-11-28T07:58:17.979330851Z
 req_type: Task
 tags:
 - from-implementer:TASK-3924
@@ -102,6 +102,20 @@ history:
   author: dirtlab
   timestamp: 2026-11-28T02:53:33.540852245Z
   changes: []
+- id: 01a22129-80d7-7791-a030-dc35f1779125
+  author: aida-auto-bump
+  timestamp: 2026-11-28T07:58:17.815962783Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a22129-817b-7403-bf5d-e0f46bac4385
+  timestamp: 2026-11-28T07:58:17.979325182Z
+  agent: aida
+  commit_sha: 8288c9ce69038f29315a7bf011e8f08293545f99
+  summary: 'TASK-3541 (no formal ACs; approval comment asks for an identity rule + tests). The rule: retrier() (admission_owner.rs) now owns a manual-train waiter by the nearest agent-client ancestor found by the existing session_start_agent_pid walk (cmdline_matches_agent, which refuses -c/-lc shell wrappers), and falls back to getppid() as before. Pid<=1 and identity-capture failure give None, so only the TTL applies. Verified by task3541_agent_session_waiter_outlives_its_short_lived_shell (fake tree train->bash -c->client; the shell''s exit keeps the waiter and the auto-train yields) and task3541_without_an_agent_session_the_parent_owns_the_waiter (a login shell is not a client; the parent''s exit releases the waiter). The only other change makes session_start_agent_pid_in pub(crate). Waiters grant no authority, and no test was weakened. Accepted residual: a one-off train run from an agent session now holds the queue until the 15-minute TTL or release-waiter, as the implementer noted. CI was pending at review time. One style follow-up.'
+  review_verdict: approved
 filed_at:
   code_sha: a4f7da7206450b57610db4aa4bdd76a78aa0cad3
   branch: task-3924-train-waiters
@@ -111,3 +125,7 @@ filed_at:
   vendor: claude
   session: 01a21b4b58e3
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-28T07:58:17.815953765Z
+  completion_sha: 8288c9ce69038f29315a7bf011e8f08293545f99
