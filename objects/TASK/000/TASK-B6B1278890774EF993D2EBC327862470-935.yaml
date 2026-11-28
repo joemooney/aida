@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:16.888539142Z
-modified_at: 2026-11-20T19:31:04.405037538Z
+modified_at: 2026-11-28T00:42:43.084517758Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -246,6 +246,11 @@ comments:
   created_at: 2026-11-20T19:31:04.405029541Z
   modified_at: 2026-11-20T19:31:04.405029541Z
   session_id: 01a1fa4eeaa4
+- id: 01a21f9a-b80c-74c1-9e81-411486237d74
+  author: joe
+  content: 'RETURNED to Approved (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Only fast-gate failure shelved it; #3691 landed one slice (Refs); remaining legacy sites still to migrate.'
+  created_at: 2026-11-28T00:42:43.084517758Z
+  modified_at: 2026-11-28T00:42:43.084517758Z
 history:
 - id: 01a1b59d-e453-77c2-9141-8b9b3f4b1fba
   author: joe
