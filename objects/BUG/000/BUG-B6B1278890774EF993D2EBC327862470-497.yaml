@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:05:21.609004102Z
-modified_at: 2026-11-28T01:01:13.072194046Z
+modified_at: 2026-11-28T01:01:34.169630891Z
 req_type: Bug
 tags:
 - integration
@@ -211,6 +211,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3454): Deferred (round-1 F3, carried): review_commands.rs passes no PR or head association to leases::shelve_spec_on_failure, so a still-current refusal for an older PR can shelve a Done spec whose Done status came from a different change. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T01:00:59.185261374Z
   modified_at: 2026-11-28T01:00:59.185261374Z
+- id: 01a21fab-fa59-77a0-af65-ec6479f3e114
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3456): Deferred (round-1 F2, carried): the shelve regression test (aida-cli-lib/src/tests/real_phase_driver_wiring_tests.rs:1790-1850) covers NeedsAttention→(race)InProgress→NeedsAttention but not the incident''s Done→NeedsAttention refusal, and it makes no... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:01:34.169630891Z
+  modified_at: 2026-11-28T01:01:34.169630891Z
 history:
 - id: 01a20aaf-b3fa-7001-9e7c-eb3d65ad567c
   author: joe
