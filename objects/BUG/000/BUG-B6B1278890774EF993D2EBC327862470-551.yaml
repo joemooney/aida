@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T12:11:28.956447070Z
-modified_at: 2026-11-28T12:31:47.535438256Z
+modified_at: 2026-11-28T12:39:35.148719357Z
 req_type: Bug
 comments:
 - id: 01a22216-3417-7351-a4b0-72768278ebb4
@@ -61,6 +61,12 @@ comments:
   modified_at: 2026-11-28T12:31:22.547205727Z
   session_id: 01a22214d769
   harness_version: 2.1.319 (Claude Code)
+- id: 01a2222b-07ec-7f20-81b8-95d829605db8
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-2790-merge-lock-unknown-holder` at head `be128756193d6ed9bc3b93740e21da19dcdce142`.'
+  created_at: 2026-11-28T12:39:35.148714632Z
+  modified_at: 2026-11-28T12:39:35.148714632Z
+  session_id: 01a22214d769
 history:
 - id: 01a22215-10bf-7693-82e5-1e9ec2ff8e06
   author: aida-session-start
