@@ -372,17 +372,14 @@ pub(crate) fn apply_allowlist_writes(root: &Path, edits: &[PlannedEdit]) -> Resu
 }
 
 /// Whether to apply the edits: `--write`, else a yes at an interactive
-/// prompt (never in JSON output or a headless session).
+/// prompt (never in JSON output or without a terminal, so a headless or
+/// piped run only reports).
 fn confirm_write(write: bool, json: bool) -> Result<bool> {
     use std::io::IsTerminal;
     if write {
         return Ok(true);
     }
-    if json
-        || std::env::var_os("AIDA_HEADLESS").is_some()
-        || !std::io::stdin().is_terminal()
-        || !std::io::stdout().is_terminal()
-    {
+    if json || !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
         return Ok(false);
     }
     crate::prompt_yes_no("Write these entries? [y/N] ", false)
