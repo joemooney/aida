@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-27T05:16:04.585617614Z
-modified_at: 2026-11-27T05:16:04.585617614Z
+modified_at: 2026-11-28T00:37:37.129945431Z
 req_type: Task
 tags:
 - carried-from:BUG-2781
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a21ad3-97f1-7170-87b7-1ded18a206f6
   created_at: 2026-11-27T05:16:21.483047736Z
+comments:
+- id: 01a21f96-0ce9-7e63-aec8-96ddf3fcd0f6
+  author: joe
+  content: 'REJECT-SHIPPED (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): origin/main lane_salvage.rs has no #[allow(clippy::too_many_arguments)] left.'
+  created_at: 2026-11-28T00:37:37.129945431Z
+  modified_at: 2026-11-28T00:37:37.129945431Z
 history:
 - id: 01a21ba6-cb05-7580-9e73-6fb0d82bc7e3
   author: joe
