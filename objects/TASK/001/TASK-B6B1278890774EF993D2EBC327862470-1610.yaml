@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:26:56.215965481Z
-modified_at: 2026-11-28T04:31:46.403893465Z
+modified_at: 2026-11-28T04:41:01.186959958Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -75,6 +75,11 @@ comments:
   created_at: 2026-11-28T04:31:46.403887254Z
   modified_at: 2026-11-28T04:31:46.403887254Z
   session_id: 01a2203a1ff4
+- id: 01a22074-e403-78e1-8ee4-b0a940fd16d6
+  author: joe
+  content: 'DEFERRED (#4791 approval @2c764ec0; product-15): [p2] Onboarding regression for agent-run inits (non-TTY, the path docs/getting-started.md has an agent take). The default now leaves the scaffolding uncommitted and also stops seeding the human_only ''Commit AIDA scaffolding'' task (init_cmd.rs:2454 `!scaffolding_committed && commit_requested`). The only reminder is one stdout hint. BUG-445 (init_cmd.rs:2478-2486) records why that matters: an `aida queue | [p3] git_add_hint_paths (init_cmd.rs:528-540) replaces the precise per-skill paths from portable_pack_commit_paths with the glob ''.agents/skills/aida-*''. That glob also stages user-authored aida-* skills AIDA does not ship, which BUG-1639''s invariant at init_cmd.rs:387-391 explicitly excludes. Running the printed hint could commit a user''s private skill. Follow-up: list the shipped skill names, or docu | [p3] The listing and hint overstate what init wrote. commit_init_scaffolding prints ''AIDA wrote these files'' and ''They are not committed'' for every existing scaffold candidate path, including files that are already tracked and unchanged (minimal-to-full expansion re-init at init_cmd.rs:3301-3315, or a pre-existing .gitignore/CLAUDE.md init only appended to). The line counts are whole-file totals, not t | [p3] Onboarding-task fallback keys only on the --commit flag. When AIDA_INIT_COMMIT_SCAFFOLD=1 requests the commit and the commit then fails, commit_requested is false, so no onboarding task is seeded (init_cmd.rs:2454). This differs from a failed --commit run. Follow-up: derive the ''commit was requested'' signal from should_auto_commit_scaffold''s decision. | [style] Stale comments. init_cmd.rs:1710-1715 still says a genuinely-new first-init ''passes false and commits its own scaffolding as before'' (the parameter is now the ScaffoldCommit enum and first-init no longer commits). init_cmd.rs:2405 still names only the old `--commit-scaffold` spelling. | [test-gap] Test coverage for AC3''s ''existing callers pass --commit'' rests on a static search plus the two updated shell callers. Many Python and shell tests (tests/test_distributed.sh, tests/test_bug_1796_no_origin_pull_warnings.sh, tests/test_work_ci_relay.py, aida-cli/tests/support/repair_attestation.py, scripts/ablations/ryo-friction-benchmark.sh, bench/agent-surface/seed_fixture.sh, docs/internal/demos/s'
+  created_at: 2026-11-28T04:41:01.186959958Z
+  modified_at: 2026-11-28T04:41:01.186959958Z
 history:
 - id: 01a22031-de1f-7b30-a729-5d2554ae7cad
   author: joe
