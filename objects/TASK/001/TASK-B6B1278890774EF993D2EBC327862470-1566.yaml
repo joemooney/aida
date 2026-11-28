@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-27T08:41:40.134934247Z
-modified_at: 2026-11-27T08:41:40.134934247Z
+modified_at: 2026-11-28T00:38:55.598395124Z
 req_type: Task
 tags:
 - carried-from:STORY-3202
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a21a2e-62ea-7e00-8684-13f8ad52587b
   created_at: 2026-11-27T08:41:59.309253898Z
+comments:
+- id: 01a21f97-3f6e-77d0-a855-d7ec3393b96c
+  author: joe
+  content: 'MERGED into STORY-3225 (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Open PR #4741 covers "ssh sign-in fix text" (agy KeyringOnly text).'
+  created_at: 2026-11-28T00:38:55.598395124Z
+  modified_at: 2026-11-28T00:38:55.598395124Z
 history:
 - id: 01a21c80-c5a9-7783-8dc9-22523c035219
   author: joe
