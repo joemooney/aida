@@ -3,7 +3,7 @@
 //! per-agent sandbox allowlist and permission entries init would tailor.
 //! Read-only: it writes nothing. trace:STORY-2838 | ai:claude
 
-use super::{agent_cli_detected, parse_agent_selection, AgentSelection};
+use super::{detected_agent_selection, parse_agent_selection, AgentSelection};
 use anyhow::Result;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -118,44 +118,17 @@ pub(crate) fn build_allowlist_report(
     forge_hosts: Vec<ForgeHost>,
 ) -> AllowlistReport {
     let hosts: Vec<String> = forge_hosts.iter().map(|f| f.host.clone()).collect();
-    let contained_hosts = || SettingEntry {
-        file: ".aida/config.toml",
-        key: "contained.allowed_hosts",
-        entries: hosts.clone(),
-    };
-    let mut agents = Vec::new();
-    if selection.claude {
-        agents.push(AgentAllowlist {
-            agent: "claude",
-            settings: vec![
-                SettingEntry {
-                    file: ".claude/settings.json",
-                    key: "sandbox.network.allowedDomains",
-                    entries: hosts.clone(),
-                },
-                contained_hosts(),
-            ],
-        });
-    }
-    if selection.codex {
-        agents.push(AgentAllowlist {
-            agent: "codex",
-            settings: vec![
-                contained_hosts(),
-                SettingEntry {
-                    file: ".aida/config.toml",
-                    key: "contained.vendors.codex",
-                    entries: vec!["native".to_string()],
-                },
-            ],
-        });
-    }
-    if selection.antigravity {
-        agents.push(AgentAllowlist {
-            agent: "antigravity",
-            settings: vec![contained_hosts()],
-        });
-    }
+    let agents = selection
+        .names()
+        .into_iter()
+        .map(|agent| AgentAllowlist {
+            agent,
+            settings: crate::vendors::init_allowlists::allowlist_settings(agent, &hosts)
+                .into_iter()
+                .map(|(file, key, entries)| SettingEntry { file, key, entries })
+                .collect(),
+        })
+        .collect();
     AllowlistReport {
         forge_hosts,
         agents,
@@ -195,21 +168,15 @@ pub(crate) fn render_allowlist_report(report: &AllowlistReport) -> String {
 }
 
 /// Resolve the agents to report on without prompting: an explicit
-/// `--agent` list, else the same PATH detection init uses.
+/// `--agent` list, else the same PATH detection init uses (all agents when
+/// none is detected), plus Codex for a Codex-default project.
 fn report_agent_selection(project_root: &Path, agent: Option<&str>) -> Result<AgentSelection> {
     if let Some(agent) = agent {
         return parse_agent_selection(agent);
     }
-    let mut selection = AgentSelection {
-        claude: agent_cli_detected("claude"),
-        codex: agent_cli_detected("codex"),
-        antigravity: agent_cli_detected("agy") || agent_cli_detected("antigravity"),
-    };
-    if aida_core::agents_config::resolve_default_vendor(project_root).as_deref() == Some("codex") {
+    let mut selection = detected_agent_selection();
+    if crate::vendors::init_allowlists::project_defaults_to_codex(project_root) {
         selection.codex = true;
-    }
-    if !(selection.claude || selection.codex || selection.antigravity) {
-        selection = AgentSelection::all();
     }
     Ok(selection)
 }
