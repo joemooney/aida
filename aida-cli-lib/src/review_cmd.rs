@@ -97,6 +97,22 @@ fn run_review(
                 crate::review_draft::handle_submit_draft(launch_dir)?;
                 Ok(crate::cmdkit::Flow::Return)
             }
+            // Standalone Git repositories without `.aida-store` (`aida init` not run yet)
+            // can still run `aida review prepare` directly; when a store exists,
+            // fall through to `StoreCtx::Git` / `StoreCtx::Legacy` so linked specs resolve.
+            // trace:STORY-3120 | ai:antigravity
+            Some(crate::ReviewCommand::Prepare(prepare_args)) => {
+                let root = crate::find_project_root()?;
+                let has_store = std::fs::symlink_metadata(root.join(".aida-store")).is_ok()
+                    || root.join("requirements.db").is_file()
+                    || root.join("requirements.yaml").is_file();
+                if !has_store {
+                    let storage = Storage::new(root.join(".aida-store"));
+                    crate::review_prepare::handle_review_prepare(prepare_args, &storage)?;
+                    return Ok(crate::cmdkit::Flow::Return);
+                }
+                Ok(crate::cmdkit::Flow::Continue)
+            }
             _ => Ok(crate::cmdkit::Flow::Continue),
         },
         Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),

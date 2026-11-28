@@ -247,6 +247,11 @@ impl RunnerCall<'_> {
                 cmd.env(key, value);
             }
         }
+        if let Some(agent) = vendor {
+            for (k, v) in agent.fixed_env {
+                cmd.env(k, v);
+            }
+        }
         cmd.env("AIDA_REVIEW_PASS", self.pass);
         if let Some(agent) = self.agent {
             cmd.env("AIDA_REVIEW_RESOLVED_AGENT", agent.program);

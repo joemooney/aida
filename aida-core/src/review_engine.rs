@@ -176,6 +176,13 @@ pub struct ProjectReviewRulesConfig {
     /// Effort for the `--adversarial` challenger pass, validated the same way.
     #[serde(default)]
     pub challenger_effort: Option<String>,
+    /// Optional telemetry recording toggle from `.aida/review-rules.toml`.
+    // trace:STORY-3120 | ai:antigravity
+    #[serde(default)]
+    pub record_telemetry: Option<bool>,
+    /// Optional default A/B arm label from `.aida/review-rules.toml`.
+    #[serde(default)]
+    pub ab_arm: Option<String>,
 }
 
 /// A single path-scoped rule entry in `.aida/review-rules.toml`.
@@ -1506,7 +1513,7 @@ where
     for f in findings {
         let mut cloned = f.clone();
         cloned.resolved_span = None;
-        if let Some(snippet) = f.existing_code.as_deref() {
+        if let Some(snippet) = f.existing_code.as_deref().filter(|s| !s.trim().is_empty()) {
             if let Some(content) = read_file(&f.path) {
                 if let Some(span) = anchor_snippet_lines(&content, snippet, f.start_line) {
                     cloned.anchor_status = Some(span.match_kind.clone());
@@ -1517,12 +1524,80 @@ where
             } else {
                 cloned.anchor_status = Some("file_unreadable".to_string());
             }
+        } else if let Some(content) = read_file(&f.path) {
+            if let Some((start_line, end_line, fallback_snippet)) =
+                infer_doc_or_omission_anchor(&content, &f.message)
+            {
+                if cloned.start_line.is_none() {
+                    cloned.start_line = Some(start_line);
+                }
+                if cloned.end_line.is_none() {
+                    cloned.end_line = Some(end_line);
+                }
+                cloned.existing_code = Some(fallback_snippet);
+                cloned.anchor_status = Some("inferred_doc".to_string());
+                cloned.resolved_span = Some(AnchoredSpan {
+                    start_line,
+                    end_line,
+                    match_kind: "inferred_doc".to_string(),
+                });
+            } else {
+                cloned.anchor_status = Some("no_snippet".to_string());
+            }
         } else {
             cloned.anchor_status = Some("no_snippet".to_string());
         }
         out.push(cloned);
     }
     out
+}
+
+/// When an omission or documentation finding omits `existing_code` (or provides an empty snippet),
+/// attempt to deterministically locate the nearest referenced heading, `#NNN` issue entry, or
+/// backticked identifier in `file_content` so the finding still receives an exact 1-based line anchor.
+// trace:STORY-3120 | ai:antigravity
+pub fn infer_doc_or_omission_anchor(
+    file_content: &str,
+    message: &str,
+) -> Option<(usize, usize, String)> {
+    let lines: Vec<&str> = file_content.lines().collect();
+    if lines.is_empty() {
+        return None;
+    }
+
+    static ISSUE_REF_RE: once_cell::sync::Lazy<Regex> =
+        once_cell::sync::Lazy::new(|| Regex::new(r"#(\d{2,6})\b").expect("static issue ref regex"));
+    for cap in ISSUE_REF_RE.captures_iter(message) {
+        if let Some(m) = cap.get(0) {
+            let needle = m.as_str();
+            if let Some((idx, line)) = lines.iter().enumerate().find(|(_, l)| l.contains(needle)) {
+                return Some((idx + 1, idx + 1, (*line).to_string()));
+            }
+        }
+    }
+
+    static BACKTICK_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+        Regex::new(r"`([A-Za-z0-9_./:-]{3,64})`").expect("static backtick regex")
+    });
+    for cap in BACKTICK_RE.captures_iter(message) {
+        if let Some(m) = cap.get(1) {
+            let token = m.as_str();
+            if let Some((idx, line)) = lines.iter().enumerate().find(|(_, l)| l.contains(token)) {
+                return Some((idx + 1, idx + 1, (*line).to_string()));
+            }
+        }
+    }
+
+    if let Some((idx, line)) = lines
+        .iter()
+        .enumerate()
+        .find(|(_, l)| l.trim_start().starts_with('#'))
+        .or_else(|| lines.iter().enumerate().find(|(_, l)| !l.trim().is_empty()))
+    {
+        return Some((idx + 1, idx + 1, (*line).to_string()));
+    }
+
+    None
 }
 
 /// Convert anchored review findings into a SARIF 2.1.0 JSON document suitable for
@@ -1677,10 +1752,12 @@ pub fn parse_runner_findings_json(
     };
     if trimmed.starts_with('[') {
         let findings: Vec<RawReviewFinding> = serde_json::from_str(trimmed)
+            .or_else(|_| serde_json::from_str(&sanitize_unescaped_json_inner_quotes(trimmed)))
             .map_err(|e| format!("failed to parse runner findings array: {e}"))?;
         return Ok((findings, CoverageLedger::default()));
     }
     let env: BatchRunnerOutput = serde_json::from_str(trimmed)
+        .or_else(|_| serde_json::from_str(&sanitize_unescaped_json_inner_quotes(trimmed)))
         .map_err(|e| format!("failed to parse runner output object: {e}"))?;
     Ok((env.findings, CoverageLedger { files: env.files }))
 }
@@ -1712,6 +1789,1240 @@ pub fn findings_exceeding_threshold<'a>(
         .iter()
         .filter(|f| severity_rank(&f.severity).unwrap_or(4) >= min_rank)
         .collect())
+}
+
+/// A Pass-1 candidate finding that was dismissed/refuted by the Pass-2 Challenger or folded
+/// during cross-batch consolidation.
+// trace:STORY-3120 | ai:antigravity
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DismissedReviewFinding {
+    pub finding: RawReviewFinding,
+    pub dismissal_reason: String,
+}
+
+/// Comprehensive telemetry record for a single `aida review prepare` execution.
+/// Stored in `.aida/review-telemetry/reviews.jsonl` (and embedded in SARIF 2.1.0
+/// `runs[0].properties.aidaTelemetry`) for A/B testing, latency/cost analysis,
+/// and false-positive tracking. Contains IDs, counts, and timings only — never file
+/// contents, secrets, or raw finding messages.
+// trace:STORY-3120 | ai:antigravity
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReviewTelemetryRecord {
+    pub review_id: String,
+    pub timestamp: String,
+    pub ab_arm: String,
+    pub mode: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pr_number: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_ref: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub head_ref: Option<String>,
+    pub inventory_sha256: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub linked_specs: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub detected_author_agents: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finder_agent: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finder_model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finder_effort: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub challenger_agent: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub challenger_model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub challenger_effort: Option<String>,
+    pub reviewable_files: usize,
+    pub excluded_files: usize,
+    pub batch_count: usize,
+    pub total_added_lines: usize,
+    pub total_removed_lines: usize,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub active_playbooks: Vec<String>,
+    pub prepare_elapsed_ms: u64,
+    pub finder_elapsed_ms: u64,
+    pub challenger_elapsed_ms: u64,
+    pub verify_elapsed_ms: u64,
+    pub total_elapsed_ms: u64,
+    pub finder_prompt_bytes: usize,
+    pub finder_response_bytes: usize,
+    pub challenger_prompt_bytes: usize,
+    pub challenger_response_bytes: usize,
+    pub estimated_input_tokens: usize,
+    pub estimated_output_tokens: usize,
+    pub estimated_cost_usd: f64,
+    pub pass1_candidate_findings: usize,
+    pub confirmed_findings: usize,
+    pub dismissed_findings: usize,
+    pub false_positive_suppression_pct: u8,
+    pub critical_count: usize,
+    pub high_count: usize,
+    pub medium_count: usize,
+    pub low_count: usize,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub counts_by_category: BTreeMap<String, usize>,
+    pub exact_anchor_count: usize,
+    pub shifted_anchor_count: usize,
+    pub unanchored_count: usize,
+    pub exact_anchor_rate_pct: u8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coverage_rate_pct: Option<u8>,
+    pub gate_failed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sarif_archive_path: Option<String>,
+    #[serde(default)]
+    pub severity_weighted_score: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub addressed_findings: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub addressed_rate_pct: Option<u8>,
+}
+
+/// One external caller or callee edge discovered in the operator's trusted CodeGraph index.
+// trace:STORY-3120 | ai:antigravity
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CodegraphCrossFileEdge {
+    pub file_path: String,
+    pub symbol_name: String,
+    pub symbol_kind: String,
+    pub line: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
+    pub is_untouched_in_diff: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body_snippet: Option<String>,
+}
+
+/// CodeGraph impact analysis for a single modified function, method, struct, trait, or enum.
+// trace:STORY-3120 | ai:antigravity
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CodegraphTouchedSymbol {
+    pub file_path: String,
+    pub name: String,
+    pub kind: String,
+    pub start_line: usize,
+    pub end_line: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
+    pub total_external_callers: usize,
+    pub untouched_external_callers: usize,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sample_callers: Vec<CodegraphCrossFileEdge>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sample_callees: Vec<CodegraphCrossFileEdge>,
+}
+
+/// File-level fan-in hub statistics from the trusted CodeGraph index.
+// trace:STORY-3120 | ai:antigravity
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CodegraphFileFanIn {
+    pub file_path: String,
+    pub distinct_caller_files: usize,
+    pub inbound_edges: usize,
+    pub is_high_fan_in_hub: bool,
+}
+
+/// Complete CodeGraph AST blast-radius & cross-file caller/callee enrichment report
+/// attached to `aida review prepare` when a trusted CodeGraph index is available.
+// trace:STORY-3120 | ai:antigravity
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CodegraphReviewContext {
+    pub index_path: String,
+    pub total_touched_symbols: usize,
+    pub total_untouched_external_callers: usize,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub file_fan_in: Vec<CodegraphFileFanIn>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub touched_symbols: Vec<CodegraphTouchedSymbol>,
+}
+
+/// Parse unified diff (`@@ -old_start,old_len +new_start,new_len @@`) headers and return
+/// 1-based inclusive `(start_line, end_line)` spans in the new/target file.
+// trace:STORY-3120 | ai:antigravity
+pub fn parse_unified_diff_new_line_ranges(patch: &str) -> Vec<(usize, usize)> {
+    let mut ranges = Vec::new();
+    for line in patch.lines() {
+        if !line.starts_with("@@") {
+            continue;
+        }
+        let Some(plus_idx) = line.find('+') else {
+            continue;
+        };
+        let after_plus = &line[plus_idx + 1..];
+        let token = after_plus.split_whitespace().next().unwrap_or("");
+        let (start_str, count_str) = match token.split_once(',') {
+            Some((s, c)) => (s, Some(c)),
+            None => (token, None),
+        };
+        let Ok(start) = start_str.parse::<usize>() else {
+            continue;
+        };
+        let count = count_str.and_then(|c| c.parse::<usize>().ok()).unwrap_or(1);
+        if start == 0 && count == 0 {
+            continue;
+        }
+        let s = start.max(1);
+        let e = if count <= 1 { s } else { s + count - 1 };
+        ranges.push((s, e));
+    }
+    ranges
+}
+
+fn cg_longest_backtick_run(text: &str) -> usize {
+    let mut run = 0;
+    text.chars()
+        .map(|c| {
+            run = if c == '`' { run + 1 } else { 0 };
+            run
+        })
+        .max()
+        .unwrap_or(0)
+}
+
+fn cg_code_span(text: &str) -> String {
+    let flat: String = text
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    let ticks = "`".repeat(cg_longest_backtick_run(&flat) + 1);
+    format!("{ticks} {flat} {ticks}")
+}
+
+fn cg_fenced_block(indent: &str, text: &str) -> String {
+    let fence = "`".repeat(cg_longest_backtick_run(text).max(2) + 1);
+    let mut out = format!("{indent}{fence}text\n");
+    for line in text.replace('\r', "").lines() {
+        out.push_str(indent);
+        out.push_str(line);
+        out.push('\n');
+    }
+    out.push_str(indent);
+    out.push_str(&fence);
+    out.push('\n');
+    out
+}
+
+/// Format the CodeGraph cross-file caller/callee impact section for a specific batch of files
+/// (or all files when `filter_files` is `None`). Every symbol name, path, signature, and
+/// body snippet is code-spanned or fenced inert so untrusted identifier strings cannot inject
+/// Markdown or HTML.
+// trace:STORY-3120 | ai:antigravity
+pub fn format_codegraph_batch_context_markdown(
+    cg: &CodegraphReviewContext,
+    filter_files: Option<&[String]>,
+) -> String {
+    let matches_file = |path: &str| match filter_files {
+        Some(list) => list.iter().any(|f| f == path),
+        None => true,
+    };
+
+    let matching_hubs: Vec<&CodegraphFileFanIn> = cg
+        .file_fan_in
+        .iter()
+        .filter(|h| matches_file(&h.file_path) && h.distinct_caller_files > 0)
+        .collect();
+    let matching_syms: Vec<&CodegraphTouchedSymbol> = cg
+        .touched_symbols
+        .iter()
+        .filter(|s| matches_file(&s.file_path))
+        .collect();
+
+    if matching_hubs.is_empty() && matching_syms.is_empty() {
+        return String::new();
+    }
+
+    let mut out = String::new();
+    out.push_str("## CodeGraph AST Blast-Radius & Cross-File Caller/Callee Context\n\n");
+    out.push_str("Use this deterministic AST dependency context from the trusted CodeGraph index to detect `contract-drift` and `incomplete-fix` across untouched callers, and to verify real callee signatures before flagging speculative false positives:\n\n");
+
+    if !matching_hubs.is_empty() {
+        out.push_str("### File-Level Inbound Fan-In\n");
+        for h in matching_hubs {
+            let hub_badge = if h.is_high_fan_in_hub {
+                " **[HIGH BLAST-RADIUS HUB]**"
+            } else {
+                ""
+            };
+            out.push_str(&format!(
+                "- {}: referenced by **{}** distinct caller file(s) ({} inbound AST edges){}\n",
+                cg_code_span(&h.file_path),
+                h.distinct_caller_files,
+                h.inbound_edges,
+                hub_badge
+            ));
+        }
+        out.push('\n');
+    }
+
+    if !matching_syms.is_empty() {
+        out.push_str("### Modified Symbols & Cross-File Call Graph\n");
+        for sym in matching_syms {
+            let sig_suffix = sym
+                .signature
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(|s| format!(" — {}", cg_code_span(s)))
+                .unwrap_or_default();
+            out.push_str(&format!(
+                "- **{}** ({} in {} lines {}-{}){}\n",
+                cg_code_span(&sym.name),
+                cg_code_span(&sym.kind),
+                cg_code_span(&sym.file_path),
+                sym.start_line,
+                sym.end_line,
+                sig_suffix
+            ));
+            if sym.total_external_callers > 0 {
+                out.push_str(&format!(
+                    "  - **Inbound External Callers**: {} total (**{} untouched in this diff**)\n",
+                    sym.total_external_callers, sym.untouched_external_callers
+                ));
+                for caller in &sym.sample_callers {
+                    let status = if caller.is_untouched_in_diff {
+                        "UNTOUCHED in diff"
+                    } else {
+                        "in diff"
+                    };
+                    out.push_str(&format!(
+                        "    - {} line {} in {} ({}) [{}]\n",
+                        cg_code_span(&caller.file_path),
+                        caller.line,
+                        cg_code_span(&caller.symbol_name),
+                        cg_code_span(&caller.symbol_kind),
+                        status
+                    ));
+                    if let Some(body) = caller
+                        .body_snippet
+                        .as_deref()
+                        .filter(|b| !b.trim().is_empty())
+                    {
+                        out.push_str(&cg_fenced_block("      ", body));
+                    }
+                }
+            }
+            if !sym.sample_callees.is_empty() {
+                out.push_str("  - **Outbound External Callees**:\n");
+                for callee in &sym.sample_callees {
+                    let callee_sig = callee
+                        .signature
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .map(|s| format!(": {}", cg_code_span(s)))
+                        .unwrap_or_default();
+                    out.push_str(&format!(
+                        "    - {} ({} line {}){}\n",
+                        cg_code_span(&callee.symbol_name),
+                        cg_code_span(&callee.file_path),
+                        callee.line,
+                        callee_sig
+                    ));
+                    if let Some(body) = callee
+                        .body_snippet
+                        .as_deref()
+                        .filter(|b| !b.trim().is_empty())
+                    {
+                        out.push_str(&cg_fenced_block("      ", body));
+                    }
+                }
+            }
+        }
+        out.push('\n');
+    }
+
+    out
+}
+
+/// Aggregated statistics for a single A/B experiment arm across recorded reviews.
+// trace:STORY-3120 | ai:antigravity
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReviewArmSummary {
+    pub ab_arm: String,
+    pub runs: usize,
+    pub avg_total_ms: u64,
+    pub avg_prepare_ms: u64,
+    pub avg_finder_ms: u64,
+    pub avg_challenger_ms: u64,
+    pub avg_input_tokens: usize,
+    pub avg_output_tokens: usize,
+    pub total_cost_usd: f64,
+    pub avg_cost_usd: f64,
+    pub total_pass1_candidates: usize,
+    pub total_confirmed_findings: usize,
+    pub total_dismissed_findings: usize,
+    pub overall_suppression_pct: u8,
+    pub avg_exact_anchor_rate_pct: u8,
+    pub avg_coverage_rate_pct: u8,
+    pub gate_failures: usize,
+    pub total_severity_weighted_score: usize,
+    pub avg_severity_weighted_score: f64,
+    pub total_addressed_findings: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub overall_addressed_rate_pct: Option<u8>,
+    pub f05_score: f64,
+    pub f1_score: f64,
+    pub f2_score: f64,
+}
+
+/// Summary of a Pass-1 Finder -> Pass-2 Challenger adversarial review run.
+// trace:STORY-3120 | ai:antigravity
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AdversarialReviewSummary {
+    pub finder_agent: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finder_model: Option<String>,
+    pub challenger_agent: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub challenger_model: Option<String>,
+    pub candidate_findings: usize,
+    pub confirmed_findings: usize,
+    pub dismissed_findings: usize,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub detected_author_agents: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dismissed_details: Vec<DismissedReviewFinding>,
+}
+
+/// Format a consolidated GitHub PR / GitLab MR Markdown review comment from the
+/// classified inventory, optional coverage report, linked spec `(spec_id, title)` list,
+/// and anchored findings.
+// trace:STORY-3120 | ai:antigravity
+pub fn format_forge_review_markdown(
+    mode: &str,
+    head_ref: Option<&str>,
+    inventory: &ClassifiedInventory,
+    coverage: Option<&CoverageVerificationReport>,
+    linked_specs: &[(String, String)],
+    findings: &[RawReviewFinding],
+) -> String {
+    format_forge_review_markdown_with_adversarial(
+        mode,
+        head_ref,
+        inventory,
+        coverage,
+        linked_specs,
+        findings,
+        None,
+    )
+}
+
+/// Format a GitHub PR / GitLab MR Markdown review comment with optional adversarial
+/// Finder -> Challenger verification summary.
+// trace:STORY-3120 | ai:antigravity
+pub fn format_forge_review_markdown_with_adversarial(
+    mode: &str,
+    head_ref: Option<&str>,
+    inventory: &ClassifiedInventory,
+    coverage: Option<&CoverageVerificationReport>,
+    linked_specs: &[(String, String)],
+    findings: &[RawReviewFinding],
+    adversarial: Option<&AdversarialReviewSummary>,
+) -> String {
+    let mut out = String::new();
+    out.push_str("## AIDA Deterministic Code Review\n\n");
+
+    let head_short = head_ref
+        .map(|h| if h.len() > 12 { &h[..12] } else { h })
+        .unwrap_or("workspace");
+    let inv_short = if inventory.inventory_sha256.len() > 12 {
+        &inventory.inventory_sha256[..12]
+    } else {
+        &inventory.inventory_sha256
+    };
+
+    out.push_str(&format!(
+        "- **Mode**: `{mode}` | **Head**: `{head_short}` | **Inventory SHA-256**: `{inv_short}`\n"
+    ));
+    out.push_str(&format!(
+        "- **Reviewable files**: {} | **Excluded files**: {}\n",
+        inventory.reviewable_files.len(),
+        inventory.excluded_files.len()
+    ));
+
+    if let Some(cov) = coverage {
+        let status_label = if cov.passed { "PASSED" } else { "INCOMPLETE" };
+        out.push_str(&format!(
+            "- **File coverage**: **{status_label}** ({}% — {} reviewed, {} skipped of {})\n",
+            cov.coverage_rate_pct, cov.reviewed_count, cov.skipped_count, cov.total_reviewable
+        ));
+    }
+
+    if let Some(adv) = adversarial {
+        let finder_label = match &adv.finder_model {
+            Some(m) => format!("`{}` (`{m}`)", adv.finder_agent),
+            None => format!("`{}`", adv.finder_agent),
+        };
+        let challenger_label = match &adv.challenger_model {
+            Some(m) => format!("`{}` (`{m}`)", adv.challenger_agent),
+            None => format!("`{}`", adv.challenger_agent),
+        };
+        out.push_str(&format!(
+            "- **Adversarial verification**: Finder {finder_label} → Challenger {challenger_label} — **{}** candidate(s) challenged → **{}** confirmed, **{}** dismissed as false positive(s)\n",
+            adv.candidate_findings, adv.confirmed_findings, adv.dismissed_findings
+        ));
+        if !adv.detected_author_agents.is_empty() {
+            let authors: Vec<String> = adv
+                .detected_author_agents
+                .iter()
+                .map(|a| format!("`{a}`"))
+                .collect();
+            out.push_str(&format!(
+                "- **Authorship separation**: Detected commit/trace author(s) {} → Reviewed by `{}`\n",
+                authors.join(", "),
+                adv.finder_agent
+            ));
+        }
+    }
+
+    if !linked_specs.is_empty() {
+        let specs_str: Vec<String> = linked_specs
+            .iter()
+            .map(|(id, title)| format!("`{id}` ({title})"))
+            .collect();
+        out.push_str(&format!(
+            "- **Linked AIDA specs**: {}\n",
+            specs_str.join(", ")
+        ));
+    }
+    out.push('\n');
+
+    if findings.is_empty() {
+        out.push_str("### Findings\n\nNo actionable defects reported.\n");
+        return out;
+    }
+
+    let mut crit_high = 0usize;
+    let mut medium = 0usize;
+    let mut low = 0usize;
+    for f in findings {
+        match f.severity.trim().to_ascii_lowercase().as_str() {
+            "critical" | "high" => crit_high += 1,
+            "medium" => medium += 1,
+            _ => low += 1,
+        }
+    }
+
+    out.push_str(&format!(
+        "### Findings ({} critical/high, {} medium, {} low)\n\n",
+        crit_high, medium, low
+    ));
+
+    for f in findings {
+        let loc = match (f.start_line, f.end_line) {
+            (Some(s), Some(e)) if s != e => format!("{}:{s}-{e}", f.path),
+            (Some(s), _) => format!("{}:{s}", f.path),
+            _ => f.path.clone(),
+        };
+        let sev = f.severity.trim().to_ascii_uppercase();
+        let cat = f.category.trim();
+        out.push_str(&format!(
+            "- **[{}] `{}`** (`{}`) — {}\n",
+            sev,
+            loc,
+            cat,
+            f.message.trim()
+        ));
+        if let Some(sugg) = f.suggestion_code.as_deref() {
+            if !sugg.trim().is_empty() {
+                out.push_str("  ```suggestion\n");
+                for line in sugg.trim_end().lines() {
+                    out.push_str("  ");
+                    out.push_str(line);
+                    out.push('\n');
+                }
+                out.push_str("  ```\n");
+            }
+        }
+    }
+
+    out
+}
+
+/// Convert confirmed and Pass-2 suppressed review findings plus optional review telemetry
+/// into a SARIF 2.1.0 JSON document, preserving `findings_to_sarif_json_with_suppressed`'s
+/// URI encoding, brace escaping, and suppression structure.
+// trace:STORY-3120 | ai:antigravity
+pub fn findings_to_sarif_json_with_telemetry(
+    findings: &[RawReviewFinding],
+    dismissed: &[DismissedReviewFinding],
+    telemetry: Option<&ReviewTelemetryRecord>,
+) -> serde_json::Value {
+    let suppressed: Vec<(RawReviewFinding, String)> = dismissed
+        .iter()
+        .map(|d| (d.finding.clone(), d.dismissal_reason.clone()))
+        .collect();
+    let mut doc = findings_to_sarif_json_with_suppressed(findings, &suppressed);
+    if let Some(results) = doc["runs"][0]["results"].as_array_mut() {
+        let all_rows = findings
+            .iter()
+            .map(|f| (f, false))
+            .chain(dismissed.iter().map(|d| (&d.finding, true)));
+        for (result_obj, (f, is_dismissed)) in results.iter_mut().zip(all_rows) {
+            let cat_clean = if f.category.trim().is_empty() {
+                "general"
+            } else {
+                f.category.trim()
+            };
+            let anchor_status = f.anchor_status.as_deref().unwrap_or("unanchored");
+            let mut props = serde_json::json!({
+                "category": cat_clean,
+                "severity": f.severity.trim().to_ascii_lowercase(),
+                "anchorStatus": anchor_status,
+                "disposition": if is_dismissed { "dismissed_by_challenger" } else { "confirmed" }
+            });
+            if let Some(existing) = f.existing_code.as_deref().filter(|s| !s.trim().is_empty()) {
+                props["existingCode"] = serde_json::Value::String(existing.to_string());
+            }
+            if let Some(suggestion) = f
+                .suggestion_code
+                .as_deref()
+                .filter(|s| !s.trim().is_empty())
+            {
+                props["suggestionCode"] = serde_json::Value::String(suggestion.to_string());
+            }
+            result_obj["properties"] = props;
+        }
+    }
+    if let Some(t) = telemetry {
+        doc["runs"][0]["invocations"] = serde_json::json!([
+            {
+                "executionSuccessful": !t.gate_failed,
+                "properties": {
+                    "reviewId": t.review_id,
+                    "abArm": t.ab_arm,
+                    "prepareElapsedMs": t.prepare_elapsed_ms,
+                    "finderElapsedMs": t.finder_elapsed_ms,
+                    "challengerElapsedMs": t.challenger_elapsed_ms,
+                    "verifyElapsedMs": t.verify_elapsed_ms,
+                    "totalElapsedMs": t.total_elapsed_ms,
+                    "estimatedInputTokens": t.estimated_input_tokens,
+                    "estimatedOutputTokens": t.estimated_output_tokens,
+                    "estimatedCostUsd": t.estimated_cost_usd
+                }
+            }
+        ]);
+        doc["runs"][0]["properties"] = serde_json::json!({
+            "aidaTelemetry": t
+        });
+    }
+    doc
+}
+
+/// Estimate USD cost for a review invocation based on agent, model family,
+/// and input/output token counts.
+// trace:STORY-3120 | ai:antigravity
+pub fn estimate_review_cost_usd(
+    agent: Option<&str>,
+    model: Option<&str>,
+    input_tokens: usize,
+    output_tokens: usize,
+) -> f64 {
+    let (in_rate, out_rate) = crate::vendors::review_vendor_token_rates_per_1m(agent, model);
+    let raw = (input_tokens as f64 / 1_000_000.0) * in_rate
+        + (output_tokens as f64 / 1_000_000.0) * out_rate;
+    (raw * 100_000.0).round() / 100_000.0
+}
+
+/// Resolve the A/B experiment arm label and whether `--adversarial` Pass 2 should run.
+// trace:STORY-3120 | ai:antigravity
+pub fn resolve_ab_arm_assignment(
+    requested_arm: Option<&str>,
+    pr_number: Option<u64>,
+    head_ref: Option<&str>,
+    inventory_sha256: &str,
+    run_review: bool,
+    explicit_adversarial: bool,
+) -> (String, bool) {
+    let cleaned = requested_arm.map(str::trim).filter(|s| !s.is_empty());
+    if !run_review {
+        return (
+            cleaned.unwrap_or("prepare-only").to_string(),
+            explicit_adversarial,
+        );
+    }
+    if let Some(arm) = cleaned {
+        if arm.eq_ignore_ascii_case("auto") {
+            if explicit_adversarial {
+                return ("ab-adversarial".to_string(), true);
+            }
+            let bucket_is_odd = if let Some(pr) = pr_number {
+                pr % 2 == 1
+            } else {
+                let seed = head_ref
+                    .filter(|h| !h.is_empty())
+                    .unwrap_or(inventory_sha256);
+                seed.bytes().next().unwrap_or(0) % 2 == 1
+            };
+            return if bucket_is_odd {
+                ("ab-adversarial".to_string(), true)
+            } else {
+                ("ab-single-pass".to_string(), false)
+            };
+        }
+        let adv = explicit_adversarial || arm.to_ascii_lowercase().contains("adversarial");
+        return (arm.to_string(), adv);
+    }
+    if explicit_adversarial {
+        ("adversarial".to_string(), true)
+    } else {
+        ("single-pass".to_string(), false)
+    }
+}
+
+/// Compute ReviewBench-aligned severity-weighted defect signal (`10*critical + 5*high + 2*medium + 1*low`).
+// trace:STORY-3120 | ai:antigravity
+pub fn compute_severity_weighted_score(
+    critical: usize,
+    high: usize,
+    medium: usize,
+    low: usize,
+) -> usize {
+    critical * 10 + high * 5 + medium * 2 + low
+}
+
+/// Compute the generalized F_beta score (`beta = 0.5` for precision-weighted, `beta = 1.0` for F1,
+/// `beta = 2.0` for recall-weighted) given `precision` and `recall` in `[0.0, 1.0]`.
+// trace:STORY-3120 | ai:antigravity
+pub fn compute_f_beta_score(precision: f64, recall: f64, beta: f64) -> f64 {
+    let p = precision.clamp(0.0, 1.0);
+    let r = recall.clamp(0.0, 1.0);
+    if p <= 0.0 || r <= 0.0 {
+        return 0.0;
+    }
+    let b2 = beta * beta;
+    let denom = b2 * p + r;
+    if denom <= 0.0 {
+        return 0.0;
+    }
+    let raw = (1.0 + b2) * (p * r) / denom;
+    (raw * 10_000.0).round() / 10_000.0
+}
+
+/// Evaluate how many snippet-bearing confirmed findings have been addressed in the current file
+/// contents returned by `read_current_file`. Returns `(addressed_count, evaluable_count, addressed_rate_pct)`.
+// trace:STORY-3120 | ai:antigravity
+pub fn compute_addressed_findings_with<F>(
+    findings: &[RawReviewFinding],
+    mut read_current_file: F,
+) -> (usize, usize, Option<u8>)
+where
+    F: FnMut(&str) -> Option<String>,
+{
+    let mut addressed = 0usize;
+    let mut evaluable = 0usize;
+
+    for f in findings {
+        let Some(existing) = f.existing_code.as_deref() else {
+            continue;
+        };
+        let trimmed_existing = existing.trim();
+        if trimmed_existing.is_empty() {
+            continue;
+        }
+        evaluable += 1;
+        match read_current_file(&f.path) {
+            Some(current_body) => {
+                let still_has_defect =
+                    anchor_snippet_lines(&current_body, trimmed_existing, f.start_line).is_some();
+                if !still_has_defect {
+                    addressed += 1;
+                } else if let Some(sugg) = f.suggestion_code.as_deref() {
+                    let trimmed_sugg = sugg.trim();
+                    if !trimmed_sugg.is_empty()
+                        && trimmed_sugg != trimmed_existing
+                        && anchor_snippet_lines(&current_body, trimmed_sugg, f.start_line).is_some()
+                    {
+                        addressed += 1;
+                    }
+                }
+            }
+            None => {
+                addressed += 1;
+            }
+        }
+    }
+
+    let rate = if evaluable > 0 {
+        Some(((addressed * 100) / evaluable).min(100) as u8)
+    } else {
+        None
+    };
+    (addressed, evaluable, rate)
+}
+
+/// Extract confirmed `RawReviewFinding` entries from a SARIF 2.1.0 JSON document so
+/// `--telemetry-report` can compute live Online Addressed Rate against current repository files.
+// trace:STORY-3120 | ai:antigravity
+pub fn extract_confirmed_findings_from_sarif(sarif: &serde_json::Value) -> Vec<RawReviewFinding> {
+    let mut out = Vec::new();
+    let Some(results) = sarif
+        .get("runs")
+        .and_then(|r| r.get(0))
+        .and_then(|r0| r0.get("results"))
+        .and_then(|res| res.as_array())
+    else {
+        return out;
+    };
+
+    for item in results {
+        if item
+            .get("suppressions")
+            .and_then(|s| s.as_array())
+            .map(|a| !a.is_empty())
+            .unwrap_or(false)
+        {
+            continue;
+        }
+        let props = item.get("properties");
+        if props
+            .and_then(|p| p.get("disposition"))
+            .and_then(|d| d.as_str())
+            == Some("dismissed_by_challenger")
+        {
+            continue;
+        }
+        let path = item
+            .get("locations")
+            .and_then(|l| l.get(0))
+            .and_then(|l0| l0.get("physicalLocation"))
+            .and_then(|pl| pl.get("artifactLocation"))
+            .and_then(|al| al.get("uri"))
+            .and_then(|u| u.as_str())
+            .unwrap_or("")
+            .to_string();
+        if path.is_empty() {
+            continue;
+        }
+        let region = item
+            .get("locations")
+            .and_then(|l| l.get(0))
+            .and_then(|l0| l0.get("physicalLocation"))
+            .and_then(|pl| pl.get("region"));
+        let start_line = region
+            .and_then(|r| r.get("startLine"))
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize);
+        let end_line = region
+            .and_then(|r| r.get("endLine"))
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize);
+        let category = props
+            .and_then(|p| p.get("category"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("general")
+            .to_string();
+        let severity = props
+            .and_then(|p| p.get("severity"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("medium")
+            .to_string();
+        let anchor_status = props
+            .and_then(|p| p.get("anchorStatus"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        let existing_code = props
+            .and_then(|p| p.get("existingCode"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        let suggestion_code = props
+            .and_then(|p| p.get("suggestionCode"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        let message = item
+            .get("message")
+            .and_then(|m| m.get("text"))
+            .and_then(|t| t.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        out.push(RawReviewFinding {
+            path,
+            severity,
+            category,
+            message,
+            existing_code,
+            suggestion_code,
+            start_line,
+            end_line,
+            resolved_span: match (start_line, end_line) {
+                (Some(s), Some(e)) => Some(AnchoredSpan {
+                    start_line: s,
+                    end_line: e,
+                    match_kind: anchor_status.clone().unwrap_or_else(|| "exact".to_string()),
+                }),
+                _ => None,
+            },
+            anchor_status,
+        });
+    }
+    out
+}
+
+/// Aggregate a slice of `ReviewTelemetryRecord` entries by `ab_arm` for A/B comparison.
+// trace:STORY-3120 | ai:antigravity
+pub fn summarize_review_telemetry_by_arm(
+    records: &[ReviewTelemetryRecord],
+) -> Vec<ReviewArmSummary> {
+    let mut grouped: BTreeMap<String, Vec<&ReviewTelemetryRecord>> = BTreeMap::new();
+    for r in records {
+        grouped.entry(r.ab_arm.clone()).or_default().push(r);
+    }
+
+    let mut summaries = Vec::with_capacity(grouped.len());
+    for (arm, rows) in grouped {
+        let n = rows.len();
+        if n == 0 {
+            continue;
+        }
+        let sum_total_ms: u64 = rows.iter().map(|r| r.total_elapsed_ms).sum();
+        let sum_prepare_ms: u64 = rows.iter().map(|r| r.prepare_elapsed_ms).sum();
+        let sum_finder_ms: u64 = rows.iter().map(|r| r.finder_elapsed_ms).sum();
+        let sum_challenger_ms: u64 = rows.iter().map(|r| r.challenger_elapsed_ms).sum();
+        let sum_in_tok: usize = rows.iter().map(|r| r.estimated_input_tokens).sum();
+        let sum_out_tok: usize = rows.iter().map(|r| r.estimated_output_tokens).sum();
+        let total_cost: f64 = rows.iter().map(|r| r.estimated_cost_usd).sum();
+        let total_candidates: usize = rows.iter().map(|r| r.pass1_candidate_findings).sum();
+        let total_confirmed: usize = rows.iter().map(|r| r.confirmed_findings).sum();
+        let total_dismissed: usize = rows.iter().map(|r| r.dismissed_findings).sum();
+        let overall_suppression_pct = if total_candidates > 0 {
+            ((total_dismissed * 100) / total_candidates).min(100) as u8
+        } else {
+            0
+        };
+        let sum_anchor_pct: usize = rows.iter().map(|r| r.exact_anchor_rate_pct as usize).sum();
+        let avg_exact_anchor_rate_pct = (sum_anchor_pct / n) as u8;
+        let mut cov_sum = 0usize;
+        let mut cov_cnt = 0usize;
+        for r in &rows {
+            if let Some(c) = r.coverage_rate_pct {
+                cov_sum += c as usize;
+                cov_cnt += 1;
+            }
+        }
+        let avg_cov = if cov_cnt > 0 {
+            (cov_sum / cov_cnt) as u8
+        } else {
+            100
+        };
+        let gate_failures = rows.iter().filter(|r| r.gate_failed).count();
+
+        let total_severity_weighted_score: usize = rows
+            .iter()
+            .map(|r| {
+                if r.severity_weighted_score > 0 {
+                    r.severity_weighted_score
+                } else {
+                    compute_severity_weighted_score(
+                        r.critical_count,
+                        r.high_count,
+                        r.medium_count,
+                        r.low_count,
+                    )
+                }
+            })
+            .sum();
+        let avg_severity_weighted_score =
+            ((total_severity_weighted_score as f64 / (n as f64)) * 100.0).round() / 100.0;
+
+        let total_addressed_findings: usize =
+            rows.iter().filter_map(|r| r.addressed_findings).sum();
+        let mut addressed_pct_sum = 0usize;
+        let mut addressed_pct_cnt = 0usize;
+        for r in &rows {
+            if let Some(pct) = r.addressed_rate_pct {
+                addressed_pct_sum += pct as usize;
+                addressed_pct_cnt += 1;
+            }
+        }
+        let overall_addressed_rate_pct = if addressed_pct_cnt > 0 {
+            Some((addressed_pct_sum / addressed_pct_cnt).min(100) as u8)
+        } else {
+            None
+        };
+
+        let precision_proxy = match overall_addressed_rate_pct {
+            Some(pct) if pct > 0 => (pct as f64) / 100.0,
+            _ => (avg_exact_anchor_rate_pct as f64) / 100.0,
+        };
+        let recall_proxy = (avg_cov as f64) / 100.0;
+        let f05_score = compute_f_beta_score(precision_proxy, recall_proxy, 0.5);
+        let f1_score = compute_f_beta_score(precision_proxy, recall_proxy, 1.0);
+        let f2_score = compute_f_beta_score(precision_proxy, recall_proxy, 2.0);
+
+        summaries.push(ReviewArmSummary {
+            ab_arm: arm,
+            runs: n,
+            avg_total_ms: sum_total_ms / (n as u64),
+            avg_prepare_ms: sum_prepare_ms / (n as u64),
+            avg_finder_ms: sum_finder_ms / (n as u64),
+            avg_challenger_ms: sum_challenger_ms / (n as u64),
+            avg_input_tokens: sum_in_tok / n,
+            avg_output_tokens: sum_out_tok / n,
+            total_cost_usd: (total_cost * 100_000.0).round() / 100_000.0,
+            avg_cost_usd: ((total_cost / (n as f64)) * 100_000.0).round() / 100_000.0,
+            total_pass1_candidates: total_candidates,
+            total_confirmed_findings: total_confirmed,
+            total_dismissed_findings: total_dismissed,
+            overall_suppression_pct,
+            avg_exact_anchor_rate_pct,
+            avg_coverage_rate_pct: avg_cov,
+            gate_failures,
+            total_severity_weighted_score,
+            avg_severity_weighted_score,
+            total_addressed_findings,
+            overall_addressed_rate_pct,
+            f05_score,
+            f1_score,
+            f2_score,
+        });
+    }
+    summaries
+}
+
+/// Format an A/B telemetry comparison report in Markdown from recorded review telemetry rows.
+// trace:STORY-3120 | ai:antigravity
+pub fn format_review_telemetry_report_markdown(records: &[ReviewTelemetryRecord]) -> String {
+    let mut out = String::new();
+    out.push_str("# AIDA Code Review Telemetry & A/B Comparison Report\n\n");
+    out.push_str(&format!(
+        "- **Total recorded review runs**: {}\n\n",
+        records.len()
+    ));
+    if records.is_empty() {
+        out.push_str(
+            "No review telemetry records found in `.aida/review-telemetry/reviews.jsonl`.\n",
+        );
+        return out;
+    }
+
+    let summaries = summarize_review_telemetry_by_arm(records);
+    out.push_str("## A/B Arm Summary\n\n");
+    out.push_str("| A/B Arm | Runs | Avg Total (ms) | Avg Finder / Challenger (ms) | Avg Tokens (in/out) | Avg Cost ($) | Candidates → Confirmed (Dismissed %) | Sev-Weighted Score | Addressed Rate | F0.5 / F1 / F2 | Exact Anchor % | Avg Coverage % |\n");
+    out.push_str("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n");
+    for s in &summaries {
+        let addressed_str = match s.overall_addressed_rate_pct {
+            Some(pct) => format!("{pct}% ({})", s.total_addressed_findings),
+            None => "n/a".to_string(),
+        };
+        out.push_str(&format!(
+            "| {} | {} | {} ms | {} / {} ms | {} / {} | ${:.4} | {} → {} ({}% suppressed) | {:.1} (total {}) | {} | {:.2} / {:.2} / {:.2} | {}% | {}% |\n",
+            cg_code_span(&s.ab_arm),
+            s.runs,
+            s.avg_total_ms,
+            s.avg_finder_ms,
+            s.avg_challenger_ms,
+            s.avg_input_tokens,
+            s.avg_output_tokens,
+            s.avg_cost_usd,
+            s.total_pass1_candidates,
+            s.total_confirmed_findings,
+            s.overall_suppression_pct,
+            s.avg_severity_weighted_score,
+            s.total_severity_weighted_score,
+            addressed_str,
+            s.f05_score,
+            s.f1_score,
+            s.f2_score,
+            s.avg_exact_anchor_rate_pct,
+            s.avg_coverage_rate_pct
+        ));
+    }
+    out.push('\n');
+
+    let mut cat_totals: BTreeMap<String, usize> = BTreeMap::new();
+    for r in records {
+        for (cat, cnt) in &r.counts_by_category {
+            *cat_totals.entry(cat.clone()).or_insert(0) += cnt;
+        }
+    }
+    if !cat_totals.is_empty() {
+        out.push_str("## Confirmed Findings by Category (All Stored in SARIF 2.1.0)\n\n");
+        out.push_str("| Category (`aida.review.<category>`) | Confirmed Findings |\n");
+        out.push_str("| :--- | :---: |\n");
+        for (cat, cnt) in cat_totals {
+            out.push_str(&format!(
+                "| {} | {cnt} |\n",
+                cg_code_span(&format!("aida.review.{cat}"))
+            ));
+        }
+        out.push('\n');
+    }
+
+    out
+}
+
+/// Deterministically repair unescaped inner double quotes inside JSON string values.
+/// Callers always re-run `serde_json::from_str` on the output so ambiguous or malformed
+/// payloads fail closed.
+// trace:STORY-3120 | ai:antigravity
+pub fn sanitize_unescaped_json_inner_quotes(input: &str) -> String {
+    let chars: Vec<char> = input.chars().collect();
+    let mut out = String::with_capacity(input.len() + 16);
+    let mut in_string = false;
+    let mut escaped = false;
+
+    for i in 0..chars.len() {
+        let c = chars[i];
+        if in_string {
+            if escaped {
+                out.push(c);
+                escaped = false;
+                continue;
+            }
+            if c == '\\' {
+                out.push(c);
+                escaped = true;
+                continue;
+            }
+            if c == '"' {
+                let mut j = i + 1;
+                while j < chars.len() && chars[j].is_whitespace() {
+                    j += 1;
+                }
+                let is_closing = if j >= chars.len() {
+                    true
+                } else {
+                    matches!(chars[j], ':' | ',' | '}' | ']')
+                };
+                if is_closing {
+                    out.push('"');
+                    in_string = false;
+                } else {
+                    out.push('\\');
+                    out.push('"');
+                }
+                continue;
+            }
+            if c == '\n' {
+                out.push_str("\\n");
+                continue;
+            }
+            if c == '\r' {
+                out.push_str("\\r");
+                continue;
+            }
+            out.push(c);
+        } else {
+            if c == '"' {
+                in_string = true;
+            }
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// Consolidate cross-batch duplicate findings (folding doc counterparts that share >= 2
+/// backticked identifiers into primary code findings, and deduplicating cross-batch code
+/// findings that share the same category and >= 3 backticked identifiers).
+// trace:STORY-3120 | ai:antigravity
+pub fn consolidate_cross_batch_findings(
+    findings: Vec<RawReviewFinding>,
+) -> (Vec<RawReviewFinding>, Vec<DismissedReviewFinding>) {
+    if findings.len() <= 1 {
+        return (findings, Vec::new());
+    }
+
+    static BACKTICK_ID_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+        Regex::new(r"`([A-Za-z_][A-Za-z0-9_]{3,63})`").expect("static backtick identifier regex")
+    });
+
+    let is_doc_path = |p: &str| {
+        let lower = p.to_ascii_lowercase();
+        lower.ends_with(".md")
+            || lower.ends_with(".mdx")
+            || lower.ends_with(".rst")
+            || lower.ends_with(".txt")
+            || lower.contains("changelog")
+            || lower.contains("readme")
+    };
+
+    let extract_ids = |msg: &str| -> BTreeSet<String> {
+        BACKTICK_ID_RE
+            .captures_iter(msg)
+            .filter_map(|c| c.get(1).map(|m| m.as_str().to_string()))
+            .collect()
+    };
+
+    let mut code_findings: Vec<RawReviewFinding> = Vec::new();
+    let mut doc_findings: Vec<RawReviewFinding> = Vec::new();
+    for f in findings {
+        if is_doc_path(&f.path) {
+            doc_findings.push(f);
+        } else {
+            code_findings.push(f);
+        }
+    }
+
+    let mut deduped_code: Vec<RawReviewFinding> = Vec::with_capacity(code_findings.len());
+    let mut folded_dismissed: Vec<DismissedReviewFinding> = Vec::new();
+
+    for f in code_findings {
+        let f_ids = extract_ids(&f.message);
+        if let Some(existing) = deduped_code.iter_mut().find(|e| {
+            let same_loc = e.path == f.path
+                && e.category == f.category
+                && e.start_line.is_some()
+                && e.start_line == f.start_line;
+            if same_loc {
+                return true;
+            }
+            if f_ids.len() >= 3 && e.category == f.category {
+                let e_ids = extract_ids(&e.message);
+                return f_ids.intersection(&e_ids).count() >= 3;
+            }
+            false
+        }) {
+            folded_dismissed.push(DismissedReviewFinding {
+                finding: f,
+                dismissal_reason: format!(
+                    "Consolidated cross-batch duplicate finding into `{}:{:?}`",
+                    existing.path, existing.start_line
+                ),
+            });
+        } else {
+            deduped_code.push(f);
+        }
+    }
+
+    for doc_f in doc_findings {
+        let doc_ids = extract_ids(&doc_f.message);
+        let matched_code = if doc_ids.len() >= 2 {
+            deduped_code.iter_mut().find(|cf| {
+                let cf_ids = extract_ids(&cf.message);
+                doc_ids.intersection(&cf_ids).count() >= 2
+            })
+        } else {
+            None
+        };
+
+        if let Some(primary) = matched_code {
+            let doc_loc = match doc_f.start_line {
+                Some(line) => format!("{}:{line}", doc_f.path),
+                None => doc_f.path.clone(),
+            };
+            primary.message = format!(
+                "{} (Also noted in `{doc_loc}`: {})",
+                primary.message.trim_end(),
+                doc_f.message.trim()
+            );
+            folded_dismissed.push(DismissedReviewFinding {
+                finding: doc_f,
+                dismissal_reason: format!(
+                    "Consolidated cross-batch documentation counterpart into primary code finding at `{}`",
+                    primary.path
+                ),
+            });
+        } else {
+            deduped_code.push(doc_f);
+        }
+    }
+
+    (deduped_code, folded_dismissed)
 }
 
 #[cfg(test)]
@@ -2728,6 +4039,159 @@ fn beta() {
             batches[0].label.starts_with("module:"),
             "{:?}",
             batches[0].label
+        );
+    }
+
+    // trace:STORY-3120 | ai:antigravity
+    #[test]
+    fn s7_s8_telemetry_f_beta_codegraph_and_consolidation() {
+        let mut contents = BTreeMap::new();
+        contents.insert(
+            "docs/guide.md".to_string(),
+            "# Title\n\n## Architecture\nDetails here.\n".to_string(),
+        );
+        let doc_finding = RawReviewFinding {
+            path: "docs/guide.md".into(),
+            severity: "medium".into(),
+            category: "documentation".into(),
+            message: "Missing section under `Architecture`".into(),
+            existing_code: None,
+            suggestion_code: None,
+            start_line: None,
+            end_line: None,
+            resolved_span: None,
+            anchor_status: None,
+        };
+        let anchored = anchor_findings_with(&[doc_finding], |p| contents.get(p).cloned());
+        assert_eq!(anchored[0].anchor_status.as_deref(), Some("inferred_doc"));
+        assert_eq!(anchored[0].start_line, Some(3));
+
+        let unescaped = r#"{"findings":[{"path":"src/a.rs","severity":"high","category":"bug","message":"Call "foo()" fails when x > 0"}]}"#;
+        let (parsed, cov) = parse_runner_findings_json(unescaped).unwrap();
+        assert_eq!(parsed.len(), 1);
+        assert!(cov.files.is_empty());
+        assert!(parse_runner_findings_json(r#"{"findings":[{"path":"src/a.rs""#).is_err());
+
+        let dismissed = vec![DismissedReviewFinding {
+            finding: anchored[0].clone(),
+            dismissal_reason: "false positive".into(),
+        }];
+        let sarif = findings_to_sarif_json_with_telemetry(&anchored, &dismissed, None);
+        let extracted = extract_confirmed_findings_from_sarif(&sarif);
+        assert_eq!(extracted.len(), 1);
+
+        assert_eq!(compute_f_beta_score(0.8, 0.8, 0.5), 0.8);
+        assert_eq!(compute_f_beta_score(0.0, 0.8, 0.5), 0.0);
+        assert_eq!(compute_severity_weighted_score(1, 2, 3, 4), 30);
+
+        let f_a = RawReviewFinding {
+            path: "src/lib.rs".into(),
+            severity: "medium".into(),
+            category: "bug".into(),
+            message: "Short msg".into(),
+            existing_code: Some("let x = 1;".into()),
+            suggestion_code: Some("let x = 2;".into()),
+            start_line: Some(10),
+            end_line: Some(10),
+            resolved_span: None,
+            anchor_status: Some("exact".into()),
+        };
+        let f_b = RawReviewFinding {
+            severity: "high".into(),
+            message: "Detailed explanation of the same defect".into(),
+            start_line: Some(10),
+            end_line: Some(10),
+            ..f_a.clone()
+        };
+        let (deduped, folded) = consolidate_cross_batch_findings(vec![f_b, f_a]);
+        assert_eq!(deduped.len(), 1);
+        assert_eq!(folded.len(), 1);
+        assert_eq!(deduped[0].severity, "high");
+
+        let (addressed, evaluable, rate) =
+            compute_addressed_findings_with(&deduped, |_| Some("let x = 2;\n".into()));
+        assert_eq!((addressed, evaluable, rate), (1, 1, Some(100)));
+
+        let diff = "@@ -10,2 +20,3 @@\n+a\n+b\n+c\n";
+        assert_eq!(parse_unified_diff_new_line_ranges(diff), vec![(20, 22)]);
+
+        let cg = CodegraphReviewContext {
+            index_path: ".codegraph/codegraph.db".into(),
+            total_touched_symbols: 1,
+            total_untouched_external_callers: 1,
+            file_fan_in: vec![CodegraphFileFanIn {
+                file_path: "src/lib.rs".into(),
+                distinct_caller_files: 7,
+                inbound_edges: 12,
+                is_high_fan_in_hub: true,
+            }],
+            touched_symbols: vec![CodegraphTouchedSymbol {
+                file_path: "src/lib.rs".into(),
+                name: "run`x".into(),
+                kind: "function".into(),
+                start_line: 1,
+                end_line: 5,
+                signature: Some("fn run()".into()),
+                total_external_callers: 1,
+                untouched_external_callers: 1,
+                sample_callers: vec![CodegraphCrossFileEdge {
+                    file_path: "src/main.rs".into(),
+                    symbol_name: "main".into(),
+                    symbol_kind: "function".into(),
+                    line: 10,
+                    signature: Some("fn main()".into()),
+                    is_untouched_in_diff: true,
+                    body_snippet: Some("fn main() {\n    run();\n}".into()),
+                }],
+                sample_callees: Vec::new(),
+            }],
+        };
+        let md = format_codegraph_batch_context_markdown(&cg, Some(&["src/lib.rs".to_string()]));
+        assert!(md.contains("CodeGraph"), "{md}");
+        assert!(md.contains("src/main.rs") && md.contains("line 10"), "{md}");
+
+        let reg = PlaybookRegistry::new(Vec::new()).unwrap();
+        let inv = classify_with_exclusions(
+            &[RawDiffEntry {
+                path: "src/lib.rs".into(),
+                old_path: None,
+                kind: FileChangeKind::Modified,
+                additions: 5,
+                deletions: 1,
+                patch_bytes: 120,
+                is_binary: false,
+                non_regular: None,
+            }],
+            &reg,
+            &[],
+            12_000,
+            |_| true,
+        );
+        let cov = verify_coverage_ledger(
+            &inv,
+            &CoverageLedger {
+                files: vec![FileCoverageEntry {
+                    path: "src/lib.rs".into(),
+                    status: FileCoverageStatus::Reviewed,
+                    reason: None,
+                }],
+            },
+        );
+        let forge_md = format_forge_review_markdown(
+            "pr",
+            Some("deadbeef123456"),
+            &inv,
+            Some(&cov),
+            &[("STORY-3120".into(), "Turnkey PR/MR Review".into())],
+            &deduped,
+        );
+        assert!(
+            forge_md.contains("## AIDA Deterministic Code Review"),
+            "{forge_md}"
+        );
+        assert!(
+            forge_md.contains("STORY-3120") && forge_md.contains("```suggestion"),
+            "{forge_md}"
         );
     }
 }

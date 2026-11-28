@@ -1149,6 +1149,13 @@ queued_timeout_secs = "policy"
 channels = ["home"]
 sites = 1
 
+# STORY-3120: operator's trusted CodeGraph SQLite path from ~/.aida/config.toml ([codegraph] db),
+# never from the checkout under review.
+# trace:STORY-3120 | ai:antigravity
+[readers."aida-cli-lib/src/review_prepare.rs"]
+channels = ["home"]
+sites = 1
+
 # trace:BUG-2631 | ai:codex
 [keys.worktree.seat_health]
 blocked_after_mins = "policy"

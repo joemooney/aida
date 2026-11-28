@@ -280,6 +280,29 @@ pub mod hooks;
 // trace:TASK-3048 | ai:codex
 pub const AGY_EXECUTABLE: &str = profile(LaunchVendor::Agy).executable;
 
+/// Default token pricing `(in_usd_per_1m, out_usd_per_1m)` for a review vendor or model family.
+// trace:STORY-3120 | ai:antigravity
+pub fn review_vendor_token_rates_per_1m(agent: Option<&str>, model: Option<&str>) -> (f64, f64) {
+    let model_lower = model.unwrap_or("").to_ascii_lowercase();
+    let agent_lower = agent.unwrap_or("").to_ascii_lowercase();
+    if model_lower.contains("opus") {
+        (15.0, 75.0)
+    } else if model_lower.contains("haiku")
+        || model_lower.contains("mini")
+        || model_lower.contains("flash")
+    {
+        (0.80, 4.0)
+    } else if model_lower.contains("o3") {
+        (10.0, 40.0)
+    } else if model_lower.contains("codex") || agent_lower == "codex" {
+        (2.50, 10.0)
+    } else if agent_lower == "gemini" || agent_lower == "agy" {
+        (1.25, 5.0)
+    } else {
+        (3.0, 15.0)
+    }
+}
+
 #[cfg(test)]
 mod resume_tests {
     use super::*;

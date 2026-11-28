@@ -32,6 +32,32 @@ impl ReviewTuning {
     pub(crate) fn effort(&self) -> Option<&'static str> {
         self.effort
     }
+    // trace:STORY-3120 | ai:antigravity
+    pub(crate) fn set_effort_if_none(&mut self, effort: Option<&'static str>) {
+        if self.effort.is_none() {
+            self.effort = effort;
+        }
+    }
+}
+
+/// Step up reasoning effort by one tier (`low` -> `medium` -> `high` -> `xhigh`, capped at `xhigh`)
+/// when Finder and Challenger run on the same vendor and no explicit Challenger effort was set.
+// trace:STORY-3120 | ai:antigravity
+pub(crate) fn step_up_challenger_effort(
+    agent: Option<&ReviewVendor>,
+    finder_effort: Option<&str>,
+) -> Option<&'static str> {
+    let target = match finder_effort
+        .map(|e| e.trim().to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("low") => "medium",
+        Some("medium") | None => "high",
+        Some("high" | "xhigh" | "max") => "xhigh",
+        _ => "high",
+    };
+    let allowed = agent.map_or(BASE_EFFORTS, |a| a.efforts);
+    allowed.iter().copied().find(|&e| e == target)
 }
 
 /// `(source name, raw value)` pairs, highest precedence first.
@@ -78,6 +104,8 @@ pub(crate) struct TrustedBase {
     pub(crate) rules: ProjectReviewRulesConfig,
     /// Base blobs of `SEAT_PATHS`, in order; `None` when absent at the base.
     seat_files: [Option<Vec<u8>>; 2],
+    /// Whether this repository is a standalone repo without an initialized AIDA store.
+    pub(crate) standalone_without_aida: bool,
 }
 
 /// The reviewer seat from the base blobs and the operator's global
@@ -100,11 +128,13 @@ fn with_base_seat_files<T>(
 ) -> Result<T> {
     let dir = tempfile::tempdir()?;
     let mut paths = [None, None];
-    for (i, body) in base.seat_files.iter().enumerate() {
-        if let Some(body) = body {
-            let path = dir.path().join(format!("{i}.toml"));
-            std::fs::write(&path, body)?;
-            paths[i] = Some(path);
+    if !base.standalone_without_aida {
+        for (i, body) in base.seat_files.iter().enumerate() {
+            if let Some(body) = body {
+                let path = dir.path().join(format!("{i}.toml"));
+                std::fs::write(&path, body)?;
+                paths[i] = Some(path);
+            }
         }
     }
     let global = aida_core::home::home_dir().map(|h| h.join(".aida/agents.toml"));
@@ -270,6 +300,12 @@ fn base_blob(root: &Path, base_commit: &str, path: &str) -> Result<Option<Vec<u8
 /// merge-base of the forge's target branch and the reviewed head SHA, never
 /// the moving target tip (a later target-side edit would refuse a stale PR)
 /// and never a PR-supplied value.
+///
+/// In a repository without an initialized AIDA store (`.aida-store` or legacy
+/// `requirements.db`), `.aida/config.toml` and `.aida/agents.toml` inside the
+/// repository are never loaded into `seat_files`, so the default review vendor
+/// and reviewer seat tuning come only from the operator's `~/.aida/` config.
+// trace:STORY-3120 | ai:claude
 pub(crate) fn trusted_review_base(
     root: &Path,
     base: &str,
@@ -287,7 +323,15 @@ pub(crate) fn trusted_review_base(
         "refusing to review: this change modifies {}; review settings come from the base revision",
         String::from_utf8_lossy(&changed).trim().replace('\n', ", ")
     );
-    let base_commit = format!("{base}^{{commit}}");
+    let empty_tree =
+        String::from_utf8_lossy(&git(root, &["hash-object", "-t", "tree", "/dev/null"])?)
+            .trim()
+            .to_owned();
+    let base_commit = if base.eq_ignore_ascii_case(&empty_tree) {
+        empty_tree
+    } else {
+        format!("{base}^{{commit}}")
+    };
     let rules = match base_blob(root, &base_commit, RULES_PATH)? {
         None => ProjectReviewRulesConfig::default(),
         Some(raw) => toml::from_str(&String::from_utf8(raw)?)
@@ -295,7 +339,43 @@ pub(crate) fn trusted_review_base(
     };
     let [config, agents] = SEAT_PATHS.map(|p| base_blob(root, &base_commit, p));
     let seat_files = [config?, agents?];
-    Ok(TrustedBase { rules, seat_files })
+    let has_aida_store = std::fs::symlink_metadata(root.join(".aida-store")).is_ok()
+        || root.join("requirements.db").is_file()
+        || root.join("requirements.yaml").is_file();
+    Ok(TrustedBase {
+        rules,
+        seat_files,
+        standalone_without_aida: !has_aida_store,
+    })
+}
+
+/// Read `.aida/review-rules.toml` from a committed revision (`rev`), never from
+/// uncommitted working-tree files. Used when `aida review prepare` runs without
+/// `--run-review`.
+// trace:STORY-3120 | ai:antigravity
+pub(crate) fn committed_review_rules(
+    root: &Path,
+    rev: Option<&str>,
+) -> Result<ProjectReviewRulesConfig> {
+    let Some(rev) = rev else {
+        return Ok(ProjectReviewRulesConfig::default());
+    };
+    ensure!(!rev.starts_with('-'), "invalid revision {rev:?}");
+    let empty_tree =
+        String::from_utf8_lossy(&git(root, &["hash-object", "-t", "tree", "/dev/null"])?)
+            .trim()
+            .to_owned();
+    let base_commit = if rev.eq_ignore_ascii_case(&empty_tree) {
+        empty_tree
+    } else {
+        format!("{rev}^{{commit}}")
+    };
+    match base_blob(root, &base_commit, RULES_PATH)? {
+        None => Ok(ProjectReviewRulesConfig::default()),
+        Some(raw) => toml::from_str(&String::from_utf8(raw)?)
+            .with_context(|| format!("parse {RULES_PATH}"))
+            .context("load .aida/review-rules.toml"),
+    }
 }
 
 #[cfg(test)]

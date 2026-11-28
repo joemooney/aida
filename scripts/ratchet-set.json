@@ -47,7 +47,8 @@
         "test_diff_triggered_rust_content_facets_zero_overhead_when_absent",
         "test_glob_matches_with_braces_and_doublestar",
         "test_verify_coverage_ledger_enforces_100_percent_accountability",
-        "test_verify_observation_citations"
+        "test_verify_observation_citations",
+        "s7_s8_telemetry_f_beta_codegraph_and_consolidation"
       ]
     },
     {
@@ -94,7 +95,8 @@
         "prepare_excludes_credentials_before_revision_reads",
         "root_credential_dirs_excluded_reported_and_refused_as_findings",
         "root_commit_preserves_unusual_git_paths",
-        "write_confines_new_and_existing_paths"
+        "write_confines_new_and_existing_paths",
+        "s8_codegraph_reads_only_trusted_index_never_checkout_and_records_telemetry"
       ],
       "scope": "module"
     },
@@ -113,7 +115,8 @@
         "s4_challenger_spawn_contract_and_opposition",
         "s4_detect_ai_authors_from_commit_tags",
         "s5c_challenger_agent_override_ignores_forged_tags_and_refuses_missing",
-        "story3202_auto_pick_never_chooses_agy_explicit_override_is_confined"
+        "story3202_auto_pick_never_chooses_agy_explicit_override_is_confined",
+        "s9_opencode_pi_no_read_false_and_single_vendor_effort_step_up"
       ],
       "scope": "module"
     },

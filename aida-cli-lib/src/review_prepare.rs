@@ -7,16 +7,26 @@
 use crate::launch::review_challenger::{self as challenger, AdversarialSummary, RefutedFinding};
 use crate::launch::review_runner::{RunnerCall, STDERR_CAP, STDOUT_CAP};
 use crate::launch::review_tuning::{
-    resolve_for_run, trusted_default_vendor, trusted_review_base, TrustedBase,
+    committed_review_rules, resolve_for_run, trusted_default_vendor, trusted_review_base,
+    TrustedBase,
 };
-use crate::vendors::review_runner::{review_vendor, ReviewVendor, DEFAULT_REVIEW_VENDOR};
+use crate::vendors::review_runner::{
+    review_vendor, review_vendor_ext, ReviewVendor, DEFAULT_REVIEW_VENDOR,
+};
 use crate::{detect_forge_from_origin, extract_acceptance_section, find_project_root, Storage};
 use aida_core::exec_context::Environment;
 use aida_core::review_engine::{
-    anchor_findings_with, bundle_review_batches, classify_with_exclusions, verify_coverage_ledger,
-    ClassifiedInventory, CoverageLedger, CoverageVerificationReport, FileChangeKind,
+    anchor_findings_with, bundle_review_batches, classify_with_exclusions,
+    compute_addressed_findings_with, compute_severity_weighted_score,
+    consolidate_cross_batch_findings, estimate_review_cost_usd,
+    extract_confirmed_findings_from_sarif, findings_to_sarif_json_with_telemetry,
+    format_codegraph_batch_context_markdown, format_review_telemetry_report_markdown,
+    parse_unified_diff_new_line_ranges, resolve_ab_arm_assignment,
+    summarize_review_telemetry_by_arm, verify_coverage_ledger, ClassifiedInventory,
+    CodegraphCrossFileEdge, CodegraphFileFanIn, CodegraphReviewContext, CodegraphTouchedSymbol,
+    CoverageLedger, CoverageVerificationReport, DismissedReviewFinding, FileChangeKind,
     PlaybookRegistry, ProjectReviewRulesConfig, RawDiffEntry, RawReviewFinding, ResolvedPlaybook,
-    ReviewBatch, DEFAULT_BATCH_TOKEN_BUDGET, DEFAULT_MAX_FILES_PER_BATCH,
+    ReviewBatch, ReviewTelemetryRecord, DEFAULT_BATCH_TOKEN_BUDGET, DEFAULT_MAX_FILES_PER_BATCH,
 };
 use aida_core::review_engine::{classify_compiled, compile_exclusions, CompiledGlob};
 use aida_core::review_engine::{FileCoverageEntry, FileCoverageStatus};
@@ -90,7 +100,7 @@ pub struct ReviewPrepareArgs {
     #[clap(long, conflicts_with_all = ["anchor_findings", "scan", "commit", "verify_coverage"])]
     pub run_review: bool,
 
-    /// Agent for `--run-review`: `claude` or `codex` (or set AIDA_REVIEW_RUNNER_CMD).
+    /// Agent for `--run-review`: `claude`, `codex`, `agy`, `opencode` or `pi` (or set AIDA_REVIEW_RUNNER_CMD).
     #[clap(long, value_name = "AGENT", requires = "run_review")]
     pub agent: Option<String>,
 
@@ -109,13 +119,15 @@ pub struct ReviewPrepareArgs {
     #[clap(long, requires = "run_review")]
     pub adversarial: bool,
 
-    /// Reasoning effort for the `--adversarial` challenger.
+    /// Reasoning effort for the `--adversarial` challenger. When omitted in
+    /// single-vendor mode, AIDA automatically steps up Challenger effort by one
+    /// tier (low -> medium -> high -> xhigh).
     #[clap(long, value_name = "LEVEL", requires = "adversarial")]
     pub challenger_effort: Option<String>,
 
-    /// Challenger agent for `--adversarial`: `claude`, `codex` or `agy`.
+    /// Challenger agent for `--adversarial`: `claude`, `codex`, `agy`, `opencode` or `pi`.
     /// Overrides the automatic pick, which commit `[AI:<tool>]` tags steer
-    /// and which never chooses agy.
+    /// and which never chooses an unverified vendor.
     // trace:STORY-3120 | ai:claude
     #[clap(long, value_name = "AGENT", requires = "adversarial")]
     pub challenger_agent: Option<String>,
@@ -133,6 +145,29 @@ pub struct ReviewPrepareArgs {
     // trace:STORY-3120 | ai:claude
     #[clap(long, requires = "pr")]
     pub post_comment: bool,
+
+    /// Persist review telemetry (`.aida/review-telemetry/reviews.jsonl`) and a SARIF 2.1.0 archive.
+    // trace:STORY-3120 | ai:antigravity
+    #[clap(long)]
+    pub record_telemetry: bool,
+
+    /// Tag the review with an A/B experiment arm (`single-pass`, `adversarial`, or `auto`).
+    // trace:STORY-3120 | ai:antigravity
+    #[clap(long, value_name = "ARM")]
+    pub ab_arm: Option<String>,
+
+    /// Aggregate `.aida/review-telemetry/reviews.jsonl` and print the A/B telemetry comparison report.
+    // trace:STORY-3120 | ai:antigravity
+    #[clap(
+        long,
+        conflicts_with_all = ["run_review", "anchor_findings", "verify_coverage", "post_comment"]
+    )]
+    pub telemetry_report: bool,
+
+    /// Disable automatic CodeGraph AST blast-radius and cross-file caller/callee enrichment.
+    // trace:STORY-3120 | ai:antigravity
+    #[clap(long)]
+    pub no_codegraph: bool,
 
     /// Emit machine-readable JSON output.
     #[clap(long)]
@@ -166,6 +201,8 @@ pub struct ReviewPreparationBundle {
     pub batches: Vec<ReviewBatch>,
     pub playbooks: Vec<ResolvedPlaybook>,
     pub linked_specs: Vec<LinkedSpecAcceptance>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codegraph_context: Option<CodegraphReviewContext>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub coverage_verification: Option<CoverageVerificationReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -176,11 +213,8 @@ pub struct ReviewPreparationBundle {
     // trace:TASK-3953 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nothing_to_review: Option<String>,
-}
-
-// trace:TASK-3862 | ai:codex
-fn load_review_rules(project_root: &Path) -> Result<ProjectReviewRulesConfig> {
-    ProjectReviewRulesConfig::load_from_root(project_root).context("load .aida/review-rules.toml")
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub telemetry: Option<ReviewTelemetryRecord>,
 }
 
 /// Execute `aida review prepare`. The top-level error carries its whole cause
@@ -205,12 +239,17 @@ fn review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
         !args.post_comment || args.pr.is_some(),
         "--post-comment needs --pr"
     );
+    let total_start = std::time::Instant::now();
+    let prepare_start = std::time::Instant::now();
     let project_root = find_project_root()?;
+    if args.telemetry_report {
+        return handle_telemetry_report(&project_root, args);
+    }
     // 1. Resolve comparison mode and git endpoints.
     let (mode, base_ref, head_ref, merge_base) = resolve_comparison_endpoints(&project_root, args)?;
     // trace:STORY-3120 | ai:claude
     let trusted = if args.run_review {
-        let base = run_review_base(&mode, merge_base.as_deref())?;
+        let base = run_review_base(&mode, base_ref.as_deref(), merge_base.as_deref())?;
         let head = head_ref.as_deref();
         Some(trusted_review_base(&project_root, base, head)?)
     } else {
@@ -218,7 +257,9 @@ fn review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
     };
     let rules_cfg = match &trusted {
         Some(trusted) => trusted.rules.clone(),
-        None => load_review_rules(&project_root)?,
+        None => {
+            committed_review_rules(&project_root, merge_base.as_deref().or(base_ref.as_deref()))?
+        }
     };
     let registry = PlaybookRegistry::new(rules_cfg.rules.clone())?;
 
@@ -315,6 +356,22 @@ fn review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
         head_ref.as_deref(),
     )?;
 
+    let parent_env = Environment::capture().to_pairs();
+    let codegraph_context = if args.no_codegraph {
+        None
+    } else {
+        build_codegraph_review_context(
+            &project_root,
+            &mode,
+            merge_base.as_deref(),
+            head_ref.as_deref(),
+            &inventory,
+            &excludes,
+        )
+    };
+    let prepare_elapsed_ms = prepare_start.elapsed().as_millis() as u64;
+    let verify_start = std::time::Instant::now();
+
     // 7. Optional: verify a coverage ledger file.
     let mut coverage_verification = if let Some(ledger_path) = &args.verify_coverage {
         let raw_ledger = std::fs::read_to_string(ledger_path)
@@ -326,8 +383,21 @@ fn review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
         None
     };
 
+    let (ab_arm, effective_adversarial) = resolve_ab_arm_assignment(
+        args.ab_arm.as_deref().or(rules_cfg.ab_arm.as_deref()),
+        args.pr,
+        head_ref.as_deref(),
+        &inventory.inventory_sha256,
+        args.run_review,
+        args.adversarial,
+    );
+
     // 8. Optional: anchor findings' `existing_code` snippets to exact 1-based line numbers.
     let mut adversarial = None;
+    let mut runner_metrics = RunnerExecutionMetrics::default();
+    let mut finder_agent_name = None;
+    let mut finder_model_name = None;
+    let mut finder_effort_name = None;
     // Producers of the findings that could read local files, by name: they
     // refuse `--post-comment`. trace:BUG-2783 | ai:claude
     let mut unconfined: Vec<&'static str> = Vec::new();
@@ -348,9 +418,16 @@ fn review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
     } else if let (Some(trusted), None) = (&trusted, &nothing_to_review) {
         // No agent starts when nothing is in scope. trace:TASK-3953 | ai:claude
         // trace:STORY-3120 | ai:claude
-        let parent_env = Environment::capture().to_pairs();
-        let agent = run_review_agent(args.agent.as_deref(), trusted, &parent_env)?;
-        let forced = (args.challenger_agent.as_deref().map(review_vendor))
+        let agent = match args.agent.as_deref() {
+            Some(a)
+                if a.trim().eq_ignore_ascii_case("opencode")
+                    || a.trim().eq_ignore_ascii_case("pi") =>
+            {
+                review_vendor_ext(a).map(Some)?
+            }
+            other => run_review_agent(other, trusted, &parent_env)?,
+        };
+        let forced = (args.challenger_agent.as_deref().map(review_vendor_ext))
             .transpose()
             .context("--challenger-agent")?;
         let mut call = RunnerCall {
@@ -365,29 +442,64 @@ fn review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
         };
         let flags = (args.effort.as_deref(), args.model.as_deref());
         call.tuning = resolve_for_run(call.vendor(), &parent_env, flags, trusted)?;
+        finder_agent_name = Some(call.label().to_owned());
+        finder_model_name = call.tuning.model().map(str::to_owned);
+        finder_effort_name = call.tuning.effort().map(str::to_owned);
         let (base, head) = (merge_base.as_deref(), head_ref.as_deref());
-        let range = format!("{}..{}", base.unwrap_or_default(), head.unwrap_or_default());
+        let range = match (mode.as_str(), base, head) {
+            ("range" | "commit", Some(b), Some(h)) => format!("{b}..{h}"),
+            _ => base_ref.as_deref().unwrap_or("HEAD").to_owned(),
+        };
         let renames = rename_sources(&inventory, &excludes);
         let prompt = |batch: &ReviewBatch| {
-            batch_prompt(
+            batch_prompt_enriched(
                 &project_root,
+                &mode,
                 &range,
+                target_rev,
                 batch,
                 &renames,
+                &excludes,
                 &playbooks,
                 &linked_specs,
+                &content_cache,
+                codegraph_context.as_ref(),
             )
         };
         // trace:STORY-3120 | ai:claude
-        let challenge = if args.adversarial {
-            let log = [
-                "log",
-                "--no-color",
-                "--format=%B",
-                "--end-of-options",
-                &range,
-            ];
-            let authors = challenger::detect_ai_authors(&git_text(&project_root, &log)?);
+        let challenge = if effective_adversarial {
+            let log_rev = head.unwrap_or("HEAD");
+            let log_range;
+            let log: &[&str] = if mode == "commit" {
+                &[
+                    "show",
+                    "-s",
+                    "--no-color",
+                    "--format=%B",
+                    "--end-of-options",
+                    log_rev,
+                ]
+            } else if mode == "range" {
+                log_range = range.clone();
+                &[
+                    "log",
+                    "--no-color",
+                    "--format=%B",
+                    "--end-of-options",
+                    &log_range,
+                ]
+            } else {
+                &[
+                    "show",
+                    "-s",
+                    "--no-color",
+                    "--format=%B",
+                    "--end-of-options",
+                    log_rev,
+                ]
+            };
+            let authors =
+                challenger::detect_ai_authors(&git_text(&project_root, log).unwrap_or_default());
             let effort = args.challenger_effort.as_deref();
             let (pass, summary) =
                 challenger::challenger_call(&call, &authors, forced, effort, trusted)?;
@@ -401,8 +513,9 @@ fn review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
         let pass = challenge.as_ref().map(|(pass, _)| pass);
         let passes = [Some(call.vendor()), pass.map(|p| p.vendor())];
         ensure_postable(args.post_comment, passes.into_iter().flatten())?;
-        let (found, ledger, refuted, unchallenged) =
+        let (found, ledger, refuted, unchallenged, metrics) =
             review_batches(&call, pass, &batches, prompt, &inventory)?;
+        runner_metrics = metrics;
         // Count the challenger even when it gave up partway: it may already
         // have read a file on an earlier batch. trace:BUG-2783 | ai:claude
         for runner in std::iter::once(&call).chain(pass) {
@@ -411,26 +524,50 @@ fn review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
             }
         }
         let read = |path: &str| content_cache.get(path).cloned();
+        let anchored_found = anchor_findings_with(&found, read);
+        let (consolidated_found, folded_dups) = if batches.len() > 1 {
+            consolidate_cross_batch_findings(anchored_found)
+        } else {
+            (anchored_found, Vec::new())
+        };
         // Refuted and unchallenged findings are anchored too: they still
-        // gate and reach SARIF.
+        // gate and reach SARIF. Folded cross-batch duplicates also stay in
+        // `refuted` so they still count for `--fail-on` (D1 fail-closed).
         let rows: Vec<_> = refuted.iter().map(|r| r.finding.clone()).collect();
-        let refuted = (refuted.into_iter().zip(anchor_findings_with(&rows, read)))
-            .map(|(r, finding)| RefutedFinding { finding, ..r })
-            .collect();
-        adversarial = challenge.map(|(_, summary)| AdversarialSummary {
-            refuted,
-            challenger_unavailable: unchallenged.cause,
-            unchallenged: anchor_findings_with(&unchallenged.rows, read),
-            ..summary
-        });
+        let mut refuted: Vec<RefutedFinding> =
+            (refuted.into_iter().zip(anchor_findings_with(&rows, read)))
+                .map(|(r, finding)| RefutedFinding { finding, ..r })
+                .collect();
+        for dup in folded_dups {
+            refuted.push(RefutedFinding {
+                finding: dup.finding,
+                reason: dup.dismissal_reason,
+            });
+        }
+        adversarial = match challenge {
+            Some((_, summary)) => Some(AdversarialSummary {
+                refuted,
+                challenger_unavailable: unchallenged.cause,
+                unchallenged: anchor_findings_with(&unchallenged.rows, read),
+                ..summary
+            }),
+            None if !refuted.is_empty() => Some(AdversarialSummary {
+                refuted,
+                ..Default::default()
+            }),
+            None => None,
+        };
         // A runner that does not report every reviewable file is incomplete.
         coverage_verification = Some(verify_coverage_ledger(&inventory, &ledger));
-        Some(anchor_findings_with(&found, read))
+        Some(consolidated_found)
     } else {
         None
     };
 
-    let bundle = ReviewPreparationBundle {
+    let verify_elapsed_ms = verify_start.elapsed().as_millis() as u64;
+    let total_elapsed_ms = total_start.elapsed().as_millis() as u64;
+
+    let mut bundle = ReviewPreparationBundle {
         mode,
         base_ref,
         head_ref,
@@ -439,16 +576,12 @@ fn review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
         batches,
         playbooks,
         linked_specs,
+        codegraph_context,
         coverage_verification,
         anchored_findings,
         adversarial,
         nothing_to_review,
-    };
-
-    let rendered = if args.json {
-        serde_json::to_string_pretty(&bundle)?
-    } else {
-        render_bundle_markdown(&bundle)
+        telemetry: None,
     };
 
     // trace:STORY-3120 | ai:codex
@@ -480,6 +613,59 @@ fn review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
                 .map_err(anyhow::Error::msg)
         })
         .transpose()?;
+    let gate_failed = exceeded.as_ref().is_some_and(|m| !m.is_empty())
+        || bundle
+            .coverage_verification
+            .as_ref()
+            .is_some_and(|c| !c.passed);
+
+    let mut telemetry_rec = build_review_telemetry_record(
+        &ab_arm,
+        &bundle.mode,
+        args.pr,
+        bundle.base_ref.as_deref(),
+        bundle.head_ref.as_deref(),
+        &bundle.inventory,
+        &bundle.batches,
+        &bundle.playbooks,
+        &bundle.linked_specs,
+        finder_agent_name.as_deref(),
+        finder_model_name.as_deref(),
+        finder_effort_name.as_deref(),
+        bundle.adversarial.as_ref(),
+        &runner_metrics,
+        prepare_elapsed_ms,
+        verify_elapsed_ms,
+        total_elapsed_ms,
+        &reported,
+        suppressed.len(),
+        bundle.coverage_verification.as_ref(),
+        gate_failed,
+    );
+    if is_review_telemetry_recording_enabled(args, &rules_cfg) {
+        let dismissed_rows: Vec<DismissedReviewFinding> = suppressed
+            .iter()
+            .map(|(f, why)| DismissedReviewFinding {
+                finding: f.clone(),
+                dismissal_reason: why.clone(),
+            })
+            .collect();
+        persist_review_telemetry_and_sarif(
+            &project_root,
+            &reported,
+            &dismissed_rows,
+            &mut telemetry_rec,
+        )?;
+        bundle.telemetry = Some(telemetry_rec.clone());
+    } else if args.record_telemetry || args.ab_arm.is_some() {
+        bundle.telemetry = Some(telemetry_rec.clone());
+    }
+
+    let rendered = if args.json {
+        serde_json::to_string_pretty(&bundle)?
+    } else {
+        render_bundle_markdown(&bundle)
+    };
 
     if let Some(write_path) = &args.write {
         write_output(&project_root, write_path, &rendered)?;
@@ -606,6 +792,73 @@ fn write_output(root: &Path, path: &Path, text: &str) -> Result<()> {
     Ok(())
 }
 
+/// Append `line` (followed by `\n`) to a repository-confined file without
+/// rewriting existing contents. Enforces the same symlink-free `confined_dir`
+/// and Git-metadata boundaries as [`write_output`].
+// trace:STORY-3120 | ai:antigravity
+fn append_output_line(root: &Path, path: &Path, line: &str) -> Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    use std::path::Component;
+
+    let relative = if path.is_absolute() {
+        path.strip_prefix(root)
+            .context("--write outside repository")?
+    } else {
+        path
+    };
+    let name = relative
+        .file_name()
+        .context("--write requires a file name")?;
+    anyhow::ensure!(
+        relative
+            .components()
+            .all(|c| matches!(c, Component::Normal(_) | Component::CurDir)),
+        "--write escapes repository"
+    );
+    anyhow::ensure!(
+        !path.components().any(|c| c.as_os_str() == ".git"),
+        "--write refuses Git metadata"
+    );
+    let destination = root.canonicalize()?.join(relative);
+    for flag in ["--absolute-git-dir", "--git-common-dir"] {
+        let output = git_text(root, &["rev-parse", "--path-format=absolute", flag])?;
+        let metadata = Path::new(output.strip_suffix('\n').context("invalid git directory")?)
+            .canonicalize()?;
+        anyhow::ensure!(
+            !destination.starts_with(metadata),
+            "--write refuses Git metadata"
+        );
+    }
+    let parents = relative.parent().into_iter().flat_map(Path::components);
+    let dir = confined_dir(
+        root,
+        parents.filter_map(|c| match c {
+            Component::Normal(part) => Some(part),
+            _ => None,
+        }),
+        true,
+    )?;
+    let dest = pinned(&dir).join(name);
+    if let Ok(meta) = dest.symlink_metadata() {
+        anyhow::ensure!(meta.is_file(), "--write destination must be a regular file");
+    }
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(&dest)?;
+    anyhow::ensure!(
+        file.metadata()?.is_file(),
+        "--write destination must be a regular file"
+    );
+    let mut row = String::with_capacity(line.len() + 1);
+    row.push_str(line.trim_end_matches('\n'));
+    row.push('\n');
+    file.write_all(row.as_bytes())?;
+    Ok(())
+}
+
 fn resolve_comparison_endpoints(
     project_root: &Path,
     args: &ReviewPrepareArgs,
@@ -725,14 +978,20 @@ fn pr_comparison(root: &Path, base: &str, head: &str) -> Result<(String, String)
 /// Per-batch runner deadline for `--run-review`.
 const RUN_DEADLINE: std::time::Duration = std::time::Duration::from_secs(15 * 60);
 
-/// The trusted base for `--run-review`: the merge base of the target (the
-/// forge's with `--pr`, `--from` otherwise) and the reviewed head. Workspace,
-/// scan and commit modes have no base the change cannot choose, so they refuse.
+/// The trusted base for `--run-review`:
+/// - `range` (`--pr` or `--from`): the merge base of target and head;
+/// - `commit` (`--commit REV`): `REV`'s parent, never `REV` itself;
+/// - `workspace` and `scan`: `HEAD`, never uncommitted files.
 // trace:STORY-3120 | ai:claude
-fn run_review_base<'a>(mode: &str, merge_base: Option<&'a str>) -> Result<&'a str> {
-    match (mode, merge_base) {
-        ("range", Some(base)) => Ok(base),
-        _ => anyhow::bail!("--run-review needs --pr or --from"),
+fn run_review_base<'a>(
+    mode: &str,
+    base_ref: Option<&'a str>,
+    merge_base: Option<&'a str>,
+) -> Result<&'a str> {
+    match (mode, base_ref, merge_base) {
+        ("range" | "commit", _, Some(base)) => Ok(base),
+        ("workspace" | "scan", Some(head), _) => Ok(head),
+        _ => anyhow::bail!("--run-review requires a committed HEAD or base revision"),
     }
 }
 
@@ -817,6 +1076,85 @@ fn batch_prompt(
             patch.as_str()
         };
         prompt.push_str(&format!("### File: `{path}`\n````diff\n{patch}````\n\n"));
+    }
+    Ok(prompt)
+}
+
+/// Enriched batch context for `--run-review`: adds `<= 32 KB` full target-file
+/// context (from `content_cache`, which holds only screened reviewable files),
+/// nearest package manifests (`<= 16 KB`, confined & screened), and CodeGraph
+/// AST blast-radius / 35-line untouched caller/callee body slices from the
+/// operator's trusted index.
+// trace:STORY-3120 | ai:antigravity
+#[allow(clippy::too_many_arguments)]
+fn batch_prompt_enriched(
+    root: &Path,
+    mode: &str,
+    range: &str,
+    target_rev: Option<&str>,
+    batch: &ReviewBatch,
+    renames: &BTreeMap<&str, &str>,
+    excludes: &[(&str, CompiledGlob)],
+    playbooks: &[ResolvedPlaybook],
+    specs: &[LinkedSpecAcceptance],
+    content_cache: &BTreeMap<String, String>,
+    codegraph_context: Option<&CodegraphReviewContext>,
+) -> Result<String> {
+    const MAX_TARGET_FILE_CONTEXT_BYTES: usize = 32_768;
+    let mut prompt = if mode == "scan" {
+        let mut p = String::new();
+        for spec in specs {
+            let id = aida_core::node_alias::display_spec_id(&spec.spec_id);
+            let (title, acceptance) = (&spec.title, &spec.acceptance_markdown);
+            p.push_str(&format!("## {id} — {title}\n{acceptance}\n\n"));
+        }
+        for pb in playbooks
+            .iter()
+            .filter(|pb| batch.playbook_ids.contains(&pb.id))
+        {
+            let (title, id, checklist) = (&pb.title, &pb.id, &pb.checklist);
+            p.push_str(&format!("## Playbook {title} (`{id}`)\n{checklist}\n\n"));
+        }
+        for path in &batch.files {
+            let body = content_cache
+                .get(path)
+                .map(String::as_str)
+                .unwrap_or("(empty file)\n");
+            p.push_str(&format!("### File: `{path}`\n{}", fenced(body)));
+        }
+        p
+    } else {
+        batch_prompt(root, range, batch, renames, playbooks, specs)?
+    };
+    if let Some(cg) = codegraph_context {
+        let cg_md = format_codegraph_batch_context_markdown(cg, Some(&batch.files));
+        if !cg_md.is_empty() {
+            prompt.push_str(&cg_md);
+        }
+    }
+    let manifests = collect_batch_dependency_manifests(root, target_rev, &batch.files, excludes);
+    if !manifests.is_empty() {
+        prompt
+            .push_str("## Nearest Package & Dependency Manifest Context (Read-Only Reference)\n\n");
+        for (m_path, m_body) in manifests {
+            prompt.push_str(&format!(
+                "### Manifest: {}\n{}\n",
+                code_span(&m_path),
+                fenced(&m_body)
+            ));
+        }
+    }
+    for path in &batch.files {
+        if let Some(body) = content_cache
+            .get(path)
+            .filter(|b| !b.is_empty() && b.len() <= MAX_TARGET_FILE_CONTEXT_BYTES)
+        {
+            prompt.push_str(&format!(
+                "### Target File Context: {}\n{}\n",
+                code_span(path),
+                fenced(body)
+            ));
+        }
     }
     Ok(prompt)
 }
@@ -925,6 +1263,17 @@ fn run_review_agent(
     Ok(Some(vendor))
 }
 
+/// Timing and byte-size metrics collected across Pass 1 (Finder) and Pass 2 (Challenger).
+#[derive(Debug, Clone, Default)]
+struct RunnerExecutionMetrics {
+    finder_elapsed_ms: u64,
+    challenger_elapsed_ms: u64,
+    finder_prompt_bytes: usize,
+    finder_response_bytes: usize,
+    challenger_prompt_bytes: usize,
+    challenger_response_bytes: usize,
+}
+
 /// Run each batch prompt; any runner error, unparsable output, finding outside
 /// the inventory or its batch, or ledger row outside its batch refuses the
 /// whole run. The
@@ -934,6 +1283,10 @@ fn run_review_agent(
 /// or refuted (returned apart) by it. A challenger that fails or answers
 /// unparsably is not asked again: its cause and every finding from that batch
 /// on come back unchallenged, so the finder's work is never discarded.
+///
+/// Finder passes execute in bounded parallel chunks of up to 4 concurrent
+/// batches (`std::thread::scope`) inside the S3a deadline/caps, joining in
+/// deterministic batch order before Challenger verification.
 // trace:STORY-3120 | ai:claude
 fn review_batches(
     call: &RunnerCall<'_>,
@@ -942,85 +1295,135 @@ fn review_batches(
     mut prompt: impl FnMut(&ReviewBatch) -> Result<String>,
     inventory: &ClassifiedInventory,
 ) -> Result<BatchesOutcome> {
+    const MAX_CONCURRENT_BATCHES: usize = 4;
     let (mut found, mut ledger, mut refuted) = (Vec::new(), CoverageLedger::default(), Vec::new());
     let mut unchallenged = Unchallenged::default();
-    for (i, batch) in batches.iter().enumerate() {
-        let context = prompt(batch)?;
-        let fail = |pass: &RunnerCall<'_>, what: &str, e: anyhow::Error| {
-            runner_failure(pass, &format!("{what} {}", i + 1), e)
-        };
-        let out = call
-            .run(&format!("{PROMPT_HEAD}{context}"))
-            .map_err(|e| fail(call, "review batch", e))?;
-        let (rows, files) = aida_core::review_engine::parse_runner_findings_json(&out)
-            .map_err(anyhow::Error::msg)
-            .context("runner output rejected")
-            .map_err(|e| fail(call, "review batch", e))?;
-        ensure_in_inventory(inventory, &rows)?;
-        // A batch's runner saw only its own files. trace:STORY-3120 | ai:claude
-        for row in &rows {
-            anyhow::ensure!(
-                batch.files.contains(&row.path),
-                "review batch {} cites a finding outside its batch: {:?}",
-                i + 1,
-                row.path
-            );
-        }
-        for entry in &files.files {
-            anyhow::ensure!(
-                batch.files.contains(&entry.path),
-                "review batch {} reports coverage for a file outside it: {:?}",
-                i + 1,
-                entry.path
-            );
-        }
-        let rows = match challenge {
-            Some(_) if unchallenged.cause.is_some() => {
-                unchallenged.rows.extend(rows);
-                Vec::new()
-            }
-            Some(pass) if !rows.is_empty() => {
-                // Never report an adversarial pass the challenger did not
-                // make: keep the finder's rows, unchallenged, with the
-                // cause. trace:STORY-3120 | ai:claude
-                let verdicts = pass
-                    .run(&challenger::challenge_prompt(&rows, &context)?)
-                    .and_then(|out| {
-                        challenger::apply_verdicts(rows.clone(), &out)
-                            .context("runner output rejected")
+    let mut metrics = RunnerExecutionMetrics::default();
+
+    let mut contexts = Vec::with_capacity(batches.len());
+    for batch in batches {
+        contexts.push(prompt(batch)?);
+    }
+
+    let indexed: Vec<(usize, &ReviewBatch, &str)> = batches
+        .iter()
+        .zip(contexts.iter())
+        .enumerate()
+        .map(|(i, (b, c))| (i, b, c.as_str()))
+        .collect();
+
+    for chunk in indexed.chunks(MAX_CONCURRENT_BATCHES) {
+        let finder_start = std::time::Instant::now();
+        let finder_outputs: Vec<Result<(String, usize)>> = std::thread::scope(|s| {
+            let handles: Vec<_> = chunk
+                .iter()
+                .map(|&(i, _batch, context)| {
+                    s.spawn(move || {
+                        let fail = |pass: &RunnerCall<'_>, what: &str, e: anyhow::Error| {
+                            runner_failure(pass, &format!("{what} {}", i + 1), e)
+                        };
+                        let full_prompt = format!("{PROMPT_HEAD}{context}");
+                        let prompt_bytes = full_prompt.len();
+                        let out = call
+                            .run(&full_prompt)
+                            .map_err(|e| fail(call, "review batch", e))?;
+                        Ok((out, prompt_bytes))
                     })
-                    .map_err(|e| fail(pass, "challenge batch", e));
-                match verdicts {
-                    Ok((kept, dropped)) => {
-                        refuted.extend(dropped);
-                        kept
-                    }
-                    Err(err) => {
-                        // Bounded: the cause can carry the agent's stderr.
-                        let cause = format!("{err:#}").chars().take(2000).collect();
-                        unchallenged.cause = Some(cause);
-                        unchallenged.rows.extend(rows);
-                        Vec::new()
+                })
+                .collect();
+            handles
+                .into_iter()
+                .map(|h| {
+                    h.join()
+                        .unwrap_or_else(|_| Err(anyhow::anyhow!("review batch thread panicked")))
+                })
+                .collect()
+        });
+        metrics.finder_elapsed_ms += finder_start.elapsed().as_millis() as u64;
+
+        for (&(i, batch, context), finder_res) in chunk.iter().zip(finder_outputs) {
+            let fail = |pass: &RunnerCall<'_>, what: &str, e: anyhow::Error| {
+                runner_failure(pass, &format!("{what} {}", i + 1), e)
+            };
+            let (out, prompt_bytes) = finder_res?;
+            metrics.finder_prompt_bytes += prompt_bytes;
+            metrics.finder_response_bytes += out.len();
+            let (rows, files) = aida_core::review_engine::parse_runner_findings_json(&out)
+                .map_err(anyhow::Error::msg)
+                .context("runner output rejected")
+                .map_err(|e| fail(call, "review batch", e))?;
+            ensure_in_inventory(inventory, &rows)?;
+            // A batch's runner saw only its own files. trace:STORY-3120 | ai:claude
+            for row in &rows {
+                anyhow::ensure!(
+                    batch.files.contains(&row.path),
+                    "review batch {} cites a finding outside its batch: {:?}",
+                    i + 1,
+                    row.path
+                );
+            }
+            for entry in &files.files {
+                anyhow::ensure!(
+                    batch.files.contains(&entry.path),
+                    "review batch {} reports coverage for a file outside it: {:?}",
+                    i + 1,
+                    entry.path
+                );
+            }
+            let rows = match challenge {
+                Some(_) if unchallenged.cause.is_some() => {
+                    unchallenged.rows.extend(rows);
+                    Vec::new()
+                }
+                Some(pass) if !rows.is_empty() => {
+                    // Never report an adversarial pass the challenger did not
+                    // make: keep the finder's rows, unchallenged, with the
+                    // cause. trace:STORY-3120 | ai:claude
+                    let chall_prompt = challenger::challenge_prompt(&rows, context)?;
+                    metrics.challenger_prompt_bytes += chall_prompt.len();
+                    let chall_start = std::time::Instant::now();
+                    let verdicts = pass
+                        .run(&chall_prompt)
+                        .and_then(|out| {
+                            metrics.challenger_response_bytes += out.len();
+                            challenger::apply_verdicts(rows.clone(), &out)
+                                .context("runner output rejected")
+                        })
+                        .map_err(|e| fail(pass, "challenge batch", e));
+                    metrics.challenger_elapsed_ms += chall_start.elapsed().as_millis() as u64;
+                    match verdicts {
+                        Ok((kept, dropped)) => {
+                            refuted.extend(dropped);
+                            kept
+                        }
+                        Err(err) => {
+                            // Bounded: the cause can carry the agent's stderr.
+                            let cause = format!("{err:#}").chars().take(2000).collect();
+                            unchallenged.cause = Some(cause);
+                            unchallenged.rows.extend(rows);
+                            Vec::new()
+                        }
                     }
                 }
-            }
-            _ => rows,
-        };
-        found.extend(rows);
-        let reviewed = |e: &FileCoverageEntry| e.status == FileCoverageStatus::Reviewed;
-        ledger
-            .files
-            .extend(files.files.into_iter().filter(reviewed));
+                _ => rows,
+            };
+            found.extend(rows);
+            let reviewed = |e: &FileCoverageEntry| e.status == FileCoverageStatus::Reviewed;
+            ledger
+                .files
+                .extend(files.files.into_iter().filter(reviewed));
+        }
     }
-    Ok((found, ledger, refuted, unchallenged))
+    Ok((found, ledger, refuted, unchallenged, metrics))
 }
 
-/// Findings, the coverage ledger, refuted findings and unchallenged ones.
+/// Findings, the coverage ledger, refuted findings, unchallenged ones, and runner metrics.
 type BatchesOutcome = (
     Vec<RawReviewFinding>,
     CoverageLedger,
     Vec<RefutedFinding>,
     Unchallenged,
+    RunnerExecutionMetrics,
 );
 
 /// Finder rows the challenger never judged, and why it could not.
@@ -1560,6 +1963,9 @@ fn resolve_linked_specs(
     // reviewed tree. Explicit `--specs` refuse a missing store or an unknown
     // ID instead of silently reviewing without criteria. trace:TASK-3869 | ai:claude
     let explicit = args.specs.is_some();
+    if spec_ids.is_empty() && !explicit {
+        return Ok(Vec::new());
+    }
     let store = match storage.load() {
         Ok(store) => store,
         Err(e) if explicit => return Err(e.context("--specs needs the AIDA store")),
@@ -1787,6 +2193,50 @@ fn report_pieces(bundle: &ReviewPreparationBundle) -> Vec<ReportPiece> {
         }
     }
 
+    if let Some(cg) = &bundle.codegraph_context {
+        let cg_md = format_codegraph_batch_context_markdown(cg, None);
+        if !cg_md.is_empty() {
+            push(cg_md, 0);
+        }
+    }
+
+    if let Some(tel) = &bundle.telemetry {
+        let mut text = String::from("## Review Telemetry & Cost Summary\n\n");
+        text.push_str(&format!(
+            "- **Review ID**: {} | **A/B Arm**: {}\n",
+            code_span(&tel.review_id),
+            code_span(&tel.ab_arm)
+        ));
+        text.push_str(&format!(
+            "- **Duration**: `{}` ms total (`prepare`: {} ms, `finder`: {} ms, `challenger`: {} ms, `verify`: {} ms)\n",
+            tel.total_elapsed_ms,
+            tel.prepare_elapsed_ms,
+            tel.finder_elapsed_ms,
+            tel.challenger_elapsed_ms,
+            tel.verify_elapsed_ms
+        ));
+        text.push_str(&format!(
+            "- **Tokens & Cost**: ~`{}` input / ~`{}` output tokens (est. `${:.5}` USD)\n",
+            tel.estimated_input_tokens, tel.estimated_output_tokens, tel.estimated_cost_usd
+        ));
+        text.push_str(&format!(
+            "- **Signal & Anchor Precision**: `{}` candidate(s) -> `{}` confirmed (`{}` dismissed, `{}%` suppression) | `{}%` exact line-anchor rate\n",
+            tel.pass1_candidate_findings,
+            tel.confirmed_findings,
+            tel.dismissed_findings,
+            tel.false_positive_suppression_pct,
+            tel.exact_anchor_rate_pct
+        ));
+        if let Some(archive_path) = &tel.sarif_archive_path {
+            text.push_str(&format!(
+                "- **SARIF 2.1.0 Archive**: {}\n",
+                code_span(archive_path)
+            ));
+        }
+        text.push('\n');
+        push(text, 0);
+    }
+
     if !bundle.inventory.excluded_files.is_empty() {
         push("## Excluded Files\n\n".into(), 0);
         for ex in &bundle.inventory.excluded_files {
@@ -1927,6 +2377,751 @@ fn fenced(text: &str) -> String {
     let fence = "`".repeat(longest_run(text, '`').max(2) + 1);
     let body = text.replace('\r', "").replace('\n', "\n  ");
     format!("  {fence}text\n  {body}\n  {fence}\n")
+}
+
+// trace:STORY-3120 | ai:antigravity
+#[allow(clippy::too_many_arguments)]
+fn build_review_telemetry_record(
+    ab_arm: &str,
+    mode: &str,
+    pr_number: Option<u64>,
+    base_ref: Option<&str>,
+    head_ref: Option<&str>,
+    inventory: &ClassifiedInventory,
+    batches: &[ReviewBatch],
+    playbooks: &[ResolvedPlaybook],
+    linked_specs: &[LinkedSpecAcceptance],
+    finder_agent: Option<&str>,
+    finder_model: Option<&str>,
+    finder_effort: Option<&str>,
+    adversarial: Option<&AdversarialSummary>,
+    metrics: &RunnerExecutionMetrics,
+    prepare_elapsed_ms: u64,
+    verify_elapsed_ms: u64,
+    total_elapsed_ms: u64,
+    anchored_findings: &[RawReviewFinding],
+    dismissed_findings: usize,
+    coverage: Option<&CoverageVerificationReport>,
+    gate_failed: bool,
+) -> ReviewTelemetryRecord {
+    let now = chrono::Utc::now();
+    let short_inv = if inventory.inventory_sha256.len() > 8 {
+        &inventory.inventory_sha256[..8]
+    } else {
+        &inventory.inventory_sha256
+    };
+    let review_id = format!("rev-{}-{short_inv}", now.format("%Y%m%dT%H%M%SZ"));
+    let timestamp = now.to_rfc3339();
+
+    let total_added_lines: usize = inventory.reviewable_files.iter().map(|f| f.additions).sum();
+    let total_removed_lines: usize = inventory.reviewable_files.iter().map(|f| f.deletions).sum();
+    let active_playbooks: Vec<String> = playbooks.iter().map(|p| p.id.clone()).collect();
+    let spec_ids: Vec<String> = linked_specs
+        .iter()
+        .map(|s| aida_core::node_alias::display_spec_id(&s.spec_id).to_string())
+        .collect();
+    let detected_author_agents = adversarial
+        .map(|a| a.ai_authors.clone())
+        .unwrap_or_default();
+
+    let finder_in_tok = (metrics.finder_prompt_bytes + 3) / 4;
+    let finder_out_tok = (metrics.finder_response_bytes + 3) / 4;
+    let chall_in_tok = (metrics.challenger_prompt_bytes + 3) / 4;
+    let chall_out_tok = (metrics.challenger_response_bytes + 3) / 4;
+    let estimated_input_tokens = finder_in_tok + chall_in_tok;
+    let estimated_output_tokens = finder_out_tok + chall_out_tok;
+
+    let finder_cost =
+        estimate_review_cost_usd(finder_agent, finder_model, finder_in_tok, finder_out_tok);
+    let challenger_cost = if let Some(adv) = adversarial {
+        estimate_review_cost_usd(
+            adv.challenger_agent.as_deref(),
+            None,
+            chall_in_tok,
+            chall_out_tok,
+        )
+    } else {
+        0.0
+    };
+    let estimated_cost_usd = ((finder_cost + challenger_cost) * 100_000.0).round() / 100_000.0;
+
+    let confirmed_findings = anchored_findings.len();
+    let pass1_candidate_findings = confirmed_findings + dismissed_findings;
+    let false_positive_suppression_pct = if pass1_candidate_findings > 0 {
+        ((dismissed_findings * 100) / pass1_candidate_findings).min(100) as u8
+    } else {
+        0
+    };
+
+    let mut critical_count = 0usize;
+    let mut high_count = 0usize;
+    let mut medium_count = 0usize;
+    let mut low_count = 0usize;
+    let mut counts_by_category: BTreeMap<String, usize> = BTreeMap::new();
+    let mut exact_anchor_count = 0usize;
+    let mut shifted_anchor_count = 0usize;
+    let mut unanchored_count = 0usize;
+
+    for f in anchored_findings {
+        match f.severity.trim().to_ascii_lowercase().as_str() {
+            "critical" => critical_count += 1,
+            "high" => high_count += 1,
+            "medium" => medium_count += 1,
+            _ => low_count += 1,
+        }
+        let cat = if f.category.trim().is_empty() {
+            "general".to_string()
+        } else {
+            f.category.trim().to_string()
+        };
+        *counts_by_category.entry(cat).or_insert(0) += 1;
+
+        match f.anchor_status.as_deref() {
+            Some("exact") => exact_anchor_count += 1,
+            Some("trimmed_whitespace") => shifted_anchor_count += 1,
+            _ => unanchored_count += 1,
+        }
+    }
+
+    let exact_anchor_rate_pct = if confirmed_findings > 0 {
+        (((exact_anchor_count + shifted_anchor_count) * 100) / confirmed_findings).min(100) as u8
+    } else {
+        100
+    };
+
+    ReviewTelemetryRecord {
+        review_id,
+        timestamp,
+        ab_arm: ab_arm.to_string(),
+        mode: mode.to_string(),
+        pr_number,
+        base_ref: base_ref.map(str::to_string),
+        head_ref: head_ref.map(str::to_string),
+        inventory_sha256: inventory.inventory_sha256.clone(),
+        linked_specs: spec_ids,
+        detected_author_agents,
+        finder_agent: finder_agent.map(str::to_string),
+        finder_model: finder_model.map(str::to_string),
+        finder_effort: finder_effort.map(str::to_string),
+        challenger_agent: adversarial.and_then(|a| a.challenger_agent.clone()),
+        challenger_model: None,
+        challenger_effort: adversarial.and_then(|a| a.challenger_effort.clone()),
+        reviewable_files: inventory.reviewable_files.len(),
+        excluded_files: inventory.excluded_files.len(),
+        batch_count: batches.len(),
+        total_added_lines,
+        total_removed_lines,
+        active_playbooks,
+        prepare_elapsed_ms,
+        finder_elapsed_ms: metrics.finder_elapsed_ms,
+        challenger_elapsed_ms: metrics.challenger_elapsed_ms,
+        verify_elapsed_ms,
+        total_elapsed_ms,
+        finder_prompt_bytes: metrics.finder_prompt_bytes,
+        finder_response_bytes: metrics.finder_response_bytes,
+        challenger_prompt_bytes: metrics.challenger_prompt_bytes,
+        challenger_response_bytes: metrics.challenger_response_bytes,
+        estimated_input_tokens,
+        estimated_output_tokens,
+        estimated_cost_usd,
+        pass1_candidate_findings,
+        confirmed_findings,
+        dismissed_findings,
+        false_positive_suppression_pct,
+        critical_count,
+        high_count,
+        medium_count,
+        low_count,
+        counts_by_category,
+        exact_anchor_count,
+        shifted_anchor_count,
+        unanchored_count,
+        exact_anchor_rate_pct,
+        coverage_rate_pct: coverage.map(|c| c.coverage_rate_pct.min(100) as u8),
+        gate_failed,
+        sarif_archive_path: None,
+        severity_weighted_score: compute_severity_weighted_score(
+            critical_count,
+            high_count,
+            medium_count,
+            low_count,
+        ),
+        addressed_findings: None,
+        addressed_rate_pct: None,
+    }
+}
+
+fn is_review_telemetry_recording_enabled(
+    args: &ReviewPrepareArgs,
+    rules_cfg: &ProjectReviewRulesConfig,
+) -> bool {
+    args.record_telemetry || rules_cfg.record_telemetry.unwrap_or(false)
+}
+
+/// Persist the full SARIF 2.1.0 report (confirmed + Pass-2 suppressed findings + embedded telemetry)
+/// to `.aida/review-telemetry/sarif/<review_id>.sarif.json` and append the `ReviewTelemetryRecord`
+/// row to `.aida/review-telemetry/reviews.jsonl` via `write_output`.
+// trace:STORY-3120 | ai:antigravity
+fn persist_review_telemetry_and_sarif(
+    project_root: &Path,
+    confirmed: &[RawReviewFinding],
+    dismissed: &[DismissedReviewFinding],
+    telemetry: &mut ReviewTelemetryRecord,
+) -> Result<String> {
+    let sarif_rel = format!(
+        ".aida/review-telemetry/sarif/{}.sarif.json",
+        telemetry.review_id
+    );
+    telemetry.sarif_archive_path = Some(sarif_rel.clone());
+
+    let sarif_doc = findings_to_sarif_json_with_telemetry(confirmed, dismissed, Some(telemetry));
+    let sarif_str = serde_json::to_string_pretty(&sarif_doc)?;
+    write_output(project_root, Path::new(&sarif_rel), &sarif_str)?;
+
+    let jsonl_rel = ".aida/review-telemetry/reviews.jsonl";
+    let line = serde_json::to_string(telemetry)?;
+    append_output_line(project_root, Path::new(jsonl_rel), &line)?;
+
+    Ok(sarif_rel)
+}
+
+/// Aggregate `.aida/review-telemetry/reviews.jsonl` (read-only; malformed rows are skipped and counted)
+/// and print the A/B telemetry comparison report.
+// trace:STORY-3120 | ai:antigravity
+fn handle_telemetry_report(project_root: &Path, args: &ReviewPrepareArgs) -> Result<()> {
+    let jsonl_rel = ".aida/review-telemetry/reviews.jsonl";
+    let mut records: Vec<ReviewTelemetryRecord> = Vec::new();
+    let mut malformed_rows = 0usize;
+    if let Some(bytes) = read_workspace_file(project_root, jsonl_rel)? {
+        let raw = String::from_utf8_lossy(&bytes);
+        for line in raw.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let Ok(mut rec) = serde_json::from_str::<ReviewTelemetryRecord>(trimmed) else {
+                malformed_rows += 1;
+                continue;
+            };
+            if let Some(sarif_rel) = rec.sarif_archive_path.as_deref() {
+                if let Ok(Some(sarif_bytes)) = read_workspace_file(project_root, sarif_rel) {
+                    if let Ok(sarif_val) = serde_json::from_slice::<serde_json::Value>(&sarif_bytes)
+                    {
+                        let confirmed = extract_confirmed_findings_from_sarif(&sarif_val);
+                        let (addressed, evaluable, rate) =
+                            compute_addressed_findings_with(&confirmed, |rel_path| {
+                                if aida_core::review_engine::is_credential_path(rel_path) {
+                                    return None;
+                                }
+                                read_workspace_file(project_root, rel_path)
+                                    .ok()
+                                    .flatten()
+                                    .and_then(|b| String::from_utf8(b).ok())
+                            });
+                        if evaluable > 0 {
+                            rec.addressed_findings = Some(addressed);
+                            rec.addressed_rate_pct = rate;
+                        }
+                    }
+                }
+            }
+            records.push(rec);
+        }
+    }
+
+    let rendered = if args.json {
+        let summaries = summarize_review_telemetry_by_arm(&records);
+        serde_json::to_string_pretty(&serde_json::json!({
+            "total_runs": records.len(),
+            "malformed_rows": malformed_rows,
+            "arms": summaries,
+            "records": records
+        }))?
+    } else {
+        let mut md = format_review_telemetry_report_markdown(&records);
+        if malformed_rows > 0 {
+            md.push_str(&format!(
+                "\n- **Skipped malformed JSONL rows**: `{malformed_rows}`\n"
+            ));
+        }
+        md
+    };
+
+    if let Some(write_path) = &args.write {
+        write_output(project_root, write_path, &rendered)?;
+    } else {
+        println!("{rendered}");
+    }
+    Ok(())
+}
+
+/// Resolve the operator's trusted CodeGraph SQLite database path.
+///
+/// Security rule (S8b): NEVER reads `.codegraph/codegraph.db` from `checkout`
+/// (the checkout under review), because a PR under review could ship a crafted
+/// SQLite file or symlink. Only accepts an absolute regular file outside `checkout`
+/// from:
+///   1. The operator's primary worktree `<primary>/.codegraph/codegraph.db` when `primary != checkout`, or
+///   2. `[codegraph] db = "/abs/path"` in `~/.aida/config.toml`.
+// trace:STORY-3120 | ai:antigravity
+fn resolve_trusted_codegraph_db(checkout: &Path) -> Option<PathBuf> {
+    let checkout_real = checkout.canonicalize().ok()?;
+    let accept = |candidate: PathBuf| -> Option<PathBuf> {
+        if !candidate.is_absolute() {
+            return None;
+        }
+        let meta = std::fs::symlink_metadata(&candidate).ok()?;
+        if !meta.is_file() {
+            return None;
+        }
+        let real = candidate.canonicalize().ok()?;
+        if !real.is_file() || real.starts_with(&checkout_real) {
+            return None;
+        }
+        Some(real)
+    };
+
+    let primary = crate::main_worktree_root_from(checkout);
+    if let Ok(primary_real) = primary.canonicalize() {
+        if primary_real != checkout_real {
+            if let Some(db) = accept(primary_real.join(".codegraph/codegraph.db")) {
+                return Some(db);
+            }
+        }
+    }
+
+    if let Some(home) = aida_core::home::home_dir() {
+        let cfg_path = home.join(".aida/config.toml");
+        if let Ok(raw) = std::fs::read_to_string(cfg_path) {
+            if let Ok(val) = toml::from_str::<toml::Value>(&raw) {
+                if let Some(db_str) = val
+                    .get("codegraph")
+                    .and_then(|c| c.get("db"))
+                    .and_then(|d| d.as_str())
+                {
+                    if let Some(db) = accept(PathBuf::from(db_str.trim())) {
+                        return Some(db);
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Query the operator's trusted CodeGraph SQLite index in read-only mode to enrich
+/// the review preparation bundle and batch prompts with AST symbol definitions, inbound
+/// cross-file callers (highlighting callers untouched by this diff), and outbound callees.
+// trace:STORY-3120 | ai:antigravity
+fn build_codegraph_review_context(
+    project_root: &Path,
+    mode: &str,
+    merge_base: Option<&str>,
+    head_ref: Option<&str>,
+    inventory: &ClassifiedInventory,
+    excludes: &[(&str, CompiledGlob)],
+) -> Option<CodegraphReviewContext> {
+    use rusqlite::{Connection, OpenFlags};
+
+    if inventory.reviewable_files.is_empty() {
+        return None;
+    }
+    let db_path = resolve_trusted_codegraph_db(project_root)?;
+    let conn = Connection::open_with_flags(
+        &db_path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .ok()?;
+    let _ = conn.busy_timeout(std::time::Duration::from_millis(250));
+
+    let diff_files: BTreeSet<&str> = inventory
+        .reviewable_files
+        .iter()
+        .map(|f| f.path.as_str())
+        .collect();
+    let range_arg = match (mode, merge_base, head_ref) {
+        ("commit" | "range", Some(mb), Some(head)) => Some(format!("{mb}..{head}")),
+        _ => None,
+    };
+
+    let mut file_fan_in = Vec::new();
+    let mut touched_symbols = Vec::new();
+    let mut total_untouched_external_callers = 0usize;
+
+    let mut fan_in_stmt = conn
+        .prepare(
+            "SELECT COUNT(DISTINCT caller.file_path), COUNT(*)
+             FROM edges e
+             JOIN nodes target ON e.target = target.id
+             JOIN nodes caller ON e.source = caller.id
+             WHERE target.file_path = ?1 AND caller.file_path != ?1",
+        )
+        .ok()?;
+
+    let mut symbols_stmt = conn
+        .prepare(
+            "SELECT id, kind, name, start_line, end_line, signature
+             FROM nodes
+             WHERE file_path = ?1
+               AND kind IN ('function', 'method', 'struct', 'trait', 'enum', 'interface', 'class')
+             ORDER BY start_line ASC",
+        )
+        .ok()?;
+
+    let mut callers_stmt = conn
+        .prepare(
+            "SELECT caller.file_path, caller.name, caller.kind, COALESCE(e.line, caller.start_line), caller.signature, caller.start_line, caller.end_line
+             FROM edges e
+             JOIN nodes caller ON e.source = caller.id
+             WHERE e.target = ?1
+               AND caller.file_path != ?2
+               AND e.kind IN ('calls', 'references', 'instantiates', 'implements')
+             ORDER BY caller.file_path ASC, e.line ASC",
+        )
+        .ok()?;
+
+    let mut callees_stmt = conn
+        .prepare(
+            "SELECT target.file_path, target.name, target.kind, COALESCE(e.line, target.start_line), target.signature, target.start_line, target.end_line
+             FROM edges e
+             JOIN nodes target ON e.target = target.id
+             WHERE e.source = ?1
+               AND target.file_path != ?2
+               AND e.kind = 'calls'
+               AND target.kind IN ('function', 'method')
+             ORDER BY target.file_path ASC, target.start_line ASC
+             LIMIT 5",
+        )
+        .ok()?;
+
+    for rf in &inventory.reviewable_files {
+        let path = rf.path.as_str();
+        if let Ok((distinct_files, inbound_edges)) = fan_in_stmt.query_row([path], |row| {
+            Ok((row.get::<_, usize>(0)?, row.get::<_, usize>(1)?))
+        }) {
+            if distinct_files > 0 {
+                file_fan_in.push(CodegraphFileFanIn {
+                    file_path: path.to_string(),
+                    distinct_caller_files: distinct_files,
+                    inbound_edges,
+                    is_high_fan_in_hub: distinct_files >= 25,
+                });
+            }
+        }
+
+        let hunk_ranges = if mode == "scan" {
+            vec![(1usize, usize::MAX)]
+        } else {
+            let patch = if let Some(r) = &range_arg {
+                git_text(
+                    project_root,
+                    &[
+                        "diff",
+                        "--unified=0",
+                        "--no-ext-diff",
+                        "--no-color",
+                        "--end-of-options",
+                        r,
+                        "--",
+                        path,
+                    ],
+                )
+                .unwrap_or_default()
+            } else {
+                git_text(
+                    project_root,
+                    &[
+                        "diff",
+                        "--unified=0",
+                        "--no-ext-diff",
+                        "--no-color",
+                        "HEAD",
+                        "--",
+                        path,
+                    ],
+                )
+                .unwrap_or_default()
+            };
+            let parsed = parse_unified_diff_new_line_ranges(&patch);
+            if parsed.is_empty() {
+                vec![(1usize, usize::MAX)]
+            } else {
+                parsed
+            }
+        };
+
+        let Ok(rows) = symbols_stmt.query_map([path], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, isize>(3)?.max(1) as usize,
+                row.get::<_, isize>(4)?.max(1) as usize,
+                row.get::<_, Option<String>>(5)?,
+            ))
+        }) else {
+            continue;
+        };
+
+        let mut file_symbol_count = 0usize;
+        for row in rows.flatten() {
+            if file_symbol_count >= 12 {
+                break;
+            }
+            let (node_id, kind, name, start_line, end_line, signature) = row;
+            let overlaps = hunk_ranges
+                .iter()
+                .any(|(hs, he)| start_line <= *he && end_line >= *hs);
+            if !overlaps {
+                continue;
+            }
+
+            let mut total_external_callers = 0usize;
+            let mut untouched_external_callers = 0usize;
+            let mut sample_callers = Vec::new();
+            let mut seen_callers = BTreeSet::new();
+
+            if let Ok(caller_rows) = callers_stmt.query_map([node_id.as_str(), path], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, isize>(3)?.max(1) as usize,
+                    r.get::<_, Option<String>>(4)?,
+                    r.get::<_, isize>(5)?.max(1) as usize,
+                    r.get::<_, isize>(6)?.max(1) as usize,
+                ))
+            }) {
+                for c in caller_rows.flatten() {
+                    let (c_path, c_name, c_kind, c_line, c_sig, c_start, c_end) = c;
+                    let dedup_key = format!("{c_path}:{c_name}:{c_line}");
+                    if !seen_callers.insert(dedup_key) {
+                        continue;
+                    }
+                    total_external_callers += 1;
+                    let is_untouched = !diff_files.contains(c_path.as_str());
+                    if is_untouched {
+                        untouched_external_callers += 1;
+                    }
+                    if sample_callers.len() < 6 {
+                        let body_snippet = if is_untouched && sample_callers.len() < 3 {
+                            slice_external_symbol_body(
+                                project_root,
+                                head_ref,
+                                &c_path,
+                                excludes,
+                                c_start,
+                                c_end,
+                                35,
+                            )
+                        } else {
+                            None
+                        };
+                        sample_callers.push(CodegraphCrossFileEdge {
+                            file_path: c_path,
+                            symbol_name: c_name,
+                            symbol_kind: c_kind,
+                            line: c_line,
+                            signature: c_sig.map(|s| truncate_str(&s, 120)),
+                            is_untouched_in_diff: is_untouched,
+                            body_snippet,
+                        });
+                    }
+                }
+            }
+
+            let mut sample_callees = Vec::new();
+            let mut seen_callees = BTreeSet::new();
+            if let Ok(callee_rows) = callees_stmt.query_map([node_id.as_str(), path], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, isize>(3)?.max(1) as usize,
+                    r.get::<_, Option<String>>(4)?,
+                    r.get::<_, isize>(5)?.max(1) as usize,
+                    r.get::<_, isize>(6)?.max(1) as usize,
+                ))
+            }) {
+                for c in callee_rows.flatten() {
+                    let (t_path, t_name, t_kind, t_line, t_sig, t_start, t_end) = c;
+                    let dedup_key = format!("{t_path}:{t_name}");
+                    if !seen_callees.insert(dedup_key) {
+                        continue;
+                    }
+                    if sample_callees.len() < 5 {
+                        let is_untouched = !diff_files.contains(t_path.as_str());
+                        let body_snippet = if is_untouched && sample_callees.len() < 3 {
+                            slice_external_symbol_body(
+                                project_root,
+                                head_ref,
+                                &t_path,
+                                excludes,
+                                t_start,
+                                t_end,
+                                35,
+                            )
+                        } else {
+                            None
+                        };
+                        sample_callees.push(CodegraphCrossFileEdge {
+                            file_path: t_path,
+                            symbol_name: t_name,
+                            symbol_kind: t_kind,
+                            line: t_line,
+                            signature: t_sig.map(|s| truncate_str(&s, 120)),
+                            is_untouched_in_diff: is_untouched,
+                            body_snippet,
+                        });
+                    }
+                }
+            }
+
+            total_untouched_external_callers += untouched_external_callers;
+            touched_symbols.push(CodegraphTouchedSymbol {
+                file_path: path.to_string(),
+                name,
+                kind,
+                start_line,
+                end_line,
+                signature: signature.map(|s| truncate_str(&s, 120)),
+                total_external_callers,
+                untouched_external_callers,
+                sample_callers,
+                sample_callees,
+            });
+            file_symbol_count += 1;
+        }
+    }
+
+    if file_fan_in.is_empty() && touched_symbols.is_empty() {
+        return None;
+    }
+
+    Some(CodegraphReviewContext {
+        index_path: ".codegraph/codegraph.db".to_string(),
+        total_touched_symbols: touched_symbols.len(),
+        total_untouched_external_callers,
+        file_fan_in,
+        touched_symbols,
+    })
+}
+
+fn truncate_str(s: &str, max_chars: usize) -> String {
+    let clean = s.trim().replace('\n', " ");
+    if clean.chars().count() <= max_chars {
+        clean
+    } else {
+        let mut out: String = clean.chars().take(max_chars).collect();
+        out.push('…');
+        out
+    }
+}
+
+/// Slice up to `max_lines` (`<= 4096` bytes) of an untouched external caller or callee symbol,
+/// screening the path through `is_credential_path` and `classify_path_exclusion` and reading
+/// through revision-pinned `read_file_at_revision` (`open_confined` in workspace mode).
+// trace:STORY-3120 | ai:antigravity
+fn slice_external_symbol_body(
+    project_root: &Path,
+    target_rev: Option<&str>,
+    rel_path: &str,
+    excludes: &[(&str, CompiledGlob)],
+    start_line: usize,
+    end_line: usize,
+    max_lines: usize,
+) -> Option<String> {
+    const MAX_SLICE_BYTES: usize = 4096;
+    if aida_core::review_engine::is_credential_path(rel_path)
+        || aida_core::review_engine::classify_path_exclusion(rel_path, excludes).is_some()
+    {
+        return None;
+    }
+    let text = read_file_at_revision(project_root, target_rev, rel_path).ok()??;
+    let lines: Vec<&str> = text.lines().collect();
+    if lines.is_empty() || start_line == 0 || start_line > lines.len() {
+        return None;
+    }
+    let s_idx = start_line - 1;
+    let e_idx = end_line.max(start_line).min(lines.len()) - 1;
+    let take_count = (e_idx - s_idx + 1).min(max_lines);
+    let mut snippet = lines[s_idx..s_idx + take_count].join("\n");
+    if e_idx - s_idx + 1 > max_lines {
+        snippet.push_str("\n// ... (truncated)");
+    }
+    if snippet.len() > MAX_SLICE_BYTES {
+        let cut = (0..=MAX_SLICE_BYTES)
+            .rev()
+            .find(|&i| snippet.is_char_boundary(i))
+            .unwrap_or(0);
+        snippet.truncate(cut);
+    }
+    if snippet.trim().is_empty() {
+        None
+    } else {
+        Some(snippet)
+    }
+}
+
+/// Discover and read up to 2 nearest package/dependency manifests (`<= 16 KB` each)
+/// for a batch of reviewed files, screening each candidate path through `is_credential_path`
+/// and `classify_path_exclusion` and reading via `read_file_at_revision`.
+// trace:STORY-3120 | ai:antigravity
+fn collect_batch_dependency_manifests(
+    project_root: &Path,
+    target_rev: Option<&str>,
+    batch_files: &[String],
+    excludes: &[(&str, CompiledGlob)],
+) -> Vec<(String, String)> {
+    const MANIFEST_NAMES: &[&str] = &[
+        "pyproject.toml",
+        "requirements.txt",
+        "package.json",
+        "Cargo.toml",
+        "go.mod",
+        "pom.xml",
+        "build.gradle",
+        "build.gradle.kts",
+    ];
+    let batch_set: BTreeSet<&str> = batch_files.iter().map(String::as_str).collect();
+    let mut candidate_dirs: BTreeSet<PathBuf> = BTreeSet::new();
+    candidate_dirs.insert(PathBuf::new());
+    for file in batch_files {
+        let mut cur = Path::new(file).parent();
+        while let Some(dir) = cur {
+            candidate_dirs.insert(dir.to_path_buf());
+            cur = dir.parent();
+        }
+    }
+
+    let mut manifests = Vec::new();
+    let mut seen_paths = BTreeSet::new();
+    for dir in candidate_dirs {
+        for &name in MANIFEST_NAMES {
+            let rel = if dir.as_os_str().is_empty() {
+                name.to_string()
+            } else {
+                format!("{}/{name}", dir.to_string_lossy().replace('\\', "/"))
+            };
+            if batch_set.contains(rel.as_str())
+                || !seen_paths.insert(rel.clone())
+                || aida_core::review_engine::is_credential_path(&rel)
+                || aida_core::review_engine::classify_path_exclusion(&rel, excludes).is_some()
+            {
+                continue;
+            }
+            if let Ok(Some(text)) = read_file_at_revision(project_root, target_rev, &rel) {
+                if text.len() <= 16_384 && !text.trim().is_empty() {
+                    manifests.push((rel, text));
+                }
+            }
+            if manifests.len() >= 2 {
+                return manifests;
+            }
+        }
+    }
+    manifests
 }
 
 // trace:TASK-3862 | ai:codex
@@ -2097,8 +3292,11 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let config_dir = root.path().join(".aida");
         std::fs::create_dir(&config_dir).unwrap();
-        std::fs::write(config_dir.join("review-rules.toml"), "[unterminated").unwrap();
         let _guard = crate::test_env::AmbientGuard::hermetic(root.path(), None);
+        git_text(root.path(), &["init", "-q"]).unwrap();
+        std::fs::write(config_dir.join("review-rules.toml"), "[unterminated").unwrap();
+        git_text(root.path(), &["add", ".aida/review-rules.toml"]).unwrap();
+        crate::test_git::commit_fixture(root.path());
         let store = Storage::new(root.path().join("requirements.yaml"));
         let error = handle_review_prepare(&ReviewPrepareArgs::default(), &store).unwrap_err();
         // The cause rides along with the context. trace:BUG-2779 | ai:claude
@@ -2114,6 +3312,8 @@ mod tests {
             format!("[[rules]]\nid = 'custom-check'\npattern = '{pattern}'\nchecklist = 'inspect'"),
         )
         .unwrap();
+        git_text(root.path(), &["add", ".aida/review-rules.toml"]).unwrap();
+        crate::test_git::commit_fixture(root.path());
         let error = handle_review_prepare(&ReviewPrepareArgs::default(), &store)
             .unwrap_err()
             .to_string();
@@ -3104,7 +4304,7 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         assert_eq!(mb, base);
         let trusted = trusted_review_base(
             root,
-            run_review_base("range", Some(&mb)).unwrap(),
+            run_review_base("range", None, Some(&mb)).unwrap(),
             Some(&reviewed),
         );
         assert_eq!(
@@ -3113,14 +4313,19 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         );
         // The target tip is not the base: it would read the wrong rules and refuse.
         assert!(trusted_review_base(root, &tip, Some(&reviewed)).is_err());
-        // The checkout's HEAD (PR-supplied) never becomes the base.
-        for (mode, supplied) in [
-            ("workspace", None),
-            ("scan", None),
-            ("commit", Some(head.as_str())),
-        ] {
-            assert!(run_review_base(mode, supplied).is_err(), "{mode}");
-        }
+        // Local review modes resolve their committed base: HEAD for workspace/scan,
+        // and the parent commit for --commit REV.
+        assert_eq!(
+            run_review_base("workspace", Some(&head), None).unwrap(),
+            head
+        );
+        assert_eq!(run_review_base("scan", Some(&head), None).unwrap(), head);
+        assert_eq!(
+            run_review_base("commit", Some(&base), Some(&base)).unwrap(),
+            base
+        );
+        assert!(run_review_base("workspace", None, None).is_err());
+        assert!(run_review_base("commit", None, None).is_err());
         let batch = ReviewBatch {
             batch_index: 1,
             label: "b".into(),
@@ -3540,6 +4745,7 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
                 status: "@status".into(),
                 acceptance_markdown: format!("- @accept {hostile}"),
             }],
+            codegraph_context: None,
             coverage_verification: None,
             anchored_findings: Some(vec![finding.clone()]),
             adversarial: Some(AdversarialSummary {
@@ -3552,6 +4758,7 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
                 ..Default::default()
             }),
             nothing_to_review: None,
+            telemetry: None,
         };
         let forge = crate::forge::fake::RecordingForge::new();
         post_review_comment(&forge, 42, &bundle, "out.md").unwrap();
@@ -3643,10 +4850,12 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             batches: Vec::new(),
             playbooks: Vec::new(),
             linked_specs: Vec::new(),
+            codegraph_context: None,
             coverage_verification: None,
             anchored_findings: Some((0..150).map(|i| finding(i, message(i))).collect()),
             adversarial: None,
             nothing_to_review: None,
+            telemetry: None,
         };
         let full = render_bundle_markdown(&bundle);
         assert!(full.chars().count() > 70_000, "{}", full.len());
@@ -4210,5 +5419,201 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         assert!(md.contains("this is not a pass"), "{md}");
         assert!(md.contains("**Passed**: not applicable"), "{md}");
         assert!(!md.contains("`true`"), "{md}");
+    }
+
+    // trace:STORY-3120 | ai:antigravity
+    #[test]
+    fn s8_codegraph_reads_only_trusted_index_never_checkout_and_records_telemetry() {
+        for name in ["opencode", "pi"] {
+            let vendor = review_vendor_ext(name).unwrap();
+            assert!(!vendor.no_read && !vendor.confinement_verified);
+            let err = super::ensure_postable(true, [Some(vendor)]).unwrap_err();
+            assert!(
+                err.to_string().contains("--post-comment refused"),
+                "{name}: {err}"
+            );
+        }
+
+        let temp = tempfile::tempdir().unwrap();
+        let primary = temp.path().join("primary");
+        let linked = temp.path().join("linked");
+        std::fs::create_dir_all(&primary).unwrap();
+        let guard = crate::test_env::AmbientGuard::hermetic(&primary, None);
+        git_text(&primary, &["init", "-q"]).unwrap();
+        std::fs::write(primary.join("src_a.rs"), "pub fn run() -> i32 { 1 }\n").unwrap();
+        git_text(&primary, &["add", "src_a.rs"]).unwrap();
+        let base = crate::test_git::commit_fixture(&primary);
+
+        // Rule 1: A `.codegraph/codegraph.db` planted inside the checkout under review is NEVER read.
+        std::fs::create_dir_all(primary.join(".codegraph")).unwrap();
+        std::fs::write(primary.join(".codegraph/codegraph.db"), "untrusted").unwrap();
+        assert_eq!(super::resolve_trusted_codegraph_db(&primary), None);
+
+        // Build a real trusted SQLite CodeGraph database in the primary worktree, then create a
+        // linked worktree (`primary != checkout`) and verify `resolve_trusted_codegraph_db(&linked)`
+        // resolves only the primary worktree's trusted DB, even if `linked` also has a planted DB.
+        std::fs::remove_file(primary.join(".codegraph/codegraph.db")).unwrap();
+        {
+            let conn = rusqlite::Connection::open(primary.join(".codegraph/codegraph.db")).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE nodes (id TEXT PRIMARY KEY, kind TEXT, name TEXT, file_path TEXT, start_line INTEGER, end_line INTEGER, signature TEXT);
+                 CREATE TABLE edges (source TEXT, target TEXT, kind TEXT, line INTEGER);
+                 INSERT INTO nodes VALUES ('n1', 'function', 'run', 'src_a.rs', 1, 1, 'pub fn run() -> i32');",
+            )
+            .unwrap();
+        }
+        git_text(
+            &primary,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "-b",
+                "topic",
+                linked.to_str().unwrap(),
+            ],
+        )
+        .unwrap();
+        std::fs::create_dir_all(linked.join(".codegraph")).unwrap();
+        std::fs::write(linked.join(".codegraph/codegraph.db"), "planted-in-linked").unwrap();
+
+        let resolved = super::resolve_trusted_codegraph_db(&linked).expect("trusted primary db");
+        assert_eq!(
+            resolved,
+            std::fs::canonicalize(primary.join(".codegraph/codegraph.db")).unwrap()
+        );
+
+        std::fs::write(linked.join("src_a.rs"), "pub fn run() -> i32 { 2 }\n").unwrap();
+        git_text(&linked, &["add", "src_a.rs"]).unwrap();
+        crate::test_git::commit_fixture(&linked);
+
+        drop(guard);
+        let _guard = crate::test_env::AmbientGuard::hermetic(&linked, None);
+        let store = Storage::new(linked.join(".aida-store"));
+        let args = ReviewPrepareArgs {
+            from: Some(base),
+            record_telemetry: true,
+            ab_arm: Some("test-arm".into()),
+            json: true,
+            write: Some("bundle.json".into()),
+            ..Default::default()
+        };
+        handle_review_prepare(&args, &store).unwrap();
+        let raw_bundle = std::fs::read_to_string(linked.join("bundle.json")).unwrap();
+        let parsed: ReviewPreparationBundle = serde_json::from_str(&raw_bundle).unwrap();
+        assert!(!parsed
+            .codegraph_context
+            .as_ref()
+            .unwrap()
+            .index_path
+            .is_empty());
+        assert_eq!(
+            parsed.telemetry.as_ref().unwrap().ab_arm.as_str(),
+            "test-arm"
+        );
+        assert!(linked
+            .join(".aida/review-telemetry/reviews.jsonl")
+            .is_file());
+        handle_review_prepare(&args, &store).unwrap();
+        let jsonl_rows =
+            std::fs::read_to_string(linked.join(".aida/review-telemetry/reviews.jsonl")).unwrap();
+        assert_eq!(jsonl_rows.lines().count(), 2);
+
+        // Rule 2: In local review modes (`workspace`, `--scan`, `--commit REV`), review rules and
+        // config are read only from a committed version (`HEAD` for workspace/--scan, `REV`'s parent
+        // for `--commit REV`), never from uncommitted files or from `REV` itself.
+        std::fs::create_dir_all(linked.join(".aida")).unwrap();
+        std::fs::write(
+            linked.join(".aida/review-rules.toml"),
+            "default_effort = \"xhigh\"\n",
+        )
+        .unwrap();
+        // Uncommitted `.aida/review-rules.toml` is ignored when reading from `HEAD` (`workspace`/`scan`),
+        // and `trusted_review_base(&linked, "HEAD", None)` refuses once tracked `.aida/review-rules.toml` is modified.
+        assert_eq!(
+            crate::launch::review_tuning::committed_review_rules(&linked, Some("HEAD"))
+                .unwrap()
+                .default_effort,
+            None
+        );
+
+        // Commit `.aida/review-rules.toml` in a new commit `REV`: `--commit REV` must read from
+        // `REV`'s parent (`run_review_base("commit", parent, parent)`), so `REV`'s own rule change is
+        // not trusted and `trusted_review_base(&linked, parent, Some(&rev_with_rules))` refuses.
+        git_text(&linked, &["add", ".aida/review-rules.toml"]).unwrap();
+        let rev_with_rules = crate::test_git::commit_fixture(&linked);
+        std::fs::write(
+            linked.join(".aida/review-rules.toml"),
+            "default_effort = \"low\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            crate::launch::review_tuning::committed_review_rules(&linked, Some("HEAD"))
+                .unwrap()
+                .default_effort
+                .as_deref(),
+            Some("xhigh")
+        );
+        assert!(
+            crate::launch::review_tuning::trusted_review_base(&linked, "HEAD", None)
+                .unwrap_err()
+                .to_string()
+                .contains("modifies .aida/")
+        );
+        git_text(&linked, &["checkout", "--", ".aida/review-rules.toml"]).unwrap();
+
+        let (_, rev_parent, _, rev_mb) = resolve_comparison_endpoints(
+            &linked,
+            &ReviewPrepareArgs {
+                commit: Some(rev_with_rules.clone()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let commit_trusted_rev =
+            run_review_base("commit", rev_parent.as_deref(), rev_mb.as_deref()).unwrap();
+        assert_ne!(commit_trusted_rev, rev_with_rules);
+        assert_eq!(
+            crate::launch::review_tuning::committed_review_rules(&linked, Some(commit_trusted_rev))
+                .unwrap()
+                .default_effort,
+            None
+        );
+        assert!(crate::launch::review_tuning::trusted_review_base(
+            &linked,
+            commit_trusted_rev,
+            Some(&rev_with_rules)
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("modifies .aida/"));
+
+        // Rule 3: In a repo without AIDA (no `.aida-store`, `requirements.db`, or `requirements.yaml`),
+        // the default review vendor comes ONLY from the user's own `~/.aida/agents.toml`, never from
+        // an `.aida/` folder inside the repo being reviewed.
+        std::fs::write(
+            linked.join(".aida/agents.toml"),
+            "[agents]\nvendor = \"codex\"\n",
+        )
+        .unwrap();
+        git_text(&linked, &["add", ".aida/agents.toml"]).unwrap();
+        let rev_with_vendor = crate::test_git::commit_fixture(&linked);
+        let standalone_trusted =
+            crate::launch::review_tuning::trusted_review_base(&linked, &rev_with_vendor, None)
+                .unwrap();
+        let (default_vendor, named_vendors) =
+            crate::launch::review_tuning::trusted_default_vendor(&standalone_trusted).unwrap();
+        assert_eq!(default_vendor, None);
+        assert!(named_vendors.is_empty());
+
+        let home = aida_core::home::home_dir().unwrap();
+        std::fs::create_dir_all(home.join(".aida")).unwrap();
+        let global_agents = home.join(".aida/agents.toml");
+        std::fs::write(&global_agents, "[agents]\nvendor = \"claude\"\n").unwrap();
+        let (default_vendor, named_vendors) =
+            crate::launch::review_tuning::trusted_default_vendor(&standalone_trusted).unwrap();
+        let _ = std::fs::remove_file(&global_agents);
+        assert_eq!(default_vendor.as_deref(), Some("claude"));
+        assert_eq!(named_vendors, vec!["claude".to_string()]);
     }
 }

@@ -6,16 +6,22 @@
 //! authored none of the change.
 
 use super::review_runner::RunnerCall;
-use super::review_tuning::{resolve_challenger, TrustedBase};
-use crate::vendors::review_runner::{review_vendor, ReviewVendor, REVIEW_VENDORS};
+use super::review_tuning::{resolve_challenger, step_up_challenger_effort, TrustedBase};
+use crate::vendors::review_runner::{
+    review_vendor, review_vendor_ext, ReviewVendor, REVIEW_VENDORS,
+};
 use aida_core::review_engine::RawReviewFinding;
 use anyhow::{bail, ensure, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
+// trace:STORY-3120 | ai:antigravity
 const CHALLENGE_HEAD: &str = "You are the challenger in a two-pass code review. \
 For each numbered finding below, try to reproduce the defect from the change shown. \
-Refute it when the code does not have it. Reply with JSON only, one verdict per \
+Confirm (`reproduced`) ONLY if ALL THREE conditions hold: (1) Technically True in the actual code, \
+(2) Introduced or Materially Exacerbated by This Change (not an untouched pre-existing issue), \
+and (3) Non-Trivial & Actionable (not subjective style or compiler/linter redundancy). \
+Refute (`refuted`) it when any condition fails. Reply with JSON only, one verdict per \
 finding: {\"verdicts\":[{\"index\":<n>,\"verdict\":\"reproduced|refuted\",\
 \"reason\":\"...\"}]}\n\n";
 
@@ -55,7 +61,7 @@ pub(crate) fn detect_ai_authors(messages: &str) -> BTreeSet<&'static str> {
         let tools = tag[..end].split(':').next().unwrap_or_default();
         for tool in tools.split('+').map(str::trim) {
             // Aliases (`antigravity`) resolve as `--agent` does. trace:STORY-3202 | ai:claude
-            found.extend(review_vendor(tool).ok().map(|v| v.program));
+            found.extend(review_vendor_ext(tool).ok().map(|v| v.program));
         }
     }
     found
@@ -145,6 +151,18 @@ pub(crate) fn challenger_call<'a>(
         tuning: Default::default(),
     };
     call.tuning = resolve_challenger(call.vendor(), finder.parent_env, effort_flag, base)?;
+    // Single-vendor opposition fallback: when Finder and Challenger share the same vendor
+    // and no explicit challenger effort was configured, automatically step up Challenger
+    // reasoning effort by one tier (`low` -> `medium` -> `high` -> `xhigh`, capped at `xhigh`).
+    // trace:STORY-3120 | ai:antigravity
+    let same_vendor = match (finder.vendor(), call.vendor()) {
+        (Some(f), Some(c)) => f.program == c.program,
+        _ => false,
+    };
+    if same_vendor && call.tuning.effort().is_none() {
+        let stepped = step_up_challenger_effort(call.vendor(), finder.tuning.effort());
+        call.tuning.set_effort_if_none(stepped);
+    }
     let summary = AdversarialSummary {
         challenger_agent: agent.map(|v| v.program.to_owned()),
         challenger_effort: call.tuning.effort().map(str::to_owned),
@@ -650,5 +668,91 @@ mod tests {
             |agent| resolve_challenger(review_vendor(agent).ok(), &env, Some("max"), &rules("low"));
         assert!(tuning("codex").is_err());
         assert_eq!(tuning("claude").unwrap().effort(), Some("max"));
+    }
+
+    // trace:STORY-3120 | ai:antigravity
+    #[test]
+    fn s9_opencode_pi_no_read_false_and_single_vendor_effort_step_up() {
+        for name in ["opencode", "pi"] {
+            let v = review_vendor_ext(name).unwrap();
+            assert!(!v.no_read, "{name} must have no_read=false");
+            assert!(
+                !v.confinement_verified,
+                "{name} must have confinement_verified=false"
+            );
+            assert!(!v.post_allowed, "{name} must have post_allowed=false");
+        }
+        let (bin, checkout) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let dump = "#!/bin/sh\nenv | sed 's/^/env=/'\nfor a in \"$@\"; do echo \"arg=$a\"; done\n";
+        for name in ["claude", "codex", "opencode", "pi"] {
+            crate::test_exec::write_executable(&bin.path().join(name), dump);
+        }
+        crate::launch::review_runner::passthrough_bwrap(bin.path());
+        let path = format!("{}:/usr/bin:/bin", bin.path().display());
+        let env = vec![
+            (OsString::from("PATH"), OsString::from(path.as_str())),
+            (OsString::from("HOME"), OsString::from("/nonexistent")),
+            (
+                OsString::from("OPENCODE_CONFIG_CONTENT"),
+                OsString::from("{\"tools\":{\"bash\":true}}"),
+            ),
+            (
+                OsString::from("XDG_CONFIG_HOME"),
+                checkout.path().join("hostile-xdg").into_os_string(),
+            ),
+        ];
+        let ext_finder = |agent: &str| RunnerCall {
+            agent: review_vendor_ext(agent).ok(),
+            ..finder("claude", checkout.path(), &env)
+        };
+        let opencode_out = ext_finder("opencode").run("prompt").unwrap();
+        assert!(
+            opencode_out.contains("env=OPENCODE_CONFIG_CONTENT={\"tools\":{\"bash\":false")
+                && opencode_out.contains("\"permission\":{\"*\":\"deny\"")
+                && !opencode_out.contains("\"bash\":true")
+                && !opencode_out.contains("XDG_CONFIG_HOME"),
+            "{opencode_out}"
+        );
+        let pi_out = ext_finder("pi").run("prompt").unwrap();
+        for flag in [
+            "arg=--print",
+            "arg=--no-tools",
+            "arg=--no-session",
+            "arg=--no-extensions",
+            "arg=--no-skills",
+            "arg=--no-prompt-templates",
+        ] {
+            assert!(pi_out.contains(flag), "missing {flag} in:\n{pi_out}");
+        }
+        let claude_call = finder("claude", checkout.path(), &env);
+        let detected = BTreeSet::from(["claude", "codex", "opencode", "pi"]);
+        // Neither opencode nor pi has confinement_verified=true, so auto-pick never selects them;
+        // when claude and codex are both in `detected`, auto-pick falls back to same-vendor claude.
+        let (picked, note) = pick_challenger(&claude_call, &detected);
+        assert_eq!(picked.map(|v| v.program), Some("claude"));
+        assert!(note.is_some());
+
+        let base = TrustedBase::default();
+        let codex_vendor = review_vendor("codex").ok();
+        for (finder_effort, expected_challenger_effort) in [
+            (None, "high"),
+            (Some("low"), "medium"),
+            (Some("medium"), "high"),
+            (Some("high"), "xhigh"),
+            (Some("xhigh"), "xhigh"),
+        ] {
+            let mut f = finder("codex", checkout.path(), &env);
+            f.tuning.set_effort_if_none(finder_effort);
+            let (challenger, summary) =
+                challenger_call(&f, &BTreeSet::from(["codex"]), codex_vendor, None, &base).unwrap();
+            assert!(
+                summary
+                    .note
+                    .as_deref()
+                    .is_some_and(|n| n.contains("same-vendor challenger")),
+                "{summary:?}"
+            );
+            assert_eq!(challenger.tuning.effort(), Some(expected_challenger_effort));
+        }
     }
 }

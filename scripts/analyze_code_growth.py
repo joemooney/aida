@@ -261,6 +261,10 @@ def export_tree(repo: str, sha: str, dest: Path) -> int:
             assert src is not None
             with open(target, "wb") as fh:
                 shutil.copyfileobj(src, fh)
+        # Drain any trailing tar end-of-archive zero padding so `git archive`
+        # does not receive SIGPIPE (-13) when proc.stdout closes early.
+        while proc.stdout.read(65536):
+            pass
     proc.stdout.close()
     err = proc.stderr.read().decode(errors="replace") if proc.stderr else ""
     if proc.stderr:
