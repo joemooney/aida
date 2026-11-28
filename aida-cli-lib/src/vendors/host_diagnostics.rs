@@ -114,7 +114,7 @@ pub(crate) fn agy_auth_probe(
     home: Option<&Path>,
     deadline: Duration,
 ) -> Option<AgyAuth> {
-    use crate::launch::review_runner::{RunnerCall, STDERR_CAP};
+    use crate::launch::review_runner::{DeadlineExceeded, RunnerCall, STDERR_CAP};
     use crate::vendors::review_runner::{AuthRequired, AGY_AUTH_PROBE};
     let checkout = tempfile::tempdir().ok()?;
     let call = RunnerCall {
@@ -135,7 +135,7 @@ pub(crate) fn agy_auth_probe(
         Ok(_) => AgyAuth::Ready,
         Err(e) if e.downcast_ref::<AuthRequired>().is_some() && token => AgyAuth::Rejected,
         Err(e) if e.downcast_ref::<AuthRequired>().is_some() => AgyAuth::KeyringOnly,
-        Err(e) if e.to_string().contains("deadline") => AgyAuth::Timeout,
+        Err(e) if e.downcast_ref::<DeadlineExceeded>().is_some() => AgyAuth::Timeout,
         Err(e) => AgyAuth::Failed(format!("{e:#}").chars().take(300).collect()),
     })
 }
@@ -149,9 +149,9 @@ pub(crate) fn agy_auth_probe_check(cause: &AgyAuth, required: bool) -> Check {
              kept only in the desktop keyring (Secret Service on the session bus) is \
              unreachable from a lane, which has no session bus or TTY"
                 .into(),
-            "set GEMINI_API_KEY in the launching environment, or sign in once with the \
-             keyring unreachable (`env -u DBUS_SESSION_BUS_ADDRESS agy`) so agy writes \
-             ~/.gemini/antigravity-cli/antigravity-oauth-token; then retry",
+            "sign in once from an ssh session (`ssh -t <host> agy`), which writes \
+             ~/.gemini/antigravity-cli/antigravity-oauth-token; lanes run over ssh and \
+             read that file (or set GEMINI_API_KEY in the launching environment)",
         ),
         AgyAuth::Rejected => (
             "non-interactive agy asks for sign-in despite its file-backed token".into(),
@@ -182,13 +182,18 @@ pub(crate) fn agy_auth_probe_check(cause: &AgyAuth, required: bool) -> Check {
 
 /// The lane-host agy auth probe when agy is on PATH: required when agy is an
 /// enabled lane vendor, a note when it is only installed (a review challenger
-/// candidate).
+/// candidate). The probe calls the vendor over the network, so only
+/// `aida doctor --lane-host` (`networked`) runs it; `aida init` never does.
 // trace:STORY-3202 | ai:claude
 pub(crate) fn agy_lane_probe(
     enabled: &[&str],
     env: &Environment,
     home: Option<&Path>,
+    networked: bool,
 ) -> Option<Check> {
+    if !networked {
+        return None;
+    }
     let cause = agy_auth_probe(&env.to_pairs(), home, Duration::from_secs(30))?;
     Some(agy_auth_probe_check(&cause, enabled.contains(&"agy")))
 }
@@ -271,7 +276,11 @@ mod tests {
         let json = serde_json::to_value(agy_auth_probe_check(&cause, true)).unwrap();
         let (fix, detail) = (json["fix"].as_str().unwrap(), json["detail"].to_string());
         assert!(
-            fix.contains("GEMINI_API_KEY") && fix.contains("oauth-token"),
+            fix.contains("ssh -t <host> agy") && fix.contains("lanes run over ssh"),
+            "{fix}"
+        );
+        assert!(
+            fix.contains("antigravity-oauth-token") && !fix.contains("DBUS"),
             "{fix}"
         );
         assert!(detail.contains("keyring") && json["required"] == true && json["pass"] == false);
@@ -283,8 +292,37 @@ mod tests {
         assert_eq!(probe("exec /bin/sleep 30", None, 1), AgyAuth::Timeout);
         let odd = probe("echo 'quota exceeded' >&2; exit 1", None, 20);
         assert!(matches!(odd, AgyAuth::Failed(why) if why.contains("quota exceeded")));
+        // Timeout comes from the typed deadline, never from the text of stderr.
+        let text = probe("echo 'upstream deadline exceeded' >&2; exit 1", None, 20);
+        assert!(matches!(text, AgyAuth::Failed(why) if why.contains("deadline")));
         let note = serde_json::to_value(agy_auth_probe_check(&AgyAuth::Ready, false)).unwrap();
         assert!(note["pass"] == true && note["required"] == false);
+    }
+
+    /// `aida init` (lane_host::report) passes `networked = false`: a fake agy on
+    /// PATH that records each call is never spawned; the doctor path spawns it.
+    // trace:STORY-3202 | ai:claude
+    #[test]
+    fn story3202_init_report_makes_no_agy_call() {
+        let bin = tempfile::tempdir().unwrap();
+        let mark = bin.path().join("called");
+        let src = bin.path().join("src");
+        std::fs::write(
+            &src,
+            format!("#!/bin/sh\n: > '{}'\necho m\n", mark.display()),
+        )
+        .unwrap();
+        let cp = std::process::Command::new("/usr/bin/install")
+            .arg("-m755")
+            .arg(&src)
+            .arg(bin.path().join("agy"))
+            .status();
+        assert!(cp.unwrap().success());
+        let env = Environment::from_pairs([("PATH".into(), bin.path().as_os_str().to_owned())]);
+        assert!(agy_lane_probe(&["agy"], &env, None, false).is_none());
+        assert!(!mark.exists(), "init's report path spawned agy");
+        assert!(agy_lane_probe(&["agy"], &env, None, true).is_some_and(|c| c.pass));
+        assert!(mark.exists(), "the doctor path runs the probe");
     }
 
     #[test]

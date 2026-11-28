@@ -2433,6 +2433,14 @@ fn typed_gate_member_with(
     })
 }
 
+/// Why the automatic train refuses a supervised PR, read from the default
+/// branch's committed `[landing]` only (never a worktree edit). An
+/// unreadable policy is the default: off, so it refuses.
+// trace:STORY-3181 | ai:claude
+pub(crate) fn auto_train_supervised_refusal(main_worktree: &Path) -> Option<String> {
+    crate::landing_policy::load(main_worktree).auto_train_supervised_refusal()
+}
+
 /// [`MemberChecks`] against the project's forge, store and main clone.
 // trace:STORY-1690 | ai:claude
 pub(crate) struct LiveChecks<'a> {
@@ -2717,6 +2725,16 @@ impl MemberChecks for LiveChecks<'_> {
         head_ref: &str,
         head: &str,
     ) -> std::result::Result<crate::gate::mandate_ship::MandateCover, Option<MemberGateError>> {
+        // The automatic pass (and its read-only pre-scan) lands no supervised
+        // PR unless the default branch's `[landing]` allows it; the refusal
+        // comes before any mandate read. Manual trains are unchanged.
+        // trace:STORY-3181 | ai:claude
+        if ADVISOR_LOOP.with(std::cell::Cell::get) {
+            if let Some(why) = auto_train_supervised_refusal(self.main_worktree) {
+                at_gate(Gate::Mandate);
+                return Err(Some(MemberGateError::Refused(why)));
+            }
+        }
         // trace:STORY-2824 | ai:claude
         if self.read_only {
             if !self.mandate_active() {
@@ -6192,6 +6210,11 @@ impl AutomaticPrescan {
         .map(|_| ())
     }
 }
+
+// trace:STORY-3181 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_3181_auto_train_knob_tests.rs"]
+mod story_3181_auto_train_knob_tests;
 
 // trace:STORY-2905 | ai:claude
 #[cfg(test)]

@@ -104,6 +104,15 @@ that in Step 4. (Filing as the advisor is what lets `--status approved` stick;
 as the default implementer role it would land in *Draft* with a note that
 approving needs advisor authority.)
 
+> **About the IDs in this guide.** They are shortened to `EPIC-1`, `STORY-1`
+> and so on to keep the examples readable. In a project not yet shared with a
+> team, `aida add` issues longer IDs such as
+> `EPIC-6A48B62E3D0E4B11A240EB48347C3317-001`: the long middle part names this
+> copy of the project, so IDs made in different copies never clash. `aida init`
+> prints the exact ID your first task will get. Use the ID `aida add` prints
+> wherever this guide writes a short one.
+<!-- trace:TASK-3956 | ai:claude -->
+
 ---
 
 ## Step 2 — File the stories
