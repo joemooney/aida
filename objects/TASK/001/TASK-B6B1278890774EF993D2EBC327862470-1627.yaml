@@ -10,12 +10,12 @@ description: |-
   - AC4: no internal SPEC IDs or seat jargon in these messages; a test per message.
 
   Source: docs/plans/2026-11-27-fresh-user-walkthrough.md, sections F10, F12, F13 (on main after #4782). Advisor aida-d3 2026-11-27 20:30 priority (g); grouped by area by product-15 for laning now.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T04:50:46.230140279Z
-modified_at: 2026-11-28T04:50:46.230140279Z
+modified_at: 2026-11-28T05:03:10.052058377Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -26,6 +26,13 @@ history:
   author: joe
   timestamp: 2026-11-28T04:50:55.404220328Z
   changes: []
+- id: 01a22089-2ae4-7193-a136-8ad85f9e34de
+  author: aida-session-start
+  timestamp: 2026-11-28T05:03:10.052050639Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 4b06a37b464472f759637aecf25042f98a4e33c2
   branch: main
