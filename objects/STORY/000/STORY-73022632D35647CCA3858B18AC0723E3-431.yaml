@@ -1,0 +1,31 @@
+id: 01a22083-e5e6-7ce3-b899-060789d5383d
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-431
+title: 'Review PR-4792: [AI:claude] fix(review): a signed-out codex fails fast with the sign-in hint (TASK-3955)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a22065`) for branch `task-3955-codex-signed-out-fast-fail`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4792>
+  - Branch: `task-3955-codex-signed-out-fast-fail` → `main`
+
+  ## Covers
+
+  - TASK-3955
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4792` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T04:57:24.710526932Z
+modified_at: 2026-11-28T04:57:24.710526932Z
+req_type: Story
+filed_at:
+  code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c
