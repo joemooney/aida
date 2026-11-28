@@ -8,12 +8,12 @@ description: |-
   - AC2: a doc test or script runs the documented commands in a throwaway repo (where feasible without network/vendor sign-in) to keep them from drifting.
 
   Source: docs/plans/2026-11-27-fresh-user-walkthrough.md, sections F1 (on main after #4782). Advisor aida-d3 2026-11-27 20:30 priority (g); grouped by area by product-15 for laning now.
-status: Approved
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T04:51:24.867906703Z
-modified_at: 2026-11-28T07:14:49.236274123Z
+modified_at: 2026-11-28T11:25:28.734918401Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -167,6 +167,24 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a221e7-2e98-7f93-be10-0815f89efd81
+  author: aida-auto-bump
+  timestamp: 2026-11-28T11:25:28.600893787Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a221e7-2f1e-7040-930b-fb22836592f8
+  timestamp: 2026-11-28T11:25:28.734914466Z
+  agent: aida
+  commit_sha: 6f4bd7e2493be2ecd3d53b1b5baf26803d64abc3
+  summary: 'TASK-3960 PASS. AC1 [documentation-inspection]: docs/getting-started.md sections 3-4 add a first spec (aida add with ## Acceptance, aida list, aida show <ID>) and a first review (branch, commit, aida review prepare --from main --specs <ID>), with what each report section means. The claims check out against aida-cli-lib/src/review_prepare.rs: --from yields mode `range` (l.650-660), no flag yields workspace mode vs HEAD, the section headings match l.1617-1775, and --run-review/--agent exist (l.87-95). AC2 [behavioral-test]: tests/test_getting_started_commands.py pulls the bash blocks out from between the doc-test markers, runs them in a throwaway repo with an empty HOME after aida init, substitutes the printed ID, and asserts the add/show/review output and every documented report label. It is wired into the ci.yml contracts shard and discover-python-tests.py. --run-review is correctly left out of the test (needs vendor sign-in). Two non-blocking follow-ups: a leaked multi-line comment fragment in the generated showcase HTML (p3) and a PR body describing TASK-3959 instead of this change (style). The head is 1 commit behind main; no finding depends on base changes. CI pending at review time.'
+  punted:
+  - 'punted: Advisor FIX-FIRST: conflicts with main after the first-run batch landed; a merge round is needed.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 4b06a37b464472f759637aecf25042f98a4e33c2
@@ -179,3 +197,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-28T05:35:58.318503980Z
   implemented_by: dirtlab
+  completed_at: 2026-11-28T11:25:28.600886682Z
+  completion_sha: 6f4bd7e2493be2ecd3d53b1b5baf26803d64abc3
