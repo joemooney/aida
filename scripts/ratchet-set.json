@@ -76,6 +76,8 @@
         "s5c_rename_old_paths_apply_every_inventory_exclusion",
         "s5d_unavailable_challenger_keeps_finder_report_and_exits_partial",
         "s5e_forced_same_vendor_challenger_is_labelled_in_bundle_and_report",
+        "task3953_empty_range_says_nothing_to_review_never_a_pass",
+        "task3953_clean_workspace_says_nothing_to_review",
         "bug2775_runner_errors_name_runner_pass_batch_and_cause",
         "bug2775_run_review_agent_resolves_and_states_the_default",
         "bug2779_top_level_error_keeps_its_cause",

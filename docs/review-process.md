@@ -357,6 +357,7 @@ The `--write` report, the SARIF file and any permitted `--post-comment` are stil
 | 1 | `--fail-on` matched, coverage verification failed, or the run was refused. |
 | 3 | Not used by `aida review prepare`. It is the `--auto-complete` drive's hard failure. |
 | 4 | Partial review: the challenger was unavailable. The finder report and SARIF are still written. |
+| 5 | Nothing to review: no files changed in the range, commit or working tree, so no file was reviewed and no agent was started. The report says so, and SARIF marks the run as not successful with zero files reviewed. |
 
 When `--fail-on` matches and the challenger was also unavailable, exit code 1 wins. No other `aida review prepare` path exits 4.
 
