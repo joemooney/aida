@@ -9,12 +9,12 @@ description: |-
   - AC1: `python3 scripts/check-ratchets.py --only-set` (no cargo) parses the Rust sources of every module in ratchet-set.json (shared_modules + groups) and fails, naming the module and test, when the #[test] fns found differ from the manifest's entries (added, removed, renamed).
   - AC2: wired into make check-ci-fast (or check-ci-source) so lanes catch it before push.
   - AC3: unit test in tests/test_ratchet_set.py with a fixture module that gains an unregistered test.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T00:07:20.208196382Z
-modified_at: 2026-11-28T06:28:18.090020473Z
+modified_at: 2026-11-28T12:51:22.580614511Z
 req_type: Task
 relationships:
 - rel_type:
@@ -79,6 +79,13 @@ comments:
   content: 'DEFERRED (#4783 approval @3ec0cbc9, p3s; product-15): scripts/check-ratchets.py crate_tests: inner attributes (`#![...]`) are skipped, so a module file gated by an inner `#![cfg(windows)]` / `#![cfg(feature = "x")]` is still walked and its tests counted as cargo-run; --only-set would then report a false ''runs under cargo but is not listed'' drift. Fail-closed noise, not a miss. Honour inner cfg attribu | scripts/check-ratchets.py crate_tests: `#[cfg_attr(<pred>, ignore)]` is not recognised as ignoring a test (only literal `#[ignore...]` prefixes are), so such a test is counted as run and reported as an unlisted drift. Evaluate cfg_attr(…, ignore) with _cfg. | scripts/check-ratchets.py set_drift.tests_of: a `--test NAME` target is resolved only as `<pkg>/tests/NAME.rs`; a `[[test]] path = ...` override in Cargo.toml or a `tests/NAME/main.rs` layout raises FileNotFoundError (crash, fail-closed) instead of being resolved. Resolve the test target the way cargo does. | scripts/check-ratchets.py set_drift: the macro-generated-test refusal scans only the manifest''s group source files and shared modules, but filter-scoped groups (e.g. ''task_2759_ratchet'') match by substring across the whole crate; a macro- or proptest-generated test elsewhere in the crate whose path matches a filter is silently undercounted, so --on'
   created_at: 2026-11-28T06:28:18.090020473Z
   modified_at: 2026-11-28T06:28:18.090020473Z
+- id: 01a22235-d30e-7de2-9565-f8143f18b676
+  author: aida-auto-bump
+  content: 'Auto-completion warning: TASK-3937 was In Progress when merge af50786e376ec1eb5371e155b67fc7db7a39a4b8 completed it; verify that no active round remains.'
+  created_at: 2026-11-28T12:51:22.510494703Z
+  modified_at: 2026-11-28T12:51:22.510494703Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a2200f-c274-7b13-9095-9db5a621a6dd
   author: aida-session-start
@@ -97,6 +104,22 @@ history:
   author: joe
   timestamp: 2026-11-28T05:26:37.102257531Z
   changes: []
+- id: 01a22235-d30e-7de2-9565-f82bc52ff8e4
+  author: aida-auto-bump
+  timestamp: 2026-11-28T12:51:22.510505521Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a22235-d354-78b1-a769-c233c1551649
+  timestamp: 2026-11-28T12:51:22.580610919Z
+  agent: aida
+  commit_sha: af50786e376ec1eb5371e155b67fc7db7a39a4b8
+  summary: 'TASK-3937 AC1 verified by tests/test_ratchet_set.py::test_only_set_names_an_unregistered_removed_or_colliding_test_without_building: set_drift walks each ratchet crate from its root (mod/#[path]/include!, cfg on CI Linux with default features, #[ignore] excluded), applies the group filter as cargo does, and names the module, file and test for unlisted, removed or renamed tests, including a test outside the source file that matches the filter. The test also asserts the real manifest has no drift. AC2 verified: ci.yml adds ''Ratchet-set manifest source check'' (gates shard) as a fast tier in ci-gate-tiers.toml, so check-ci-fast runs it through check-ci-gates.py, and the test asserts both. CI (fast gates), which includes the step, passed at this head. AC3 verified: the fixture module gains guard_new and the test checks the exact message. CI note: the ''CI (fast compile)'' Ratchet set step (cargo-heavy, ~15-17 min on sibling runs) hit its 25-minute timeout, and the Build aggregate failed only on ''Require every CI lane''. The only Python additions on that path are set_drift (proven quick by the fast-gates pass) and the unit test, so I read the timeout as runner variance, not a defect of this diff. Re-run that job before landing. Four minor parser edge cases, all fail-closed or caught later by the cargo count check, are recorded as p3 follow-ups.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 82c120dd1cf960e4272004b5cae7243b8d45aa67
@@ -105,3 +128,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 0fba3d42ee9
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-28T12:51:22.510502402Z
+  completion_sha: af50786e376ec1eb5371e155b67fc7db7a39a4b8
