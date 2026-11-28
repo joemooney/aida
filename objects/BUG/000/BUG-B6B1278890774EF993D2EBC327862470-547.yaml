@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T15:17:28.841464752Z
-modified_at: 2026-11-27T23:53:41.363625544Z
+modified_at: 2026-11-28T00:10:00.323691532Z
 req_type: Bug
 comments:
 - id: 01a21e68-91e5-7d92-8eb8-cc5493ef9ccc
@@ -141,6 +141,18 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-27T23:50:59.593652261Z
   modified_at: 2026-11-27T23:50:59.593652261Z
+- id: 01a21f7c-c503-7962-a922-a3b5fe9d5916
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: f37d0cb960 (round 3, #4752 CR @dc0f8cf4 authority bypass).
+    Fix: both barrier writers (ledger/mod.rs record_verdict_at and record_collected_verdict) record the pre-barrier verdict as barrier_of. The collected writer reads it before setting sweep_pending, because disposition_verdict reads every barrier as request-changes. A first test run caught exactly that ordering bug. complete_approval finalizes only when barrier_of == approved and the re-decided findings still approve. rejected, request-changes, waiting or a missing barrier_of abandons the barrier (fail closed). barrier_of is stripped from the delivered approval, the finalized approval, a fresh reviewer act and same_pending_delivery's comparison.
+    Evidence: abandoned_sweep tests a_non_approval_barrier_is_abandoned_never_finalized (rejected / request-changes / None / waiting) and a_collected_rejection_barrier_records_its_verdict_and_is_never_approved (real collected writer under tier policy, delivery failure, then expiry abandons). The approved path is still finalized (exited_reviewer_with_complete_draft_is_finalized, bug_2786_..._finalized_by_the_expiry_pass, which now asserts barrier_of=approved). 11/11 pass. Mutation check: with the barrier_of guard disabled, both new tests FAIL ('must not finalize').
+    Residual risk: barriers written before this change carry no barrier_of. Expiry now abandons them (needs re-review) rather than finalizing them, which is the intended fail-closed behavior.
+  created_at: 2026-11-28T00:10:00.323691532Z
+  modified_at: 2026-11-28T00:10:00.323691532Z
+  session_id: 01a21f6d9a8f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21d95-9bce-7210-a003-d78cbc07dd29
   author: joe
