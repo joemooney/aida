@@ -7,12 +7,12 @@ description: |
 
   Raised by the implementer while working BUG-2777.
   Branch: bug-2777-ejection-routing  ·  Commit: 36ffea9bc5  ·  PR #4685
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T20:27:39.429848017Z
-modified_at: 2026-11-28T00:34:00.806456580Z
+modified_at: 2026-11-28T00:34:02.598072277Z
 req_type: Task
 tags:
 - from-implementer:BUG-2777
@@ -31,6 +31,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21f92-c6e6-7811-bc73-b51ff96057f9
+  author: joe
+  timestamp: 2026-11-28T00:34:02.598069708Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 36ffea9bc51797e6a523d58c668abd4888c859e1
   branch: bug-2777-ejection-routing
