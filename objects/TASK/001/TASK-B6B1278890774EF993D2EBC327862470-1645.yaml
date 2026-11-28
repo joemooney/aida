@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T08:29:38.066956Z
-modified_at: 2026-11-28T13:14:12.140639154Z
+modified_at: 2026-11-28T13:15:22.268957376Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -251,6 +251,12 @@ comments:
   content: Implementer push dd85481f4923 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-28T13:14:12.140638593Z
   modified_at: 2026-11-28T13:14:12.140638593Z
+  session_id: 01a22220d306
+- id: 01a2224b-cb1c-7c91-9398-0e1b3bd581b3
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3963-train-regen-s1` at head `dd85481f4923fcb0d8c707c20a5fad7306893198`.'
+  created_at: 2026-11-28T13:15:22.268951450Z
+  modified_at: 2026-11-28T13:15:22.268951450Z
   session_id: 01a22220d306
 history:
 - id: 01a22146-948a-7032-ad96-95a74d9a14d6
