@@ -200,7 +200,8 @@ impl RunnerCall<'_> {
     /// Refuse a signed-out codex before the review starts, within `limit`: a
     /// signed-out `codex exec` retries silently until the run deadline. Other
     /// vendors and `AIDA_REVIEW_RUNNER_CMD` pass; so does a codex given
-    /// `OPENAI_API_KEY`, which `codex login status` does not count.
+    /// `OPENAI_API_KEY`, which `codex login status` does not count, and an
+    /// inconclusive check, which only warns.
     // trace:TASK-3955 | ai:claude
     pub(crate) fn sign_in_check(&self, limit: Duration) -> Result<()> {
         let codex = self.vendor().is_some_and(|v| v.program == "codex");
@@ -225,7 +226,12 @@ impl RunnerCall<'_> {
                  to see why, or `codex login` to sign in",
                 limit.as_secs()
             ),
-            Err(e) => Err(e.context("codex sign-in check (`codex login status`)")),
+            // Inconclusive (an older codex without `login status`, say): the
+            // review's own run reports any real failure.
+            Err(e) => {
+                eprintln!("run review: codex sign-in check was inconclusive ({e:#}); continuing");
+                Ok(())
+            }
         }
     }
 
@@ -1144,6 +1150,9 @@ mod tests {
             err.contains("did not answer its sign-in check within 2s"),
             "{err}"
         );
+        // A codex without `login status` warns and lets the review run.
+        fake("echo \"error: unrecognized subcommand 'login'\" >&2; exit 2");
+        check(&[], "codex").unwrap();
         fake("echo 'Logged in using ChatGPT'; exit 0");
         check(&[], "codex").unwrap();
         // It ran confined, like the review it guards.
