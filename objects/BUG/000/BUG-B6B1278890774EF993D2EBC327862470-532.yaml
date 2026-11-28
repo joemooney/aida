@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T13:12:13.855583833Z
-modified_at: 2026-11-27T04:31:12.972636890Z
+modified_at: 2026-11-28T01:09:37.499016398Z
 req_type: Bug
 tags:
 - admission
@@ -251,6 +251,11 @@ comments:
   modified_at: 2026-11-27T03:23:02.390428535Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a21fb3-5a5b-77c1-a882-e32c167030d1
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3493): Multiplicity: admission_owner.rs record_waiter keeps a single manual-train.waiter file and writes/removes it outside the admission serializer. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:09:37.499016398Z
+  modified_at: 2026-11-28T01:09:37.499016398Z
 history:
 - id: 01a217ff-2dc1-7641-9cda-5abfd4de3de4
   author: joe
