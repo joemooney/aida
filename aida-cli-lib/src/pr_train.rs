@@ -2751,6 +2751,12 @@ impl MemberChecks for LiveChecks<'_> {
                 at_gate(Gate::Mandate);
                 return Err(Some(MemberGateError::Refused(why)));
             }
+            // With no mandate active there is no cover: say so before any
+            // forge read, sparing the shared checks budget. A released
+            // member still goes on to its recheck, which refuses.
+            if self.released_member.is_none() && !self.mandate_active() {
+                return Err(None);
+            }
             // It lands a supervised PR only when EVERY check at the head is
             // green, not just the required set.
             at_gate(Gate::Mandate);
@@ -2821,17 +2827,30 @@ impl MemberChecks for LiveChecks<'_> {
             .map_err(|r| Some(r.message(pr).into()));
         }
         let hold_root = crate::pr_cmd::pr_ship_hold_root(self.project_root);
-        crate::gate::mandate_ship::mandate_ship_cover_for_ship(
-            self.project_root,
-            self.main_worktree,
-            &hold_root,
-            pr,
-            ids,
-            Some(head_ref),
-            || Some(head.to_string()),
-            false,
-            auto,
-        )
+        let head_now = || Some(head.to_string());
+        let (main, hold, branch) = (self.main_worktree, &hold_root, Some(head_ref));
+        if auto {
+            crate::gate::mandate_ship::mandate_auto_train_cover(
+                self.project_root,
+                main,
+                hold,
+                pr,
+                ids,
+                branch,
+                head_now,
+            )
+        } else {
+            crate::gate::mandate_ship::mandate_ship_cover_for_ship(
+                self.project_root,
+                main,
+                hold,
+                pr,
+                ids,
+                branch,
+                head_now,
+                false,
+            )
+        }
         .map_err(|r| match r {
             crate::gate::mandate::MandateRefusal::NoMandate => None,
             r => {

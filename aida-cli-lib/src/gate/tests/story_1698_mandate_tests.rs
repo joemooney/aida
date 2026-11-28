@@ -4298,31 +4298,37 @@ fn story_2893_preview_carry_over_proves_without_appending() {
 
 // ── STORY-3181: the automatic train's stricter decision ────────────────────
 
+/// An independent approval at `sha` attested by a reviewer seat grant.
+fn reviewer_approval(sha: &str) -> RecordedVerdict {
+    let mut v = approval(sha);
+    let a = v.attestation.as_mut().unwrap();
+    (a.human_at_tty, a.receipt_id) = (false, None);
+    (a.seat, a.grant_id) = (Some("reviewer".into()), Some("grant-r".into()));
+    v
+}
+
+/// The automatic train's happy path: an include-supervised mandate and a
+/// re-validated reviewer-seat approval at the head.
+fn auto_case() -> Case {
+    let mut c = Case::ok();
+    c.state = MandateState::Active(active(true));
+    c.candidates = vec![reviewer_approval(HEAD)];
+    c.policy = policy(&c.candidates);
+    c
+}
+
 // trace:STORY-3181 | ai:claude
 #[test]
 fn story3181_auto_train_decision_covers_only_an_independent_exact_head_approval() {
     use crate::gate::merge_hold_core::HoldReasonKind;
     let auto = |c: &Case| auto_train_decision(&c.check());
-    let mut c = Case::ok();
-    c.state = MandateState::Active(active(true));
+    let mut c = auto_case();
     assert!(auto(&c).is_ok(), "{:?}", auto(&c));
-    c.hold = HoldFacts::SupervisedByMode;
-    assert!(auto(&c).is_ok());
-    // An approval recorded by ANY advisor session is refused.
-    for seat in ["advisor", "Advisor", "dialog"] {
-        let mut a = c.candidates[0].clone();
-        a.attestation.as_mut().unwrap().seat = Some(seat.into());
-        let mut advised = Case::ok();
-        advised.state = MandateState::Active(active(true));
-        advised.candidates = vec![a];
-        advised.policy = policy(&advised.candidates);
-        assert_eq!(
-            auto(&advised),
-            Err(MandateRefusal::AdvisorApproval),
-            "{seat}"
-        );
-        assert!(advised.decide().is_ok(), "the manual ship is unchanged");
-    }
+    assert!(auto(&Case {
+        hold: HoldFacts::SupervisedByMode,
+        ..auto_case()
+    })
+    .is_ok());
     // A carried-over approval never covers, even when proven.
     c.carry_over = Some(Ok(HEAD.into()));
     assert!(matches!(auto(&c), Err(MandateRefusal::StaleApproval(_))));
@@ -4352,12 +4358,80 @@ fn story3181_auto_train_decision_covers_only_an_independent_exact_head_approval(
     ));
 }
 
+/// Unknown provenance is not independence: an approval with no attestation,
+/// no seat, an advisor or other seat, a human receipt, or a reviewer seat
+/// whose grant did not re-validate as one is refused (the manual ship's own
+/// rules are unchanged by it).
+// trace:STORY-3181 | ai:claude
+#[test]
+fn story3181_auto_train_decision_fails_closed_on_approval_provenance() {
+    let refused = |c: &Case, why: &str| {
+        assert_eq!(
+            auto_train_decision(&c.check()),
+            Err(MandateRefusal::AdvisorApproval),
+            "{why}"
+        );
+    };
+    let with = |edit: &dyn Fn(&mut RecordedVerdict), reverify: bool| {
+        let mut c = auto_case();
+        edit(&mut c.candidates[0]);
+        if reverify {
+            c.policy = policy(&c.candidates);
+        }
+        c
+    };
+    refused(&with(&|v| v.attestation = None, true), "no attestation");
+    refused(
+        &with(&|v| v.attestation.as_mut().unwrap().seat = None, true),
+        "no seat",
+    );
+    for seat in [
+        "advisor",
+        "Advisor",
+        "dialog",
+        " advisor ",
+        "product",
+        "implementer",
+        "",
+    ] {
+        let c = with(
+            &|v| v.attestation.as_mut().unwrap().seat = Some(seat.into()),
+            true,
+        );
+        refused(&c, seat);
+    }
+    refused(
+        &with(&|v| v.attestation.as_mut().unwrap().grant_id = None, true),
+        "no grant",
+    );
+    // The default approval: a human-review receipt, never the auto path.
+    let human = Case {
+        state: MandateState::Active(active(true)),
+        ..Case::ok()
+    };
+    assert!(human.decide().is_ok(), "a human may still ship it");
+    refused(&human, "human receipt");
+    // A grant that re-validated for the ADVISOR seat, relabelled `reviewer`
+    // in the verdict: its key is not in the verified authority.
+    let mut c = with(
+        &|v| v.attestation.as_mut().unwrap().seat = Some("advisor".into()),
+        true,
+    );
+    c.candidates[0].attestation.as_mut().unwrap().seat = Some("reviewer".into());
+    refused(&c, "reviewer seat verified as an advisor");
+    // No approval at all.
+    let mut none = auto_case();
+    none.candidates.clear();
+    none.policy = policy(&none.candidates);
+    refused(&none, "no approval");
+}
+
 /// The same decision is the recheck before the merge: a mandate with less
 /// than 30 minutes left, stopped or expired by then refuses.
 // trace:STORY-3181 | ai:claude
 #[test]
 fn story3181_auto_train_decision_refuses_a_mandate_ending_before_the_merge() {
-    let mut c = Case::ok();
+    let mut c = auto_case();
     let mut m = active(true);
     m.expires_at = now() + AUTO_TRAIN_MANDATE_MIN_REMAINING - Duration::minutes(1);
     c.state = MandateState::Active(m.clone());

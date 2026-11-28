@@ -407,8 +407,6 @@ fn collect_on_stable_store<S, T>(
 /// one.
 // trace:STORY-1698 | ai:claude
 // trace:STORY-1889 | ai:claude
-// STORY-3181: `auto` = the automatic train, bound instead to
-// `auto_train_decision` with no carry-over proof. trace:STORY-3181 | ai:claude
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn mandate_ship_cover_for_ship(
     project_root: &std::path::Path,
@@ -419,9 +417,7 @@ pub(crate) fn mandate_ship_cover_for_ship(
     head_branch: Option<&str>,
     head: impl FnOnce() -> Option<String>,
     override_stale_approval: bool,
-    auto: bool,
 ) -> std::result::Result<MandateCover, crate::gate::mandate::MandateRefusal> {
-    let (decide, prove_carry_over) = decision_for(auto);
     mandate_ship_cover(
         project_root,
         main_worktree,
@@ -431,8 +427,36 @@ pub(crate) fn mandate_ship_cover_for_ship(
         head_branch,
         head,
         override_stale_approval,
-        decide,
-        prove_carry_over,
+        crate::gate::mandate::ship_decision,
+        true,
+        None,
+    )
+}
+
+/// [`mandate_ship_cover_for_ship`] for the AUTOMATIC train: bound here to
+/// [`crate::gate::mandate::auto_train_decision`], exact head only, so no
+/// carry-over proof and no stale-approval override.
+// trace:STORY-3181 | ai:claude
+pub(crate) fn mandate_auto_train_cover(
+    project_root: &std::path::Path,
+    main_worktree: &std::path::Path,
+    hold_root: &std::path::Path,
+    pr: u64,
+    known_ids: &[String],
+    head_branch: Option<&str>,
+    head: impl FnOnce() -> Option<String>,
+) -> std::result::Result<MandateCover, crate::gate::mandate::MandateRefusal> {
+    mandate_ship_cover(
+        project_root,
+        main_worktree,
+        hold_root,
+        pr,
+        known_ids,
+        head_branch,
+        head,
+        false,
+        crate::gate::mandate::auto_train_decision,
+        false,
         None,
     )
 }
@@ -619,10 +643,12 @@ pub(crate) fn preview_ship_cover(
     )
 }
 
-/// The read-only collection behind [`preview_ship_cover`], with the decision
-/// as a parameter so a test can pin preview/actual parity for a covering
-/// decision without fabricating approval authority.
+/// The read-only collection [`preview_ship_cover`] runs for a ship, with the
+/// decision as a parameter so a test can pin preview/actual parity for a
+/// covering decision without fabricating approval authority. Test-only.
 // trace:STORY-2893 | ai:claude
+// trace:STORY-3181 | ai:claude
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub(in crate::gate) fn preview_cover_deciding(
     project_root: &std::path::Path,

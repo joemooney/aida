@@ -351,11 +351,17 @@ impl LandingPolicy {
     }
 
     /// Why the automatic train does not land a supervised PR under this
-    /// policy, or `None` when it may (it then still needs the mandate cover
-    /// and the pre-merge recheck). Off, the refusal names the setting.
+    /// policy, or `None` once it may. Off, the refusal names the setting.
+    /// On, it still refuses: the mandate cover is built (S2), but the knob
+    /// stays inert until the pre-merge recheck and its tests land (S4).
     // trace:STORY-3181 | ai:claude
     pub(crate) fn auto_train_supervised_refusal(&self) -> Option<String> {
-        (!self.auto_train_supervised_under_mandate).then(|| {
+        Some(if self.auto_train_supervised_under_mandate {
+            format!(
+                "`[landing] {AUTO_TRAIN_SUPERVISED_KEY}` is on, but this build of the automatic \
+                 train does not land supervised PRs yet; a human ships it"
+            )
+        } else {
             format!(
                 "the automatic train does not land supervised PRs (`[landing] \
                  {AUTO_TRAIN_SUPERVISED_KEY}` is off); a human ships it"
@@ -744,8 +750,14 @@ mod story2897_landing_policy_tests {
         let p = parse("[landing]\nauto_train_supervised_under_mandate = true # S6\n");
         assert!(p.auto_train_supervised_under_mandate);
         assert_eq!(p.origin(AUTO_TRAIN_SUPERVISED_KEY), Origin::Explicit);
-        // On, the knob no longer refuses; the mandate cover then decides.
-        assert_eq!(p.auto_train_supervised_refusal(), None);
+        // Not yet a landing path: on still refuses, naming the setting.
+        let why = p
+            .auto_train_supervised_refusal()
+            .expect("on refuses until S4");
+        assert!(
+            why.contains("is on, but") && why.contains(AUTO_TRAIN_SUPERVISED_KEY),
+            "{why}"
+        );
         for bad in ["\"true\"", "1", "\"yes\""] {
             let p = parse(&format!(
                 "[landing]\nauto_train_supervised_under_mandate = {bad}\n"

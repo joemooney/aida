@@ -176,7 +176,6 @@ impl Fixture {
             Some(head_ref),
             || Some(self.head.clone()),
             false,
-            false,
         )
     }
 }

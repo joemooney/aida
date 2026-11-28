@@ -5404,7 +5404,9 @@ pub(crate) fn advisor_train_eligible(
     let change = repo.change(root, pr).map_err(unavailable)?;
     // trace:STORY-3181 | ai:claude
     let main = crate::main_worktree_root_from(root);
-    let lane = crate::landing_policy::load(&main).auto_train_supervised_under_mandate
+    let lane = crate::landing_policy::load(&main)
+        .auto_train_supervised_refusal()
+        .is_none()
         && matches!(crate::gate::mandate::current_state(),
             crate::gate::mandate::MandateState::Active(m) if m.include_supervised);
     train::eligible_in(&change, &ready::Live { root, repo: &repo }, lane)?;

@@ -1668,7 +1668,7 @@ impl MandateRefusal {
             Self::ScopeNotCovered { id, scope } => {
                 format!("mandate {id} does not cover `{scope}`")
             }
-            Self::AdvisorApproval => "the approval was recorded by an advisor session; the automatic train needs an independent reviewer's approval, so a human ships it".to_string(),
+            Self::AdvisorApproval => "the approval is not from a verified reviewer seat (an advisor session, or no re-validated reviewer seat grant); the automatic train needs an independent reviewer's approval, so a human ships it".to_string(),
             Self::ExpiresSoon { id } => format!(
                 "mandate {id} has less than {} minutes left, too little for the automatic train to land under it",
                 AUTO_TRAIN_MANDATE_MIN_REMAINING.num_minutes()
@@ -1790,12 +1790,16 @@ pub(crate) fn ship_decision(c: &ShipCheck<'_>) -> std::result::Result<String, Ma
 // trace:STORY-3181 | ai:claude
 pub(crate) const AUTO_TRAIN_MANDATE_MIN_REMAINING: Duration = Duration::minutes(30);
 
+/// The only seat whose approval the automatic train lands a supervised PR on.
+// trace:STORY-3181 | ai:claude
+const AUTO_TRAIN_REVIEWER_SEAT: &str = "reviewer";
+
 /// STORY-3181: may the AUTOMATIC train land this supervised PR under the
 /// active mandate? [`ship_decision`] plus: the mandate was minted with
 /// `--include-supervised` and has [`AUTO_TRAIN_MANDATE_MIN_REMAINING`] left;
 /// the hold is a typed supervision marker or supervision by mode; the
-/// approval is at the exact head (no carry-over) and was not recorded by any
-/// advisor session.
+/// approval is at the exact head (no carry-over) and carries a re-validated
+/// reviewer seat grant (never an advisor session, nor unknown provenance).
 // trace:STORY-3181 | ai:claude
 pub(crate) fn auto_train_decision(
     c: &ShipCheck<'_>,
@@ -1824,13 +1828,23 @@ pub(crate) fn auto_train_decision(
         .filter(|v| v.kind.approves() && !v.is_closed())
         .cloned()
         .collect();
-    let advisor = crate::gate::ship::newest_approval(&approvals)
-        .and_then(|v| v.attestation.as_ref())
-        .and_then(|a| a.seat.as_deref())
-        .is_some_and(|seat| {
-            aida_core::team::canonical_role(seat).eq_ignore_ascii_case(MANDATE_SEAT)
-        });
-    if advisor {
+    // Fail closed on provenance: only a seat-grant attestation for the
+    // reviewer seat whose grant re-validated (its key is in the verified
+    // authority, so the seat is the grant's, not self-reported) is
+    // independent. A missing attestation or seat, an advisor or any other
+    // seat, a human receipt or an unverified grant is not.
+    let independent = crate::gate::ship::newest_approval(&approvals).is_some_and(|v| {
+        v.attestation.as_ref().is_some_and(|a| {
+            a.grant_id.as_deref().is_some_and(|g| !g.trim().is_empty())
+                && a.seat.as_deref().is_some_and(|seat| {
+                    aida_core::team::canonical_role(seat)
+                        .eq_ignore_ascii_case(AUTO_TRAIN_REVIEWER_SEAT)
+                })
+                && a.authority_key(v.recorded_at.as_deref())
+                    .is_some_and(|k| c.policy.verified_authority.contains_key(&k))
+        })
+    });
+    if !independent {
         return Err(MandateRefusal::AdvisorApproval);
     }
     let id = ship_decision(c)?;
