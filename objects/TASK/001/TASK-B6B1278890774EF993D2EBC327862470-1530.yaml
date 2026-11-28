@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 1eba036e95ffbc060aba8b5844232897f0def674
 
   Test gap: the production end closure in reclaim_retained_review_tree (`aida session end <lease> --yes --skip-ci` subprocess, aida-cli-lib/src/queue_cmd/work.rs:216-230) is never exercised. bug_2776_review_watch_reclaims_only_a_clean_exited_leftover_on_a_moved_head injects a stub that force-removes the worktree, and bug2776_reclaimed_leftover_dispatches_the_moved_head_in_the_same_pass stubs the whole reclaim. No test shows that a real session end on a stale or ending-retained reviewer lease removes the checkout. If it refused, the code fails closed ('session end refused' / 'session end kept the checkout'), so this is a coverage gap, not a safety hole. Follow-up: add one integration test that runs the real subprocess against the BUG-2776 lease shape.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T18:42:18.194552511Z
-modified_at: 2026-11-28T01:13:03.832151291Z
+modified_at: 2026-11-28T01:13:05.978739765Z
 req_type: Task
 tags:
 - carried-from:BUG-2776
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21fb6-88ba-72c0-90c9-d8b4b146b244
+  author: joe
+  timestamp: 2026-11-28T01:13:05.978737630Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 1eba036e95ffbc060aba8b5844232897f0def674
   branch: pr-4678
