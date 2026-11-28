@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T04:52:28.064803Z
-modified_at: 2026-11-28T06:46:33.512672851Z
+modified_at: 2026-11-28T06:47:33.606500624Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -114,6 +114,12 @@ comments:
   content: Implementer push df175ced76d5 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-28T06:46:33.512672296Z
   modified_at: 2026-11-28T06:46:33.512672296Z
+  session_id: 01a220d4214e
+- id: 01a220e8-bde6-7102-abf9-1770080dfe34
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3961-init-output-short` at head `df175ced76d54aa4b3c16dc9446dc6af13370140`.'
+  created_at: 2026-11-28T06:47:33.606493313Z
+  modified_at: 2026-11-28T06:47:33.606493313Z
   session_id: 01a220d4214e
 history:
 - id: 01a22080-0acd-7123-bb30-50e7fe96392e
