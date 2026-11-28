@@ -18,6 +18,15 @@ feature: Uncategorized
 created_at: 2026-11-28T08:29:38.066956221Z
 modified_at: 2026-11-28T08:29:38.066956221Z
 req_type: Task
+relationships:
+- rel_type: Child
+  target_id: 01a1ec19-04a5-7a73-b69c-876cd6cd48e4
+  created_at: 2026-11-28T08:30:01.299156873Z
+history:
+- id: 01a22146-948a-7032-ad96-95a74d9a14d6
+  author: joe
+  timestamp: 2026-11-28T08:30:03.402658632Z
+  changes: []
 filed_at:
   code_sha: 6d3ca942ec2e4a042f45c48bc90773576e06ffdc
   branch: main
