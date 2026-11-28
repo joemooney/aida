@@ -58,7 +58,8 @@ pub struct ReviewPrepareArgs {
     #[clap(long, conflicts_with_all = ["anchor_findings", "scan", "commit", "verify_coverage"])]
     pub run_review: bool,
 
-    /// Which agent reviews with --run-review: `claude` or `codex`.
+    /// Which agent reviews with --run-review: `claude` or `codex` (or set
+    /// AIDA_REVIEW_RUNNER_CMD to run your own command).
     #[clap(long, value_name = "AGENT", requires = "run_review")]
     pub agent: Option<String>,
 

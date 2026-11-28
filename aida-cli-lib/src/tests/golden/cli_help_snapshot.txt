@@ -22392,9 +22392,7 @@ Commands:
                   criteria. Specs come either from an explicit `--specs` list (CSV) or from the
                   commit-range of a PR/MR (parsed `(REQ-ID)` trailers in commit messages)
   assemble        Assemble active review fragments into a root REVIEW.md file
-  prepare         Deterministically classify diff inventory, match path-scoped review playbooks,
-                  bundle token-budgeted review batches, verify 100% file coverage ledgers, and
-                  anchor quoted code snippets to exact 1-based line numbers
+  prepare         Review a change with an AI agent and get line-anchored findings
   record          Record a review verdict for a spec as first-class state
   claim           Mark a pull request as under review, so nothing merges it before your verdict
                   lands
@@ -22851,40 +22849,47 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida review prepare
-Deterministically classify diff inventory, match path-scoped review playbooks, bundle token-budgeted
-review batches, verify 100% file coverage ledgers, and anchor quoted code snippets to exact 1-based
-line numbers
+Review a change with an AI agent and get line-anchored findings.
+
+Common uses:
+  aida review prepare --run-review --pr 42
+      Review a pull request.
+  aida review prepare --run-review --from v1.2 --to v1.3
+      Review the commits between two refs.
+  aida review prepare --run-review --from main
+      Review the commits on your branch (commit your work first).
+
+Add --agent codex to choose the reviewer, or --sarif review.sarif to save the
+findings for code-scanning tools. Without --run-review, it lists the files to
+review and how they are grouped, without running an agent.
 
 Usage: aida review prepare [OPTIONS]
 
 Options:
-      --specs <SPEC-IDS>
-          Comma-separated list of AIDA spec IDs whose `## Acceptance` criteria should be injected
-          into the review preparation bundle
+      --run-review
+          Run an AI agent over the change and report its findings with line numbers. Needs --pr or
+          --from. Review settings are read from the base branch, so the change under review cannot
+          alter them
+
+      --agent <AGENT>
+          Which agent reviews with --run-review: `claude` or `codex` (or set AIDA_REVIEW_RUNNER_CMD
+          to run your own command)
 
       --pr <N>
-          Pull spec IDs and base/head refs from PR/MR number N
+          Review pull request N (its base and head, and any specs it names)
 
       --from <REF>
-          Base Git revision for range comparison (e.g. `main`)
+          Review the commits since this ref (for example `main`)
 
       --to <REF>
-          Target Git revision for range comparison (defaults to `HEAD` when `--from` is set)
+          End of the range for --from (default: `HEAD`)
 
   -c, --commit <SHA>
-          Single commit SHA to inspect against its parent
+          Review a single commit against its parent
 
       --scan
-          Full-file scan mode (`aida review prepare --scan [--path <DIR_OR_FILE>...]`). Inventories
-          tracked files under the specified paths (or the entire repo if `--path` is omitted)
-          instead of computing a Git diff
-
-      --path <PATH>
-          Target file or directory path(s) to scope `--scan` (or filter diff entries). Repeatable
-          (`--path aida-core/src --path aida-cli-lib/src`)
-
-      --exclude <GLOBS>
-          Additional comma-separated glob patterns to exclude from review
+          Review whole files instead of a change: every tracked file under --path, or the whole
+          repository when --path is omitted
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -22896,61 +22901,64 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
+      --path <PATH>
+          Only review files under this path. Repeatable (`--path src --path docs`)
+
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
 
-      --verify-coverage <LEDGER_JSON>
-          Verify a reviewer coverage ledger JSON file against the classified inventory. Exits
-          non-zero if any reviewable file is unaccounted for or skipped without a reason
-
-      --anchor-findings <FINDINGS_JSON>
-          Deterministically anchor quoted `existing_code` snippets in a findings JSON file to exact
-          1-based `(start_line, end_line)` spans on the target revision
-
-      --run-review
-          Review every batch with an agent and anchor its findings. Needs `--pr` or `--from`; review
-          settings come from the merge base
-
-      --agent <AGENT>
-          Agent for `--run-review`: `claude` or `codex` (or set AIDA_REVIEW_RUNNER_CMD)
-
-      --effort <LEVEL>
-          Reasoning effort for `--run-review`: low, medium, high, xhigh (claude: max)
-
-      --model <MODEL>
-          Model for `--run-review`
+      --exclude <GLOBS>
+          Skip files matching these comma-separated glob patterns
 
       --adversarial
-          Have a second agent reproduce or refute each finding. Refuted findings are listed apart
-          and marked suppressed in SARIF, but still count for `--fail-on`. It prefers a vendor that
-          did not write the change
-
-      --challenger-effort <LEVEL>
-          Reasoning effort for the `--adversarial` challenger
-
-      --challenger-agent <AGENT>
-          Challenger agent for `--adversarial`: `claude`, `codex` or `agy`. Overrides the automatic
-          pick, which commit `[AI:<tool>]` tags steer and which never chooses agy
+          Have a second agent try to reproduce each finding. Findings it refutes are listed
+          separately and marked suppressed in SARIF, but still count for --fail-on. It prefers an
+          agent that did not write the change
 
       --sarif <PATH>
-          Write a SARIF 2.1.0 report inside the repository
+          Save the findings as a SARIF 2.1.0 file inside the repository
 
       --fail-on <SEVERITY>
-          Exit with an error when any finding meets or exceeds this severity
+          Exit with an error when any finding is at or above this severity
 
       --post-comment
-          Post the Markdown report as a comment on the `--pr` change. Off unless given; agent text
-          in the comment is code-fenced so it renders inert
+          Post the report as a comment on the --pr pull request. Agent text in the comment is
+          code-fenced so it renders inert
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+Advanced:
+      --effort <LEVEL>
+          Reasoning effort for --run-review: low, medium, high, xhigh (claude: max)
+
+      --model <MODEL>
+          Model for --run-review
+
+      --challenger-effort <LEVEL>
+          Reasoning effort for the --adversarial challenger
+
+      --challenger-agent <AGENT>
+          Challenger agent for --adversarial: `claude`, `codex` or `agy`. Overrides the automatic
+          pick, which commit `[AI:<tool>]` tags steer and which never chooses agy
+
+      --specs <SPEC-IDS>
+          Comma-separated spec IDs whose acceptance criteria are added to the review bundle
+
+      --verify-coverage <LEDGER_JSON>
+          Check a reviewer coverage ledger (JSON) against the file list. Exits non-zero if any
+          reviewable file is missing or skipped without a reason
+
+      --anchor-findings <FINDINGS_JSON>
+          Pin the quoted `existing_code` snippets in a findings JSON file to exact line ranges in
+          the reviewed revision
 
       --json
           Emit machine-readable JSON output
 
       --write <PATH>
           Write output inside the repository (relative paths start at the project root)
-
-  -h, --help
-          Print help (see a summary with '-h')
 ===== aida review record
 Record a review verdict for a spec as first-class state.
 
@@ -56441,22 +56449,22 @@ Working on aida itself
       "review",
       "prepare"
     ],
-    "about": "Deterministically classify diff inventory, match path-scoped review playbooks, bundle token-budgeted review batches, verify 100% file coverage ledgers, and anchor quoted code snippets to exact 1-based line numbers",
+    "about": "Review a change with an AI agent and get line-anchored findings",
     "flags": [
       {
         "name": "adversarial",
         "takes_value": false,
-        "help": "Have a second agent reproduce or refute each finding. Refuted findings are listed apart and marked suppressed in SARIF, but still count for `--fail-on`. It prefers a vendor that did not write the change"
+        "help": "Have a second agent try to reproduce each finding. Findings it refutes are listed separately and marked suppressed in SARIF, but still count for --fail-on. It prefers an agent that did not write the change"
       },
       {
         "name": "agent",
         "takes_value": true,
-        "help": "Agent for `--run-review`: `claude` or `codex` (or set AIDA_REVIEW_RUNNER_CMD)"
+        "help": "Which agent reviews with --run-review: `claude` or `codex` (or set AIDA_REVIEW_RUNNER_CMD to run your own command)"
       },
       {
         "name": "anchor-findings",
         "takes_value": true,
-        "help": "Deterministically anchor quoted `existing_code` snippets in a findings JSON file to exact 1-based `(start_line, end_line)` spans on the target revision"
+        "help": "Pin the quoted `existing_code` snippets in a findings JSON file to exact line ranges in the reviewed revision"
       },
       {
         "name": "canonical-ids",
@@ -56466,32 +56474,32 @@ Working on aida itself
       {
         "name": "challenger-agent",
         "takes_value": true,
-        "help": "Challenger agent for `--adversarial`: `claude`, `codex` or `agy`. Overrides the automatic pick, which commit `[AI:<tool>]` tags steer and which never chooses agy"
+        "help": "Challenger agent for --adversarial: `claude`, `codex` or `agy`. Overrides the automatic pick, which commit `[AI:<tool>]` tags steer and which never chooses agy"
       },
       {
         "name": "challenger-effort",
         "takes_value": true,
-        "help": "Reasoning effort for the `--adversarial` challenger"
+        "help": "Reasoning effort for the --adversarial challenger"
       },
       {
         "name": "commit",
         "takes_value": true,
-        "help": "Single commit SHA to inspect against its parent"
+        "help": "Review a single commit against its parent"
       },
       {
         "name": "effort",
         "takes_value": true,
-        "help": "Reasoning effort for `--run-review`: low, medium, high, xhigh (claude: max)"
+        "help": "Reasoning effort for --run-review: low, medium, high, xhigh (claude: max)"
       },
       {
         "name": "exclude",
         "takes_value": true,
-        "help": "Additional comma-separated glob patterns to exclude from review"
+        "help": "Skip files matching these comma-separated glob patterns"
       },
       {
         "name": "fail-on",
         "takes_value": true,
-        "help": "Exit with an error when any finding meets or exceeds this severity"
+        "help": "Exit with an error when any finding is at or above this severity"
       },
       {
         "name": "format",
@@ -56501,7 +56509,7 @@ Working on aida itself
       {
         "name": "from",
         "takes_value": true,
-        "help": "Base Git revision for range comparison (e.g. `main`)"
+        "help": "Review the commits since this ref (for example `main`)"
       },
       {
         "name": "help",
@@ -56516,52 +56524,52 @@ Working on aida itself
       {
         "name": "model",
         "takes_value": true,
-        "help": "Model for `--run-review`"
+        "help": "Model for --run-review"
       },
       {
         "name": "path",
         "takes_value": true,
-        "help": "Target file or directory path(s) to scope `--scan` (or filter diff entries). Repeatable (`--path aida-core/src --path aida-cli-lib/src`)"
+        "help": "Only review files under this path. Repeatable (`--path src --path docs`)"
       },
       {
         "name": "post-comment",
         "takes_value": false,
-        "help": "Post the Markdown report as a comment on the `--pr` change. Off unless given; agent text in the comment is code-fenced so it renders inert"
+        "help": "Post the report as a comment on the --pr pull request. Agent text in the comment is code-fenced so it renders inert"
       },
       {
         "name": "pr",
         "takes_value": true,
-        "help": "Pull spec IDs and base/head refs from PR/MR number N"
+        "help": "Review pull request N (its base and head, and any specs it names)"
       },
       {
         "name": "run-review",
         "takes_value": false,
-        "help": "Review every batch with an agent and anchor its findings. Needs `--pr` or `--from`; review settings come from the merge base"
+        "help": "Run an AI agent over the change and report its findings with line numbers. Needs --pr or --from. Review settings are read from the base branch, so the change under review cannot alter them"
       },
       {
         "name": "sarif",
         "takes_value": true,
-        "help": "Write a SARIF 2.1.0 report inside the repository"
+        "help": "Save the findings as a SARIF 2.1.0 file inside the repository"
       },
       {
         "name": "scan",
         "takes_value": false,
-        "help": "Full-file scan mode (`aida review prepare --scan [--path <DIR_OR_FILE>...]`). Inventories tracked files under the specified paths (or the entire repo if `--path` is omitted) instead of computing a Git diff"
+        "help": "Review whole files instead of a change: every tracked file under --path, or the whole repository when --path is omitted"
       },
       {
         "name": "specs",
         "takes_value": true,
-        "help": "Comma-separated list of AIDA spec IDs whose `## Acceptance` criteria should be injected into the review preparation bundle"
+        "help": "Comma-separated spec IDs whose acceptance criteria are added to the review bundle"
       },
       {
         "name": "to",
         "takes_value": true,
-        "help": "Target Git revision for range comparison (defaults to `HEAD` when `--from` is set)"
+        "help": "End of the range for --from (default: `HEAD`)"
       },
       {
         "name": "verify-coverage",
         "takes_value": true,
-        "help": "Verify a reviewer coverage ledger JSON file against the classified inventory. Exits non-zero if any reviewable file is unaccounted for or skipped without a reason"
+        "help": "Check a reviewer coverage ledger (JSON) against the file list. Exits non-zero if any reviewable file is missing or skipped without a reason"
       },
       {
         "name": "write",
