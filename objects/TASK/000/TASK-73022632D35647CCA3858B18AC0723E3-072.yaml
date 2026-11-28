@@ -1,0 +1,30 @@
+id: 01a220a6-aefa-79c0-9369-ef05415ba5bb
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-072
+title: 'aida review --help: describe the group in plain English for new users'
+description: |
+  F9 in docs/plans/2026-11-27-fresh-user-walkthrough.md also notes that `aida review --help` describes the group as "Drive human review of a held spec" and lists 19 subcommands with no pointer to `review prepare`. TASK-3959's acceptance covered only `review prepare --help`, so the group-level text (aida-cli-lib/src/review_cmd_args.rs, the Review command's doc) is unchanged.
+
+  Suggestion: lead the `aida review` about with "Review changes with an AI agent (start with `aida review prepare`)" and move seat-workflow subcommands under an advanced grouping.
+
+  Raised by the implementer while working TASK-3959.
+  Branch: task-3959-help-for-new-users  ·  Commit: 264c5f7dc5  ·  PR #4797
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T05:35:24.410129529Z
+modified_at: 2026-11-28T05:35:24.410129529Z
+req_type: Task
+tags:
+- from-implementer:TASK-3959
+- kind:followup-suggestion
+- severity:minor
+filed_at:
+  code_sha: 264c5f7dc54e62d52d3b995a86f1e0675c3b63f4
+  branch: task-3959-help-for-new-users
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4b06a37b46
+  vendor: claude
+  session: 01a2208aaf73
+  harness_version: 2.1.319 (Claude Code)
