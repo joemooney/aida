@@ -1,0 +1,18 @@
+{
+  "id": "advisor-loop-review-watch-b8516ef4-413c-4416-a07d-8197fc0e0b7c",
+  "thread_id": "advisor-loop-review-watch-b8516ef4-413c-4416-a07d-8197fc0e0b7c",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795845858625,
+  "body": "review-watch failed 3 consecutive times. Last failure: base evidence refused: change head moved during discovery; retry the next pass. Inspect aida advisor loops status and train-status, and .aida/review-watch/service.log; renew/rebind the advisor grant if authority ended.",
+  "subject": "review-watch: repeated service failure",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
