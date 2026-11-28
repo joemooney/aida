@@ -53,7 +53,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T03:41:07.856444Z
-modified_at: 2026-11-28T09:39:10.920878522Z
+modified_at: 2026-11-28T09:39:14.019167459Z
 req_type: Story
 tags:
 - containment
@@ -234,6 +234,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Advisor FIX-FIRST at 0c402489: the reviewer''s draft approved with 5 deferrals, but two of them harm users (settings data loss on a read error; a 0600→0644 permission widening) and must be fixed before init --write ships. The other three (shape errors caught mid-apply, the ENOENT retry delay, the interactive-prompt test gap) stay deferred.. No triage reason was given.'
   created_at: 2026-11-28T09:39:10.920874735Z
   modified_at: 2026-11-28T09:39:10.920874735Z
+- id: 01a22185-e940-7061-8e3a-142b39375b3f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2838):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 0c402489d839
+    Recorded: 2026-11-28T09:38:15.808228759+00:00
+    Findings:
+    1. DATA LOSS (must fix, not deferrable): apply_allowlist_writes' JSON branch maps ANY read error of .claude/settings.json (not only NotFound) to an empty object and then atomically overwrites the file with just the sandbox key, so a permission or IO error destroys the user's settings. Only NotFound may mean empty; any other read error must abort the write with the cause. Test it.
+    2. PERMISSION REGRESSION (must fix): settings.json is rewritten via write_atomic, which stages with std::fs::write (0666 & !umask), so a 0600 settings file (which can hold API keys in env) comes back 0644. Preserve the existing file's mode (and owner) on the atomic replace, creating new files 0600. Test it.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-28T09:39:13.856982618Z
+  modified_at: 2026-11-28T09:39:13.856982618Z
 history:
 - id: 01a1e0f7-c069-77f2-b73d-5d3a4f0f8d52
   author: joe
