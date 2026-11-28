@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T04:07:56.087585344Z
-modified_at: 2026-11-28T01:05:09.367423610Z
+modified_at: 2026-11-28T01:05:13.410109896Z
 req_type: Bug
 tags:
 - ci
@@ -144,6 +144,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3474): When the planner''s listing breaches (main: `except ValueError` then `return 1`), the script returns without printing watch.summary(). [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T01:04:58.037072785Z
   modified_at: 2026-11-28T01:04:58.037072785Z
+- id: 01a21faf-52c2-7902-93ae-6de6001101da
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3475): ResourceWatch measures its deadline from script start, not from job start (scripts/ci-test-shards.py ResourceWatch.__init__; ci.yml AIDA_CI_TEST_DEADLINE_SECS=1980). [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:05:13.410109896Z
+  modified_at: 2026-11-28T01:05:13.410109896Z
 history:
 - id: 01a2160c-52af-7011-8abf-6c6497fc6b7c
   author: joe
