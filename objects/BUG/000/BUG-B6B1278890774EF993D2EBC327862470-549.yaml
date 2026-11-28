@@ -23,12 +23,35 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T10:26:37.477984708Z
-modified_at: 2026-11-28T11:17:13.751622903Z
+modified_at: 2026-11-28T11:18:42.285416963Z
 req_type: Bug
 tags:
 - ci
 - flaky
 - train
+comments:
+- id: 01a221e0-fb6d-7132-9a8e-43787860e6f0
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (configuration):** `timeout-minutes: 15` on the "Live bwrap OS-wrap confinement gate" step; checked by inspection of .github/workflows/ci.yml and a unit test that parses the step.
+    - **AC2 (unit/fixture):** new `scripts/ci-live-test-watchdog.py` builds the test binary once (`cargo test --no-run --message-format=json`), lists the matching tests, and runs each in its own process (parallel pool) with a per-test timeout; a timed-out test is killed (process group) and printed as `TIMEOUT <name>`. It writes libtest-format `ok <name>` / `failed <name>` result lines so the step's existing counting and skip checks stay unchanged. `tests/test_ci_live_test_watchdog.py` proves it.
+    - **AC3 (fixture):** on a timeout (or the overall deadline) the harness prints the running tests and the tail of the live log before exiting non-zero; asserted in the same unit test.
+    - **AC4 (fixture):** a fake test binary whose one test sleeps forever is killed within the bound and named; others report ok.
+
+    ### Expected files
+    - `.github/workflows/ci.yml` (step + unittest step)
+    - `scripts/ci-live-test-watchdog.py`
+    - `tests/test_ci_live_test_watchdog.py`
+
+    ### Ambiguities / conflicts as questions
+    - None. AIDA_REQUIRE_BWRAP_LIVE stays as is; skips still fail.
+  created_at: 2026-11-28T11:18:42.285416963Z
+  modified_at: 2026-11-28T11:18:42.285416963Z
+  session_id: 01a221df696f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a221b3-6753-7fb2-add9-43dfca3c1423
   author: joe
