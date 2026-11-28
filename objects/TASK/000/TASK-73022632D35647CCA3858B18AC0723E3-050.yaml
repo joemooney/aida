@@ -14,12 +14,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T10:47:01.862391650Z
-modified_at: 2026-11-26T10:47:01.862391650Z
+modified_at: 2026-11-28T00:26:42.196066403Z
 req_type: Task
 tags:
 - from-implementer:BUG-2770
 - kind:design-choice
 - severity:minor
+comments:
+- id: 01a21f8c-0e94-7450-9ffc-816aff45e886
+  author: joe
+  content: 'APPROVED (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Give anchor-level mailbox id temps an owner record or age-floor reap path; testable.'
+  created_at: 2026-11-28T00:26:42.196066403Z
+  modified_at: 2026-11-28T00:26:42.196066403Z
 history:
 - id: 01a217a4-df51-7bd1-b679-179793d6c41c
   author: joe
