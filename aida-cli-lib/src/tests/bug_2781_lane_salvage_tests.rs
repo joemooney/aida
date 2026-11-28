@@ -252,6 +252,20 @@ fn run_failed_exit(
     outcome: &Outcome,
     seat: SeatState,
 ) -> (Option<String>, Vec<(String, Option<u64>)>) {
+    run_failed_exit_as(fx, clone, (branch, id), launch, outcome, seat, false)
+}
+
+/// [`run_failed_exit`], salvaging to the side branch only when `side_only`.
+#[cfg(unix)]
+fn run_failed_exit_as(
+    fx: &super::tests::Fixture,
+    clone: &Path,
+    (branch, id): (&str, &str),
+    launch: &LaunchSeat<'_>,
+    outcome: &Outcome,
+    seat: SeatState,
+    side_only: bool,
+) -> (Option<String>, Vec<(String, Option<u64>)>) {
     let said = RefCell::new(Vec::new());
     let note = failed_exit_note(
         &FailedExit {
@@ -262,6 +276,7 @@ fn run_failed_exit(
             lane: id,
             seat_clone: true,
             launch_seat: launch,
+            side_branch_only: side_only,
         },
         &sigterm(),
         outcome,
@@ -445,6 +460,45 @@ fn bug_2781_run_step_passes_the_launch_head() {
     assert!(!ref_exists(&fx.origin, &format!("refs/heads/salvage/{id}")));
 }
 
+// STORY-3134: a usage-limit stop salvages to `salvage/<lane>`, never to the
+// PR branch it launched on, and never by force.
+// trace:STORY-3134 | ai:claude
+#[cfg(unix)]
+#[test]
+fn story_3134_usage_limit_stop_salvages_to_the_side_branch_only() {
+    let fx = fixture();
+    let id = "c0ffee313401";
+    let (clone, tip) = seat_with_commit(&fx, "outage", id, "seat-outage", "fix: o (BUG-1)");
+    pr_branch_at_main(&fx, "seat-outage");
+    let before = git_ok(&fx.origin, &["rev-parse", "refs/heads/seat-outage"]);
+    let launch_pr = (12, None);
+    let launch = LaunchSeat {
+        pr: Some(&launch_pr),
+        head: None,
+    };
+    let branch = ("seat-outage", id);
+    let (note, said) = run_failed_exit_as(
+        &fx,
+        &clone,
+        branch,
+        &launch,
+        &Outcome::NoPr,
+        committed(&tip),
+        true,
+    );
+    let salvage = format!("refs/heads/salvage/{id}");
+    assert_eq!(git_ok(&fx.origin, &["rev-parse", &salvage]), tip);
+    let pr_head = git_ok(&fx.origin, &["rev-parse", "refs/heads/seat-outage"]);
+    assert_eq!(pr_head, before, "the PR branch is untouched");
+    assert_eq!(said.len(), 1);
+    assert_eq!(said[0].1, None, "nothing posted on the PR");
+    let note = note.unwrap();
+    assert!(
+        note.contains(&format!("pushed {tip} to salvage/{id}")),
+        "{note}"
+    );
+}
+
 // A seat that is not a self-publishing clone only names the cause.
 #[cfg(unix)]
 #[test]
@@ -459,6 +513,7 @@ fn bug_2781_run_step_outside_a_seat_clone_only_names_the_cause() {
             lane: "l",
             seat_clone: false,
             launch_seat: &LaunchSeat::default(),
+            side_branch_only: false,
         },
         "exited with code 1",
         &Outcome::NoPr,

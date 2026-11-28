@@ -475,6 +475,9 @@ pub(crate) struct FailedExit<'a> {
     /// Whether the seat is a host-recorded clone that publishes itself.
     pub(crate) seat_clone: bool,
     pub(crate) launch_seat: &'a crate::standalone_implementer::LaunchSeat<'a>,
+    /// Salvage to `salvage/<lane>` only, never a PR branch: a usage-limit
+    /// stop's partial work. trace:STORY-3134 | ai:claude
+    pub(crate) side_branch_only: bool,
 }
 
 /// `run()`'s failed-exit step: name what ended the lane (`cause`) and, for a
@@ -494,6 +497,7 @@ pub(crate) fn failed_exit_note(
     let mut note = format!("lane {cause}");
     if exit.seat_clone {
         let open_pr = match outcome {
+            _ if exit.side_branch_only => None,
             Outcome::PrOpened { pr, .. } => Some(*pr),
             _ => exit.launch_seat.pr.map(|(pr, _)| *pr),
         };

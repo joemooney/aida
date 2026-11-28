@@ -91,16 +91,18 @@ pub(crate) fn note_failed_run(
     main: &std::path::Path,
     vendor: HeadlessVendor,
     log: &std::path::Path,
+    lane: &str,
     success: bool,
     outcome: &crate::standalone_implementer::Outcome,
 ) -> Option<String> {
     if success || !matches!(outcome, crate::standalone_implementer::Outcome::NoPr) {
         return None;
     }
-    let outage = detect_log(vendor, log)?;
+    let mut outage = detect_log(vendor, log)?;
+    outage.lane = Some(lane.to_owned());
     let failed = match crate::vendor_outage::record(main, &outage) {
         Ok(()) => String::new(),
         Err(e) => format!("; could not record it: {e:#}"),
     };
-    Some(format!("agent usage limit: {}{failed}", outage.describe()))
+    Some(format!("{}{failed}", outage.exit_note()))
 }

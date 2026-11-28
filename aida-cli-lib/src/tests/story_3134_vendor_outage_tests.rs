@@ -125,7 +125,8 @@ fn ac2_a_lane_that_fails_on_a_usage_limit_records_it_and_says_so() {
     let tmp = tempfile::tempdir().unwrap();
     let (at, reset) = soon();
     let log = write_log(tmp.path(), &[&codex_limit(&at)]);
-    let note = |success, outcome| note_failed_run(tmp.path(), Codex, &log, success, &outcome);
+    let note =
+        |success, outcome| note_failed_run(tmp.path(), Codex, &log, "lane-7", success, &outcome);
     let held = Outcome::Held { branch: "b".into() };
     let punted = Outcome::Punted { reason: "r".into() };
     for (success, outcome) in [(true, Outcome::NoPr), (false, held), (false, punted)] {
@@ -134,7 +135,88 @@ fn ac2_a_lane_that_fails_on_a_usage_limit_records_it_and_says_so() {
     }
     let message = note(false, Outcome::NoPr).unwrap();
     let until = reset.with_timezone(&Local).format("%Y-%m-%d %H:%M");
-    let note = format!("agent usage limit: `codex` is unavailable until {until}");
+    let note = format!("agent usage limit: codex until {until}");
     assert!(message.starts_with(&note), "{message}");
     assert!(vendor_outage::refuse_launch(tmp.path(), "codex").is_err());
+    let recorded = vendor_outage::active(tmp.path());
+    assert_eq!(
+        recorded[0].lane.as_deref(),
+        Some("lane-7"),
+        "its source lane"
+    );
+}
+
+#[test]
+fn s1b_doctor_lists_active_outages_with_reset_and_lane() {
+    let tmp = tempfile::tempdir().unwrap();
+    assert!(
+        vendor_outage::doctor_findings(tmp.path()).is_empty(),
+        "none"
+    );
+    let mut active = outage("codex", 2);
+    active.lane = Some("lane-9".into());
+    vendor_outage::record(tmp.path(), &active).unwrap();
+    vendor_outage::record(tmp.path(), &outage("claude", -1)).unwrap();
+    let found = vendor_outage::doctor_findings(tmp.path());
+    assert_eq!(found.len(), 1, "an expired outage is not listed");
+    let until = active.until.with_timezone(&Local).format("%Y-%m-%d %H:%M");
+    let f = &found[0];
+    assert_eq!(
+        (f.category.as_str(), f.id.as_str()),
+        ("vendor-outage", "codex")
+    );
+    assert!(f.summary.contains("lane lane-9") && f.summary.contains(&until.to_string()));
+    assert!(f.action.contains("clears on its own"), "{}", f.action);
+    // `aida doctor --category vendor-outage` and `aida status` read the same list.
+    let store = aida_core::models::RequirementsStore::default();
+    let proc = tmp.path().join("proc");
+    let all = crate::doctor_root::collect_doctor_findings_at(
+        tmp.path(),
+        &store,
+        Some("usage-limit"),
+        &proc,
+        None,
+    )
+    .unwrap();
+    assert_eq!(all.len(), 1, "{all:?}");
+}
+
+#[test]
+fn s1b_usage_limit_stop_releases_its_lease_only_when_nothing_is_uncommitted() {
+    let ended = std::cell::Cell::new(0);
+    let end = || {
+        ended.set(ended.get() + 1);
+        Ok(())
+    };
+    assert_eq!(
+        vendor_outage::end_lane(Some(0), &end),
+        (true, "lease released".into())
+    );
+    let (kept, note) = vendor_outage::end_lane(Some(2), &end);
+    assert!(!kept && note.contains("2 uncommitted"), "{note}");
+    assert!(
+        !vendor_outage::end_lane(None, &end).0,
+        "an unreadable seat keeps it"
+    );
+    assert_eq!(ended.get(), 1, "only the clean seat ran session end");
+    let refused = || anyhow::bail!("holds 1 commit(s) that no remote has");
+    let (kept, note) = vendor_outage::end_lane(Some(0), &refused);
+    assert!(
+        !kept && note.starts_with("lease kept: holds 1 commit"),
+        "{note}"
+    );
+}
+
+#[test]
+fn s1b_every_usage_limit_exit_names_itself() {
+    // The retained-merge early return and the ordinary failure share this.
+    let note = outage("codex", 2).exit_note();
+    assert!(
+        note.starts_with("agent usage limit: codex until "),
+        "{note}"
+    );
+    let detail = "a merge is still pending in the seat".to_string();
+    let message = vendor_outage::exit_message(Some(&note), detail.clone());
+    assert_eq!(message, format!("{note}; {detail}"));
+    assert_eq!(vendor_outage::exit_message(None, detail.clone()), detail);
 }

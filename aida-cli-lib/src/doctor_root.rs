@@ -911,6 +911,12 @@ pub(crate) fn collect_doctor_findings_at(
         }
     }
 
+    // Active agent usage limits, also shown by `aida status`.
+    // trace:STORY-3134 | ai:claude
+    for finding in crate::vendor_outage::doctor_findings(project_root) {
+        push(finding);
+    }
+
     // A parent edge is canonical; parent:* tags are a denormalized query aid.
     // Surface either direction of drift without touching the graph.
     // trace:BUG-1252 | ai:codex
@@ -1610,6 +1616,11 @@ pub(crate) fn which_binary(binary: &str) -> Option<std::path::PathBuf> {
 pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
     // trace:BUG-2490 | ai:codex
     (&["store-objects"], "store-objects"),
+    // trace:STORY-3134 | ai:claude
+    (
+        &["vendor-outage", "vendor-outages", "usage-limit"],
+        "vendor-outage",
+    ),
     (
         &["merge-hold", "merge-hold-integrity"],
         "merge-hold-integrity",
