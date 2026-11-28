@@ -9,12 +9,12 @@ description: |-
   - AC3: existing callers that rely on the commit (CI, scripts) pass --commit explicitly; the help text says so.
 
   Source: docs/plans/2026-11-27-fresh-user-walkthrough.md (on branch task-3951-fresh-user-walkthrough / PR #4782), section F5. Advisor aida-d3 2026-11-27 20:30 priority order; filed by product-15 for laning now (one spec per lane).
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:26:56.215965481Z
-modified_at: 2026-11-28T04:19:19.028938057Z
+modified_at: 2026-11-28T04:23:46.524933682Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -81,6 +81,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a22065-1a91-7b20-9e53-23a3fad3edf7
+  author: dirtlab
+  timestamp: 2026-11-28T04:23:46.577780033Z
+  session_id: 01a2203a1ff4
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
   branch: main
@@ -88,3 +97,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: f0ad200d8c6
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-28T04:23:46.524933682Z
+  implemented_by: dirtlab
