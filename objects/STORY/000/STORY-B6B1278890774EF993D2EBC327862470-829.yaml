@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T04:42:11.569133Z
-modified_at: 2026-11-28T04:52:43.826139931Z
+modified_at: 2026-11-28T09:27:02.207960375Z
 req_type: Story
 tags:
 - integration
@@ -2020,6 +2020,11 @@ comments:
   modified_at: 2026-11-28T02:58:44.958434424Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a2217a-bf40-7600-9a49-8f2f748ac9f2
+  author: joe
+  content: 'DEFERRED FOLLOW-UPS (#4779 S7-S10 approval @46c45d85; product-15; candidates for the next agy pass): F1 [p2] review_engine.rs anchor_findings_with/infer_doc_or_omission_anchor (aida-core/src/review_engine.rs:1527-1600): every finding without existing_code, in code files too, now gets an anchor that may be invented. It uses the first line containing any backticked token or #NNN, else the first ''#'' line (e.g. a Rust #[derive]), else the first non-empty line. That start_line/end_line then reaches SARIF and the posted comment a | F2 [p2] Telemetry privacy in other repos: the .gitignore line only affects AIDA''s own repo, which already ignores .aida/*. persist_review_telemetry_and_sarif (aida-cli-lib/src/review_prepare.rs) writes .aida/review-telemetry/sarif/<id>.sarif.json, holding finding messages that can quote code, with default 0644 permissions. It also adds no self-ignoring .gitignore inside .aida/review-telemetry/, so in a community repo `git ad | F3 [p3] resolve_ab_arm_assignment (aida-core/src/review_engine.rs:2466) uses arm.to_ascii_lowercase().contains("adversarial"), so --ab-arm non-adversarial (or a committed review-rules ab_arm with that substring) turns on the challenger pass without --adversarial. Match exact arm names. | F4 [p3] format_forge_review_markdown/_with_adversarial (aida-core/src/review_engine.rs:2194-2330) has only a test caller. --post-comment still posts the existing post_review_comment/report_pieces renderer, so the two renderers can drift, and this one lists linked specs by id/title, not their acceptance criteria. The AC is met by a pure, unit-tested function, but either route --post-comment through it or fold it into the live | F5 [p3] sanitize_unescaped_json_inner_quotes (aida-core/src/review_engine.rs, parse_runner_findings_json fallback) has no ambiguity detection. Any repair that re-parses is accepted, even when another way of splitting the quotes was possible. The TASK-3947 note asked it to fail closed when the repair is ambiguous. No authority is added (a runner can emit valid JSON directly, and the coverage ledger is still enforced), but rej | F6 [p3] With no challenger and more than one batch, review_prepare.rs (~lines 527-560 and the suppressed builder ~592) builds an AdversarialSummary with no challenger to hold the folded cross-batch duplicates. Those duplicates then go to SARIF suppressions labelled ''refuted by challenger: Consolidated cross-batch duplicate…'', which misstates provenance in the report and SARIF. They still count toward --fail-on, so gating is  | F7 [p3] consolidate_cross_batch_findings (aida-core/src/review_engine.rs:2964-2979) merges two code findings on the same path, category and start_line regardless of severity or message, and merges findings that share 3 or more backticked identifiers across files. A distinct, higher-severity defect can vanish from the reported list into suppressions. It is still gated, but compare severity and keep the higher one as primary. | F8 [p3] OPENCODE/PI review vendors (aida-cli-lib/src/vendors/review_runner.rs) were never run against real binaries: neither is installed on the hosts. Two things are unchecked: whether `opencode run` reads the prompt from stdin, and whether OPENCODE_CONFIG_CONTENT''s deny-all schema takes precedence over the global config. confinement_verified=false keeps them opt-in only (--agent), never auto-picked, and refused for --post-'
+  created_at: 2026-11-28T09:27:02.207960375Z
+  modified_at: 2026-11-28T09:27:02.207960375Z
 history:
 - id: 01a211a9-56a6-7a81-8ad2-bc8f76fc04a2
   author: joe
