@@ -117,12 +117,12 @@ description: |
   S3: Receipt v2 (producer, processor, store namespace); `list --json` reports refs, writer ids, and unknown when a receipt branch is unavailable.
   S4: relay alignment (R7).
   S5 (optional): AC8 and multi-producer fixtures.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:35:39.542243859Z
-modified_at: 2026-11-28T00:47:43.633687438Z
+modified_at: 2026-11-28T00:47:46.626217561Z
 req_type: Story
 comments:
 - id: 01a1b895-7815-78d0-ba38-bbf9fe9f1533
@@ -223,6 +223,11 @@ comments:
   content: 'AC verification vs origin/main (product-15 2026-11-27, per advisor aida-d3 17:45/17:58): NOT complete, only slice 1 shipped (#3653, #3664): ACs 1-5, 7 and AC10''s backward-compat half met. GAP: AC6 receipt identity/status; AC8 processing authority + duplicate scope; AC9 (branch protection reported unverified); AC10 migration procedure. Note: branches are aida-feedback-*, not aida-intent/* as titled. Returned to Approved.'
   created_at: 2026-11-28T00:47:43.633687438Z
   modified_at: 2026-11-28T00:47:43.633687438Z
+- id: 01a21f9f-59c2-7e32-b47e-657a11b44e91
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: Redispatch reused the retained S0 HEAD 718baf0aed. Verified shipped S1 commit 92e7eb3544 is an ancestor of origin/main at 697f85f2ff and is not an ancestor of lane HEAD. S2-S4 require S1 and native Git metadata is read-only. Relaunch from a fresh branch based on current main instead of reusing the retained S0 branch.. No triage reason was given.'
+  created_at: 2026-11-28T00:47:46.626214186Z
+  modified_at: 2026-11-28T00:47:46.626214186Z
 history:
 - id: 01a1b92a-7413-7ed3-b4ef-34036b0ecfba
   author: aida-session-start
@@ -336,6 +341,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a21f9f-59c2-7e32-b47e-656af127d430
+  author: joe
+  timestamp: 2026-11-28T00:47:46.626208171Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 2782389cd8ad9240672ea95d0f2209c7f193700b
   branch: main
@@ -345,8 +357,3 @@ filed_at:
   vendor: claude
   session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: Redispatch reused the retained S0 HEAD 718baf0aed. Verified shipped S1 commit 92e7eb3544 is an ancestor of origin/main at 697f85f2ff and is not an ancestor of lane HEAD. S2-S4 require S1 and native Git metadata is read-only. Relaunch from a fresh branch based on current main instead of reusing the retained S0 branch.
-  raised_by: implementer
-  raised_at: 2026-11-19T02:57:51.551474160Z
