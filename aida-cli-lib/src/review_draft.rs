@@ -1895,6 +1895,7 @@ mod standalone_review_verdict_parent_tests {
         assert!(rv::delivery_pending(&serde_json::Value::Object(
             pending.clone()
         )));
+        assert_eq!(pending[rv::BARRIER_OF], "approved");
         // No lease is registered for the reviewer's session: it has ended.
         use crate::gate::ledger::abandoned_sweep as sweep;
         assert!(sweep::reviewer_session_ended(&f.root, &pending));

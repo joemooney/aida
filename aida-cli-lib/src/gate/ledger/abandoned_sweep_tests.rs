@@ -42,9 +42,47 @@ fn setup(
     (tmp, root, env)
 }
 
+/// The barrier of an approval whose only finding is deferred.
 fn deferred() -> Value {
-    json!({"findings": ["P3 follow-up"], "finding_dispositions":
-        [{"severity": "minor", "disposition": "deferred", "rationale": "later"}]})
+    deferred_of(Some("approved"))
+}
+
+/// A deferred-finding barrier standing in for `original` (`None` = a barrier
+/// that names no original verdict).
+fn deferred_of(original: Option<&str>) -> Value {
+    let mut body = json!({"findings": ["P3 follow-up"], "finding_dispositions":
+        [{"severity": "minor", "disposition": "deferred", "rationale": "later"}]});
+    if let Some(word) = original {
+        body[rv::BARRIER_OF] = word.into();
+    }
+    body
+}
+
+/// Review finding on #4752: the collected-verdict writer barriers a rejected
+/// record with a deferred finding too. Expiry must never turn that rejection
+/// into an approval, nor finalize a request-changes or unlabeled barrier.
+#[test]
+fn a_non_approval_barrier_is_abandoned_never_finalized() {
+    for (pr, original) in [
+        (81, Some("rejected")),
+        (82, Some("request-changes")),
+        (83, None),
+        (84, Some("waiting")),
+    ] {
+        let (_tmp, root, _env) = setup(pr, deferred_of(original));
+        let done = run(&root, pr, true, true, NO_FINALIZE);
+        assert_eq!(
+            done,
+            SweepExpiry {
+                finalized: 0,
+                abandoned: 1
+            },
+            "{original:?}"
+        );
+        let after = rv::read_recorded_verdict(&root, &format!("PR-{pr}")).unwrap();
+        assert!(!after.kind.approves(), "{original:?} never approves");
+        assert!(rv::sweep_abandoned(&newest(&root, pr)), "{original:?}");
+    }
 }
 
 fn run(root: &Path, pr: u64, aged: bool, ended: bool, finalize: Fin) -> SweepExpiry {
@@ -76,6 +114,39 @@ fn run_under(
 
 fn newest(root: &Path, pr: u64) -> Value {
     Value::Object(project::newest_verdict(root, &format!("PR-{pr}")).unwrap())
+}
+
+/// The writer half: under tier policy the collected-verdict writer barriers a
+/// rejected record with a deferred finding, and the barrier keeps the word
+/// `rejected`. When delivery dies there, expiry abandons it.
+#[test]
+fn a_collected_rejection_barrier_records_its_verdict_and_is_never_approved() {
+    let (_tmp, root, _env) = setup(85, json!({}));
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[review]\nblocking_tiers = [\"p1\"]\n",
+    )
+    .unwrap();
+    crate::review_blocking::commit_config_for_test(&root);
+    let mut rejected = json!({"verdict": "rejected", "reviewed_sha": HEAD,
+        "recorded_by": "reviewer:gone-review-session",
+        "recorded_at": chrono::Utc::now().to_rfc3339()});
+    rejected
+        .as_object_mut()
+        .unwrap()
+        .extend(deferred_of(None).as_object().unwrap().clone());
+    let rejected = rejected.as_object().unwrap().clone();
+    // No canonical store here: delivery fails after the barrier is durable.
+    assert!(
+        super::super::record_collected_verdict(&root, ChangeKey::pr(85), &rejected, &[]).is_err()
+    );
+    let barrier = newest(&root, 85);
+    assert!(rv::delivery_pending(&barrier));
+    assert_eq!(barrier[rv::BARRIER_OF], "rejected");
+    assert_eq!(run(&root, 85, true, true, NO_FINALIZE).abandoned, 1);
+    let after = rv::read_recorded_verdict(&root, "PR-85").unwrap();
+    assert!(!after.kind.approves());
 }
 
 #[test]
@@ -118,6 +189,7 @@ fn exited_reviewer_with_complete_draft_is_finalized() {
     let finalize = |_: &GateEvent, approval: &JsonObj| {
         assert!(rv::disposition_verdict(approval).approves());
         assert!(approval.get("sweep_pending").is_none());
+        assert!(approval.get(rv::BARRIER_OF).is_none());
         assert_eq!(approval["reviewed_sha"], HEAD);
         seen.set(seen.get() + 1);
         Ok(())

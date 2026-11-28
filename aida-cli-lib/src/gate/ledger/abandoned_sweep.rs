@@ -69,15 +69,23 @@ pub(crate) fn reviewer_session_ended(root: &Path, record: &JsonObj) -> bool {
             })
 }
 
-/// The approval a barrier stands for, when the barrier alone proves it: a
-/// reviewed head and findings that are all deferred (the recorder already
-/// normalizes such a record to an approval). Any other barrier is
-/// incomplete: its fail-closed verdict hides what the reviewer decided.
-/// The stored findings are re-decided under the `policy` held now, so a
-/// policy that changed since the barrier was written cannot be bypassed.
+/// The approval a barrier stands for, when the barrier alone proves it: it
+/// stood in for an `approved` verdict ([`rv::BARRIER_OF`]), with a reviewed
+/// head and findings that are all deferred (the recorder already normalizes
+/// such a record to an approval). Any other barrier is incomplete: its
+/// fail-closed verdict hides what the reviewer decided. A barrier of a
+/// rejected or request-changes record, or one naming no original verdict,
+/// is never an approval (fail closed). The stored findings are re-decided
+/// under the `policy` held now, so a policy that changed since the barrier
+/// was written cannot be bypassed.
 fn complete_approval(barrier: &JsonObj, policy: &Effective) -> Option<JsonObj> {
+    // trace:BUG-2786 | ai:claude
+    if barrier.get(rv::BARRIER_OF).and_then(|v| v.as_str()) != Some("approved") {
+        return None;
+    }
     let mut restored = barrier.clone();
     restored.remove("sweep_pending");
+    restored.remove(rv::BARRIER_OF);
     restored.insert("verdict".into(), "approved".into());
     let restored = rv::redecide_replay_record(restored, policy, rv::VerdictKind::Approved).ok()?;
     let head = restored.get("reviewed_sha").and_then(|v| v.as_str());
