@@ -53,7 +53,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T03:41:07.856444039Z
-modified_at: 2026-11-28T07:24:53.130246573Z
+modified_at: 2026-11-28T07:29:16.997670741Z
 req_type: Story
 tags:
 - containment
@@ -151,20 +151,26 @@ comments:
   modified_at: 2026-11-28T04:22:07.615336163Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
-- id: 01a2210a-ea0a-7411-8edd-dbc62cf0d8dc
-  author: dirtlab
+- id: 01a2210f-5ed2-70f3-a164-5dc2ae8cc142
+  author: joe
   content: |-
-    ## Implementer self-review
-    Reviewed HEAD: 1a6a7ff7ae (branch story-2838-s2-init-write, base origin/integration fb1f8edfba; PR #4805). Slice 2 only (Refs): `aida init --report-allowlists --write` (or an interactive yes) writes the reported entries.
-    Acceptance evidence (S2 brief): [behavioral-test] write puts the entries in both configs, and a second run is byte-identical (write_adds_reported_entries_keeps_user_entries_and_is_idempotent). User entries and comments are kept. A user-set codex posture is kept and the unselected Claude file is untouched (write_keeps_a_user_set_vendor_posture_and_skips_unselected_agents). Without --write no file changes (without_write_no_file_changes). Nested DIR gives no remotes (a_dir_nested_in_an_enclosing_repo_reports_no_remotes). A missing config is refused before any write (write_refuses_before_any_change_when_a_target_is_unusable). Lane: 9 passed. Guards: story_2539 + bug_1723 passed in aida-ci-guards (15) and aida-cli-lib, and the help golden passed. make check-ci-fast exit 0.
-    Probes: (1) case: hosts dedupe case-insensitively against existing entries. (2) format: TOML comments preserved via toml_edit; an unparseable JSON/TOML errors before any write; an inline table is refused by set_nested. (3) multiplicity: a setting shared by Claude and Codex (contained.allowed_hosts) merges into one edit; empty hosts plan no edit. (4) symlinked settings.json (this repo's own layout) and a missing config are refused up front.
-    Fixes during review: a partial write was possible when the second target was unusable, so all targets are now checked first. A new AIDA_HEADLESS env read was flagged by the ExecContext ratchet and removed (no TTY means no prompt). The store-writer inventory was regenerated with 3 rows.
-    S1 nits: the shared host git builder, the enclosing-repo guard, a 5 s --version timeout, and the size (~270 non-test lines, over 250).
-    Residual risks: --write requires an initialized project. A mid-write failure after up-front checks can leave earlier files written. The interactive prompt path is untested. The golden was hand-edited but verified by the golden test.
-  created_at: 2026-11-28T07:24:53.130246573Z
-  modified_at: 2026-11-28T07:24:53.130246573Z
-  session_id: 01a220dbd95e
-  harness_version: 2.1.319 (Claude Code)
+    INTEGRATION PRE-CHECK #4805 @ 1a6a7ff7ae0 (S2, --write). Verdict: PASS (STANDARD). Two SHOULDs; neither blocks the p57 promotion, but both are cheap.
+    OK:
+    - It writes only with --write or an interactive yes. JSON output, piped and headless runs only report.
+    - It writes only validated hostnames plus the codex "native" scalar.
+    - It's additive and idempotent: case-insensitive dedup, and a user's scalar is kept.
+    - An unparseable existing file errors with "nothing was written".
+    - A symlinked target file is refused, so the AIDA repo's linked .claude/settings.json is safe.
+    - A missing .aida/config.toml asks the user to run init first.
+    - The TOML edit goes through config_edit, so comments and order are kept.
+    - All S1 nits are fixed: host_fetch_git_command, the show-toplevel == DIR guard for a nested DIR, and the 5 s bounded --version probe.
+    SHOULD (security, small): apply_allowlist_writes lstat-checks only the final file. A symlinked PARENT directory (.claude -> elsewhere, or .aida -> elsewhere) is followed, and create_dir_all plus fs::write land outside the project. lstat each component under root (or canonicalize the parent and require it to start with the canonical root), and refuse otherwise. Add a test with a .claude dir symlink.
+    SHOULD (UX): .claude/settings.json is rewritten through serde_json without preserve_order, so every key in the user's file gets re-sorted alphabetically on the first --write. That's churn in a hand-edited file. Enable serde_json preserve_order for this path (e.g. parse to an IndexMap-backed Value), or edit it surgically. The write also isn't atomic (fs::write); config_edit::save_doc may already be the atomic pattern, so reuse it.
+    CI: fast is running. I'll send FAST done when it's green.
+  created_at: 2026-11-28T07:29:16.997670741Z
+  modified_at: 2026-11-28T07:29:16.997670741Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1e0f7-c069-77f2-b73d-5d3a4f0f8d52
   author: joe
