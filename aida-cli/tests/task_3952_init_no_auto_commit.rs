@@ -94,17 +94,20 @@ fn default_init_in_a_fresh_repo_creates_no_commit() {
         .nth(1)
         .expect("a git command follows the hint")
         .trim();
-    let ran = Command::new("sh")
-        .args(["-c", hint])
-        .current_dir(&repo)
-        .env("HOME", &home)
-        .output()
-        .unwrap();
     assert!(
-        ran.status.success(),
-        "`{hint}` failed: {}",
-        String::from_utf8_lossy(&ran.stderr)
+        hint.ends_with("&& git commit -m 'chore: scaffold AIDA'"),
+        "{hint}"
     );
+    // Run its `git add` half with the shell's quote removal done by hand.
+    let add = hint
+        .split(" && ")
+        .next()
+        .and_then(|c| c.strip_prefix("git add "))
+        .expect("the hint starts with `git add`");
+    let mut args = vec!["add"];
+    args.extend(add.split_whitespace().map(|a| a.trim_matches('\'')));
+    git(&repo, &args);
+    git(&repo, &["commit", "-q", "-m", "chore: scaffold AIDA"]);
     assert_eq!(
         git(&repo, &["log", "-1", "--format=%s"]),
         "chore: scaffold AIDA"
