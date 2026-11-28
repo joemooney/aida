@@ -23,14 +23,18 @@
 <blockquote><p>Install AIDA on this Linux machine by following https://github.com/joemooney/aida#install (<code>README.md#install</code> and <code>docs/operator-setup.md</code>). Inspect <code>scripts/install.sh</code> first, install the latest release binary into <code>~/.local/bin</code> (or build from source if we have a local checkout), verify <code>aida --version</code> is on <code>PATH</code>, and then run <code>aida init --help</code> and <code>aida init</code> in this repository. Ask me before changing shell profile files or enabling optional <code>--with-mcp</code> registration.</p></blockquote>
 <h3 id="option-b-install-the-prebuilt-binary-from-a-release-location">Option B: Install the prebuilt binary from a release location</h3>
 <p>For end users and CI runners (no Rust toolchain required), the <a href="../../scripts/install.sh">release installer</a> detects your Linux architecture (<code>x86_64</code> or <code>arm64</code>), downloads the release tarball (<code>aida-linux-x86_64.tar.gz</code> or <code>aida-linux-arm64.tar.gz</code>), and installs <code>aida</code>, <code>aida-server</code>, <code>aida-porcelain</code>, and the <code>aida-flow</code> symlink into <code>~/.local/bin/</code>:</p>
-<pre><code># Install the latest release from GitHub Releases into ~/.local/bin
-curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh | bash
+<pre><code># Download the installer, then install the latest release into ~/.local/bin
+curl -fsSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh -o install.sh &amp;&amp; bash install.sh
 
 # Pin a specific release tag or choose a custom install directory
-curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh | bash -s -- --version v0.16.0 --prefix ~/.local/bin
+bash install.sh --version v0.16.0 --prefix ~/.local/bin
 
 # Or install from a GitLab release host (or set AIDA_RELEASE_HOST=gitlab)
-curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh | bash -s -- --host gitlab</code></pre>
+bash install.sh --host gitlab
+
+# Offline: install a release tarball you downloaded on another machine
+bash install.sh --archive aida-linux-x86_64.tar.gz</code></pre>
+<p>If a download fails, the installer prints the URL it could not fetch, installs nothing, and exits with an error.</p>
 <p>Ensure <code>~/.local/bin</code> is on your <code>PATH</code>, then verify and update later with:</p>
 <pre><code>aida --version
 aida upgrade</code></pre>
