@@ -7,12 +7,12 @@ description: |
 
   Raised by the implementer while working BUG-2777.
   Branch: bug-2777-ejection-routing  ·  Commit: 36ffea9bc5  ·  PR #4685
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T20:27:39.429848017Z
-modified_at: 2026-11-28T02:31:15.226996194Z
+modified_at: 2026-11-28T02:38:55.108096076Z
 req_type: Task
 tags:
 - from-implementer:BUG-2777
@@ -76,6 +76,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a22005-1aad-7232-8ef6-5cc9bedde290
+  author: dirtlab
+  timestamp: 2026-11-28T02:38:55.149044947Z
+  session_id: 01a21ff4218c
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 36ffea9bc51797e6a523d58c668abd4888c859e1
   branch: bug-2777-ejection-routing
@@ -85,3 +94,7 @@ filed_at:
   vendor: claude
   session: 01a219535435
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-28T02:38:55.108096076Z
+  implemented_by: dirtlab
