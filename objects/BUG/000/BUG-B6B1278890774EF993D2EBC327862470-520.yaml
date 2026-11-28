@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T01:04:40.825248848Z
-modified_at: 2026-11-27T05:40:34.266342666Z
+modified_at: 2026-11-28T01:16:21.095984536Z
 req_type: Bug
 tags:
 - hubs
@@ -200,6 +200,11 @@ comments:
   created_at: 2026-11-27T03:49:20.554482190Z
   modified_at: 2026-11-27T03:49:20.554482190Z
   session_id: 01a21aecb33b
+- id: 01a21fb9-82e8-7ad2-9a9d-71b10ae37af6
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3532): The returned error on push failure (remote_create.rs:3016) says only ''the union is committed locally but N hub(s) did not receive it — re-run ... once they are reachable''. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:16:21.095984536Z
+  modified_at: 2026-11-28T01:16:21.095984536Z
 history:
 - id: 01a21045-c0a3-7902-beaf-52bed2b10b7b
   author: joe
