@@ -4044,12 +4044,22 @@ fn watch_change(
     .map(|_| ())
 }
 
+/// What the newest relevant CI run at a reviewed head says.
+// trace:BUG-2766 | ai:claude
+#[derive(Debug, PartialEq)]
+enum HeadCi {
+    FastSettled,
+    FastPending,
+    Full { pending: bool },
+}
+
 // trace:TASK-3877 | ai:codex
+// trace:BUG-2766 | ai:claude
 fn reviewed_fast_settled(
     root: &Path,
     repo: &forge::Repository,
     change: &forge::Change,
-) -> Result<bool> {
+) -> Result<HeadCi> {
     use crate::forge::tier_runs::{list, outcome};
     let slug = repo.github_slug().context("GitHub repository is unknown")?;
     let (_, project) = slug.split_once('/').context("GitHub project is unknown")?;
@@ -4069,7 +4079,7 @@ fn reviewed_fast_settled(
             .as_array()
             .context("missing CI owners")?;
         let [owner] = owners.as_slice() else {
-            return Ok(false);
+            return Ok(HeadCi::FastPending);
         };
         if owner["number"] == change.id && owner["base"]["ref"] == change.base {
             let number = run["run_number"]
@@ -4082,27 +4092,45 @@ fn reviewed_fast_settled(
         }
     }
     for run in owned.into_values().rev() {
-        if crate::forge::tier_runs::bucket(outcome(&run)?) == "pending" {
-            return Ok(false);
-        }
+        let pending = crate::forge::tier_runs::bucket(outcome(&run)?) == "pending";
         let id = run["id"].as_u64().context("missing CI run ID")?;
         let attempt = run["run_attempt"].as_u64().context("missing CI attempt")?;
         let path = format!("actions/runs/{id}/attempts/{attempt}/jobs");
         let jobs = list(&path, "jobs", &mut api)?;
-        if jobs.iter().any(|job| job["name"] == "ci-tier: fast") {
-            return Ok(true);
+        let named = |name: &str| jobs.iter().any(|job| job["name"] == name);
+        // A label event that leaves the tier alone reruns nothing; its
+        // skipping rows say nothing about FAST at this head.
+        if jobs.iter().any(|job| {
+            job["name"]
+                .as_str()
+                .is_some_and(|n| n.starts_with("label event"))
+        }) {
+            continue;
+        }
+        // A cancelled FULL run is left to request_full_ci_with to re-apply.
+        if named("ci-tier: full") && run["conclusion"] != "cancelled" {
+            return Ok(HeadCi::Full { pending });
+        }
+        if pending {
+            return Ok(HeadCi::FastPending);
+        }
+        if named("ci-tier: fast") {
+            return Ok(HeadCi::FastSettled);
         }
     }
-    Ok(false)
+    Ok(HeadCi::FastPending)
 }
 
-/// An approving, open spec-keyed verdict attested at its own reviewed head,
-/// indexed by that head. `aida review record <SPEC>` without `--pr` writes
-/// only the spec key; the exact head SHA identifies the PR it approved.
+/// The newest approving, open spec-keyed verdict at each reviewed head.
+/// `aida review record <SPEC>` without `--pr` writes only the spec key; the
+/// exact head SHA identifies the PR it approved. Unattested approvals are
+/// kept so the pass reports them instead of omitting the PR.
 // trace:BUG-2764 | ai:claude
-fn spec_approvals_by_head(root: &Path) -> std::collections::BTreeMap<String, String> {
+// trace:BUG-2766 | ai:claude
+fn spec_approvals_by_head(root: &Path) -> BTreeMap<String, String> {
     use crate::gate::review_verdict::{read_recorded_verdict, verdict_keys};
-    let mut by_head = std::collections::BTreeMap::new();
+    let mut by_head: BTreeMap<String, (String, Option<chrono::DateTime<chrono::FixedOffset>>)> =
+        BTreeMap::new();
     for key in verdict_keys(root) {
         if crate::gate::ledger::ChangeKey::parse(&key).is_some() {
             continue;
@@ -4111,15 +4139,26 @@ fn spec_approvals_by_head(root: &Path) -> std::collections::BTreeMap<String, Str
             continue;
         };
         if let Some(head) = v.reviewed_sha.as_deref() {
-            if v.kind.approves()
-                && !v.is_closed()
-                && v.attestation.as_ref().is_some_and(|a| a.sha == head)
-            {
-                by_head.entry(head.to_string()).or_insert(key);
+            if v.kind.approves() && !v.is_closed() {
+                let at = recorded_time(&v);
+                let slot = by_head.entry(head.to_string()).or_insert((key.clone(), at));
+                if at > slot.1 {
+                    *slot = (key, at);
+                }
             }
         }
     }
     by_head
+        .into_iter()
+        .map(|(head, (key, _))| (head, key))
+        .collect()
+}
+
+// trace:BUG-2766 | ai:claude
+fn recorded_time(
+    v: &crate::gate::review_verdict::RecordedVerdict,
+) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    chrono::DateTime::parse_from_rfc3339(v.recorded_at.as_deref()?).ok()
 }
 
 /// The promotion pass. Writes one line per approved PR it considered to
@@ -4171,23 +4210,43 @@ fn promotion_pass(root: &Path) -> Result<(Vec<String>, Vec<String>)> {
         let pr = change.id;
         let key = change.key();
         let receipt = format!("{key}.full-ci");
-        let _lock = receipts.lock(&format!("{receipt}.lock"))?;
+        // Another holder (a concurrent pass or the train) owns this PR's
+        // receipt: report it and move on rather than failing the pass.
+        let _lock = match receipts.lock(&format!("{receipt}.lock")) {
+            Ok(lock) => lock,
+            Err(e) if format!("{e:#}").contains("review-watch lock busy") => {
+                return Ok(Some(format!(
+                    "{key}: skipped (busy: {receipt}.lock is held; retried next tick)"
+                )));
+            }
+            Err(e) => return Err(e),
+        };
         let own = read_recorded_verdict(root, &key);
-        // A PR's own verdict for its current head wins; otherwise an
-        // approval recorded under a spec key at exactly this head counts.
-        let (v, source) = match own {
-            Some(v) if v.reviewed_sha.as_deref() == Some(change.head.as_str()) => (v, key.clone()),
-            own => match spec_approvals
-                .get_or_init(|| spec_approvals_by_head(root))
-                .get(&change.head)
-                .and_then(|spec: &String| Some((read_recorded_verdict(root, spec)?, spec.clone())))
-            {
-                Some(found) => found,
-                None => match own {
-                    Some(v) => (v, key.clone()),
-                    None => return Ok(None),
-                },
-            },
+        let spec = spec_approvals
+            .get_or_init(|| spec_approvals_by_head(root))
+            .get(&change.head)
+            .and_then(|spec: &String| Some((read_recorded_verdict(root, spec)?, spec.clone())));
+        // A PR's own approval for its current head wins. A refusal there
+        // wins too, unless a spec-keyed approval at exactly this head was
+        // recorded after it (an advisor override). Without an own verdict at
+        // the head, a spec-keyed approval at the head counts.
+        let (v, source) = match (own, spec) {
+            (Some(o), spec) if o.reviewed_sha.as_deref() == Some(change.head.as_str()) => {
+                match spec {
+                    Some(s)
+                        if !o.kind.approves()
+                            && recorded_time(&s.0).is_some_and(|t| {
+                                recorded_time(&o).is_some_and(|own_t| t > own_t)
+                            }) =>
+                    {
+                        s
+                    }
+                    _ => (o, key.clone()),
+                }
+            }
+            (_, Some(s)) => s,
+            (Some(o), None) => (o, key.clone()),
+            (None, None) => return Ok(None),
         };
         let Some(head) = v.reviewed_sha.clone() else {
             return Ok(None);
@@ -4220,8 +4279,15 @@ fn promotion_pass(root: &Path) -> Result<(Vec<String>, Vec<String>)> {
             receipts.write(&receipt, identity.as_bytes())?;
             return skipped("approval is for a superseded head; discarded");
         }
-        if !reviewed_fast_settled(root, &repo, &change)? {
-            return skipped("FAST CI at this head has not finished");
+        match reviewed_fast_settled(root, &repo, &change)? {
+            HeadCi::FastSettled => {}
+            HeadCi::FastPending => return skipped("FAST CI at this head has not finished"),
+            HeadCi::Full { pending: true } => {
+                return skipped("ci:full already applied: FULL run at this head is in progress")
+            }
+            HeadCi::Full { pending: false } => {
+                return skipped("ci:full already applied: FULL run at this head has finished")
+            }
         }
         let edited = request_full_ci_with(root, pr, bounded, |root, cli, args| {
             let current = repo.change(root, pr).map_err(|e| e.to_string())?;
@@ -4244,7 +4310,14 @@ fn promotion_pass(root: &Path) -> Result<(Vec<String>, Vec<String>)> {
     };
     let (mut lines, mut failures) = (Vec::new(), Vec::new());
     let changes = repo.discover(root).context("discover open pull requests")?;
-    for change in changes.into_iter().filter(|c| !c.gitlab) {
+    // Train PRs always run the FULL tier (ci.yml) and the train owns them.
+    // trace:BUG-2766 | ai:claude
+    let train = |c: &forge::Change| {
+        c.head_branch
+            .as_deref()
+            .is_some_and(|b| b.starts_with("train/"))
+    };
+    for change in changes.into_iter().filter(|c| !c.gitlab && !train(c)) {
         let key = change.key();
         match promote(change) {
             Ok(line) => lines.extend(line),
@@ -4450,11 +4523,186 @@ fn bug2764_promotion_failures_reach_stderr() {
     );
 }
 
+/// A git project under `tmp` with gh resolved from its root; returns the
+/// root, its head commit and the env guard.
+// trace:BUG-2766 | ai:claude
+#[cfg(test)]
+fn promotion_fixture(tmp: &Path) -> (PathBuf, String, crate::test_env::EnvVarsGuard) {
+    let root = tmp.join("project");
+    let home = tmp.join("home");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::create_dir_all(&home).unwrap();
+    let path = format!("{}:/usr/bin:/bin", root.display());
+    let guard = crate::test_env::EnvVarsGuard::apply(&[
+        ("HOME", Some(home.to_str().unwrap())),
+        ("AIDA_HOME", Some(home.to_str().unwrap())),
+        ("AIDA_PROJECT_ROOT", Some(root.to_str().unwrap())),
+        ("AIDA_DRIVE_ROOT", Some(root.to_str().unwrap())),
+        ("PATH", Some(path.as_str())),
+    ]);
+    let head = crate::test_git::commit_fixture(&root);
+    (root, head, guard)
+}
+
+#[cfg(test)]
+fn write_verdict(root: &Path, key: &str, body: serde_json::Value) {
+    let dir = root.join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join(format!("{key}.json")), body.to_string()).unwrap();
+}
+
+/// AC1: an advisor override (a spec-keyed approval at the head, recorded
+/// after the PR's own request-changes there) is promoted; an approval older
+/// than the refusal is not.
+// trace:BUG-2766 | ai:claude
+#[cfg(test)]
+#[cfg(unix)]
+#[test]
+fn bug2766_override_approval_after_refusal_promotes() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    for override_newer in [true, false] {
+        let tmp = tempfile::tempdir().unwrap();
+        let (root, head, _env) = promotion_fixture(tmp.path());
+        install_full_ci_stub(&root, 81, &head);
+        std::fs::write(root.join("state"), "completed").unwrap();
+        std::fs::write(root.join("current"), &head).unwrap();
+        let attested = serde_json::json!({"sha": head});
+        write_verdict(
+            &root,
+            "PR-81",
+            serde_json::json!({"verdict":"request-changes",
+            "reviewed_sha":head,"recorded_at":"2026-11-25T23:00:00Z","recorder_attestation":attested}),
+        );
+        let at = if override_newer {
+            "2026-11-25T23:10:00Z"
+        } else {
+            "2026-11-25T22:50:00Z"
+        };
+        write_verdict(
+            &root,
+            "STORY-1",
+            serde_json::json!({"verdict":"approved",
+            "reviewed_sha":head,"recorded_at":at,"recorder_attestation":attested}),
+        );
+        let (result, lines, err) = promote_captured(&root);
+        result.unwrap();
+        let edits = std::fs::read_to_string(root.join("edits")).unwrap_or_default();
+        if override_newer {
+            assert_eq!(lines.len(), 1, "{lines:?} {err}");
+            assert!(lines[0].starts_with("PR-81: promoted"), "{lines:?}");
+            assert!(lines[0].contains("[STORY-1 @"), "{lines:?}");
+            assert_eq!(edits.trim(), "pr edit 81 -R o/r --add-label ci:full");
+        } else {
+            assert!(lines.is_empty(), "{lines:?}");
+            assert_eq!(edits, "");
+        }
+    }
+}
+
+/// AC2: a running label-event run is ignored (FAST is judged from the real
+/// fast run, so the PR is promoted), and a FULL run at the head is reported
+/// as such instead of "FAST CI at this head has not finished".
+// trace:BUG-2766 | ai:claude
+#[cfg(test)]
+#[cfg(unix)]
+#[test]
+fn bug2766_label_event_runs_and_full_runs() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let (root, head, _env) = promotion_fixture(tmp.path());
+    install_full_ci_stub(&root, 61, &head);
+    std::fs::write(root.join("current"), &head).unwrap();
+    write_verdict(
+        &root,
+        "PR-61",
+        serde_json::json!({"verdict":"approved",
+        "reviewed_sha":head,"recorder_attestation":{"sha":head}}),
+    );
+    let tick = |state: &str| {
+        std::fs::write(root.join("state"), state).unwrap();
+        let (result, lines, err) = promote_captured(&root);
+        result.unwrap();
+        assert_eq!(lines.len(), 1, "{state}: {lines:?} {err}");
+        lines[0].clone()
+    };
+    let line = tick("full");
+    assert!(
+        line.starts_with(
+            "PR-61: skipped (ci:full already applied: FULL run at this head is in progress)"
+        ),
+        "{line}"
+    );
+    assert!(!root.join("edits").exists());
+    let line = tick("label");
+    assert!(line.starts_with("PR-61: promoted"), "{line}");
+}
+
+/// AC3: train PRs are never considered, and a held per-PR receipt lock is
+/// reported as "skipped (busy ...)" without failing the pass.
+// trace:BUG-2766 | ai:claude
+#[cfg(test)]
+#[cfg(unix)]
+#[test]
+fn bug2766_train_prs_skipped_and_busy_lock() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let (root, head, _env) = promotion_fixture(tmp.path());
+    forge::git(
+        &root,
+        &["remote", "add", "origin", "git@github.com:o/r.git"],
+    )
+    .unwrap();
+    let change = |pr: u64, branch: &str| {
+        serde_json::json!({"state":"OPEN","isDraft":false,"number":pr,"headRefOid":head,
+            "headRefName":branch,"baseRefName":"main","author":{"login":"alice"}})
+    };
+    // Any forge call past discovery fails, so considering PR-91 would fail.
+    let script = format!(
+        "#!/bin/sh\ncase \"$*\" in\n  *\"pr list\"*) echo '[{},{}]';;\n  *) exit 1;;\nesac\n",
+        change(91, "train/p40"),
+        change(92, "feat")
+    );
+    crate::test_exec::write_executable(&root.join("gh"), script);
+    write_verdict(
+        &root,
+        "PR-91",
+        serde_json::json!({"verdict":"approved",
+        "reviewed_sha":head,"recorder_attestation":{"sha":head}}),
+    );
+    write_verdict(
+        &root,
+        "PR-92",
+        serde_json::json!({"verdict":"approved","reviewed_sha":head}),
+    );
+    let (result, lines, err) = promote_captured(&root);
+    result.unwrap();
+    assert_eq!(lines.len(), 1, "{lines:?} {err}");
+    assert!(
+        lines[0].starts_with("PR-92: skipped (approval carries no recorder"),
+        "{lines:?}"
+    );
+    let runtime = Directory::shared(&root.join(".aida")).unwrap();
+    let receipts = Directory::open(&runtime.path().join("full-ci-requests")).unwrap();
+    let _held = receipts.lock("PR-92.full-ci.lock").unwrap();
+    let (result, lines, err) = promote_captured(&root);
+    result.unwrap();
+    assert_eq!(lines.len(), 1, "{lines:?} {err}");
+    assert!(lines[0].starts_with("PR-92: skipped (busy: "), "{lines:?}");
+    assert_eq!(err, "");
+}
+
 #[cfg(test)]
 fn install_full_ci_stub(root: &Path, pr: u64, head: &str) {
     use serde_json::json;
     let change = json!({"state":"OPEN","isDraft":false,"number":pr,"headRefOid":head,"baseRefName":"main","author":{"login":"alice"}});
     let marker = json!({"name":"ci-tier: fast","head_sha":head,"status":"completed","conclusion":"success","details_url":"https://github.com/o/r/actions/runs/1/job/2"});
+    let label = json!({"name":"label event (CI tier unchanged)","head_sha":head,"status":"completed","conclusion":"skipped","details_url":"https://github.com/o/r/actions/runs/2/job/3"});
     let script = format!(
         r#"#!/bin/sh
 state=$(cat state)
@@ -4462,12 +4710,13 @@ base=$(cat base 2>/dev/null || echo main)
 case "$*" in
   *url,state,headRefOid,labels*) echo '{{"url":"https://github.com/o/r/pull/{pr}","state":"OPEN","headRefOid":"{head}","labels":[]}}';;
   *"pr list"*) if [ "$state" = stale ]; then echo '[{change}]' | sed "s/{head}/$(cat old)/"; else echo '[{change}]' | sed "s/main/$base/"; fi;;
-  *statusCheckRollup*) if [ "$state" = moved ]; then cp old current; fi; case "$state" in completed|newer) labels='[]';; *) labels='[{{"name":"ci:full"}}]';; esac; printf '{{"labels":%s,"statusCheckRollup":[]}}' "$labels";;
+  *statusCheckRollup*) if [ "$state" = moved ]; then cp old current; fi; case "$state" in completed|newer|label) labels='[]';; *) labels='[{{"name":"ci:full"}}]';; esac; printf '{{"labels":%s,"statusCheckRollup":[]}}' "$labels";;
   *"pr view"*) echo '{change}' | sed "s/{head}/$(cat current)/;s/main/$base/";;
-  *runs/1/attempts/1/jobs*) if [ "$state" = absent ]; then echo '{{"total_count":0,"jobs":[]}}'; else echo '{{"total_count":1,"jobs":[{marker}]}}'; fi;;
+  *runs/1/attempts/1/jobs*) case "$state" in absent) echo '{{"total_count":0,"jobs":[]}}';; full) echo '{{"total_count":1,"jobs":[{marker}]}}' | sed 's/ci-tier: fast/ci-tier: full/';; *) echo '{{"total_count":1,"jobs":[{marker}]}}';; esac;;
+  *runs/2/attempts/1/jobs*) if [ "$state" = label ]; then echo '{{"total_count":1,"jobs":[{label}]}}'; else echo '{{"total_count":0,"jobs":[]}}'; fi;;
   *workflows/ci.yml/runs*) owner={pr}; conclusion=null; extra=; count=1
-    case "$state" in foreign) owner=$((owner+1));; retargeted) base=other;; newer) extra=',{{"id":2,"run_number":2,"head_sha":"{head}","event":"pull_request","pull_requests":[{{"number":{pr},"base":{{"ref":"main"}}}}],"status":"queued"}}'; count=2;; esac
-    case "$state" in absent|newer|foreign|retargeted|completed|moved) state=completed; conclusion='"success"';; missing) state=completed;; esac
+    case "$state" in foreign) owner=$((owner+1));; retargeted) base=other;; newer|label) status=queued; [ "$state" = label ] && status=in_progress; extra=',{{"id":2,"run_number":2,"run_attempt":1,"head_sha":"{head}","event":"pull_request","pull_requests":[{{"number":{pr},"base":{{"ref":"main"}}}}],"status":"'$status'","conclusion":null}}'; count=2;; esac
+    case "$state" in absent|newer|label|foreign|retargeted|completed|moved) state=completed; conclusion='"success"';; missing) state=completed;; full) state=in_progress;; esac
     printf '{{"total_count":%s,"workflow_runs":[{{"id":1,"run_number":1,"run_attempt":1,"head_sha":"{head}","event":"pull_request","pull_requests":[{{"number":%s,"base":{{"ref":"%s"}}}}],"status":"%s","conclusion":%s}}%s]}}' "$count" "$owner" "$base" "$state" "$conclusion" "$extra";;
   *status\?*) echo '{{"sha":"{head}","total_count":0,"statuses":[]}}';;
   *"pr edit"*) echo "$*" >> edits;;
