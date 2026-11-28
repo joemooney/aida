@@ -8,6 +8,6 @@ note: 'Reran landing-health. Its three-PR shared signature is the aggregate and 
 due_since: 2026-11-21T07:03:33.426507094Z
 due_reason: on CronJobFailed:landing-health-guard
 due_failure:
-  trip_id: landing-health-guard@2026-11-28T01:20:32.098442124Z
+  trip_id: landing-health-guard@2026-11-28T01:39:02.936441043Z
   job: landing-health-guard
   error: 'exit 124: timed out: doctor check landing-health --fail-on-findings did not complete within 120s (killed)'
