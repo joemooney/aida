@@ -1,0 +1,31 @@
+id: 01a22012-4b97-7d71-85dc-564e58d434b7
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-422
+title: 'Review PR-4781: [AI:claude] fix(admission): manual-train waiters belong to the aida pr train process (TASK-3541)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a21ff7`) for branch `task-3541-waiter-owner`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4781>
+  - Branch: `task-3541-waiter-owner` → `main`
+
+  ## Covers
+
+  - TASK-3541
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4781` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T02:53:19.639276692Z
+modified_at: 2026-11-28T02:53:19.639276692Z
+req_type: Story
+filed_at:
+  code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c
