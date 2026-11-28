@@ -726,7 +726,9 @@ The branch merge lease at `.aida/merge-locks/<branch>` records a cooperative
 immediately. Alive holders are never stolen, even after expiry or a wall-clock
 jump. Separately, a persisted `deadline_boot` plus `deadline_boottime` uses
 Linux `CLOCK_BOOTTIME` (including suspend): non-Alive holders become **Expired**
-after 600 seconds, or after the deadline's boot ends. This local-file deadline
+after 600 seconds, or after the deadline's boot ends. Clock readings are whole
+seconds, so a record expires only once the clock is strictly past its deadline;
+reaching the deadline second is not proof that the full TTL elapsed. This local-file deadline
 is not process death and does not authorize signaling. A failed clock read
 retains the lease. Incomplete publications keep their 30-second mtime grace.
 
