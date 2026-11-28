@@ -235,6 +235,7 @@ fn a_refusal_is_one_bounded_line() {
 /// pinned generators are read-only, HOME and /tmp are empty tmpfs mounts,
 /// the network is unshared, and the host root is never bound.
 #[test]
+#[cfg(target_os = "linux")]
 fn the_regen_sandbox_binds_only_the_checkout_and_the_toolchain() {
     use std::path::PathBuf;
     let wt = PathBuf::from("/s/tip");
