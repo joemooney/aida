@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T02:24:33.315826220Z
-modified_at: 2026-11-26T02:24:33.315826220Z
+modified_at: 2026-11-28T00:24:02.902437300Z
 req_type: Task
 tags:
 - carried-from:BUG-2733
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a2098c-59f6-7922-a25a-70a7be418e02
   created_at: 2026-11-26T02:24:33.315871685Z
+comments:
+- id: 01a21f89-a056-7ef2-bd71-58eac9836e15
+  author: joe
+  content: 'MERGED into TASK-3441 (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Same defect: base window starts at newest fork point; fix is octopus merge-base of stops.'
+  created_at: 2026-11-28T00:24:02.902437300Z
+  modified_at: 2026-11-28T00:24:02.902437300Z
 history:
 - id: 01a21644-6376-7850-96a3-6b8e3edab251
   author: joe
