@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T16:30:06.377354071Z
-modified_at: 2026-11-26T16:30:06.377354071Z
+modified_at: 2026-11-28T00:30:09.710634232Z
 req_type: Task
 tags:
 - carried-from:TASK-3912
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a215a5-1661-7d81-984f-eca5198e20e1
   created_at: 2026-11-26T16:30:22.612685412Z
+comments:
+- id: 01a21f8f-392e-73a2-b523-7ba6719eaf05
+  author: joe
+  content: 'MERGED into TASK-3491 (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Identical test gap: advisor_train_handler passes auto_train_max into TrainOptions.max.'
+  created_at: 2026-11-28T00:30:09.710634232Z
+  modified_at: 2026-11-28T00:30:09.710634232Z
 history:
 - id: 01a218ca-97b0-7ad0-ae24-a0ef719ffa1e
   author: joe
