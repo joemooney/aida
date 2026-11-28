@@ -2,128 +2,163 @@ id: 01a2207f-5f20-71a1-8d19-0582794b1c30
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1632
 agreed_id: TASK-3961
 title: 'First-run: aida init output is short and jargon-free (F4, F7, F15)'
-description: |-
-  ## Acceptance
+description: '## Acceptance
+
   - AC1 (F4): host-readiness checks that are irrelevant to a first run do not print a wall of FAILs; init shows at most a short summary with one line on how to see details.
-  - AC2 (F7): init's first-run guide avoids role/advisor/seat jargon or explains it in one plain sentence.
+
+  - AC2 (F7): init''s first-run guide avoids role/advisor/seat jargon or explains it in one plain sentence.
+
   - AC3 (F15): the prepare report rough edges listed in F15 are fixed.
+
   - AC4: tests pin the shortened output (no FAIL wall in a fresh repo).
 
-  Source: docs/plans/2026-11-27-fresh-user-walkthrough.md, sections F4, F7, F15 (on main after #4782). Advisor aida-d3 2026-11-27 20:30 priority (g); grouped by area by product-15 for laning now.
+
+  Source: docs/plans/2026-11-27-fresh-user-walkthrough.md, sections F4, F7, F15 (on main after #4782). Advisor aida-d3 2026-11-27 20:30 priority (g); grouped by area by product-15 for laning now.'
 status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-28T04:52:28.064803162Z
-modified_at: 2026-11-28T06:22:39.708361869Z
+created_at: 2026-11-28 04:52:28.064803+00:00
+modified_at: 2026-11-28 06:22:39.708361+00:00
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a22014-1672-7093-9f8f-09bbbefcbf09
-  created_at: 2026-11-28T04:52:47.991774315Z
+  created_at: 2026-11-28 04:52:47.991774+00:00
 comments:
 - id: 01a220ab-57a5-7a01-8b4f-1f7cced0bf7e
   author: dirtlab
-  content: |-
-    ## Implementer approach
+  content: '## Implementer approach
+
 
     ### Acceptance criteria and evidence
+
     - AC1 [behavioral-test, unit + command-level]: `lane_host::first_run_summary` folds the per-vendor readiness checks (and the separate bwrap block) into one line pointing at `aida doctor --lane-host`; unit tests in lane_host.rs pin the ready / needs-setup lines, and `aida-cli/tests/task_3961_init_output_short.rs` runs `aida init` in a fresh HOME + repo and asserts no line starts with FAIL.
+
     - AC2 [behavioral-test, command-level]: drop the `aida role enter advisor` hint (the `aida done` refusal already names it at the point of need), and print the implementer-role sentence, global-roles install lines and bypass-confirmation line only under `--verbose`. Same integration test asserts their absence.
+
     - AC3 [behavioral-test, unit]: `code_span` pads only when CommonMark needs it (content starts/ends with a backtick, or is space-wrapped/empty); a linked spec with no acceptance prints a visible note instead of an empty fence. Unit tests in review_prepare.rs.
+
     - AC4: the integration test above.
 
+
     ### Expected files
+
     - aida-cli-lib/src/init_cmd.rs
+
     - aida-cli-lib/src/lane_host.rs
+
     - aida-cli-lib/src/review_prepare.rs
+
     - aida-cli/tests/task_3961_init_output_short.rs (+ ratchet-set if required)
 
+
     ### Ambiguities / conflicts as questions
-    - None; full detail remains in `aida doctor --lane-host` and `aida init --verbose`.
-  created_at: 2026-11-28T05:40:29.733144866Z
-  modified_at: 2026-11-28T05:40:29.733144866Z
+
+    - None; full detail remains in `aida doctor --lane-host` and `aida init --verbose`.'
+  created_at: 2026-11-28 05:40:29.733144+00:00
+  modified_at: 2026-11-28 05:40:29.733144+00:00
   session_id: 01a220a91a56
   harness_version: 2.1.319 (Claude Code)
 - id: 01a220bd-3eb0-7090-be5a-85ea8ea487da
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: 5739c066c3 (git diff origin/main...HEAD; 5 files).
 
+
     Acceptance evidence:
-    - AC1 [behavioral-test]: lane_host.rs first_run_summary + task3961_first_run_summary_is_one_line_without_fail (unit, pass); init_cmd.rs calls report_summary in place of the per-check render and the separate bwrap block. aida-cli/tests/task_3961_init_output_short.rs asserts no line starts with FAIL, no UsernsBlocked, exactly one 'aida doctor --lane-host' pointer (command-level, pass).
+
+    - AC1 [behavioral-test]: lane_host.rs first_run_summary + task3961_first_run_summary_is_one_line_without_fail (unit, pass); init_cmd.rs calls report_summary in place of the per-check render and the separate bwrap block. aida-cli/tests/task_3961_init_output_short.rs asserts no line starts with FAIL, no UsernsBlocked, exactly one ''aida doctor --lane-host'' pointer (command-level, pass).
+
     - AC2 [behavioral-test]: advisor hint removed; implementer sentence, global-role install lines and bypass line only under --verbose. Same integration test asserts each phrase is absent (pass).
+
     - AC3 [behavioral-test]: review_prepare.rs code_span pads only for backtick-edged, space-wrapped or blank content; acceptance_block prints a visible note for empty acceptance. task3961_code_spans_are_unpadded_unless_needed, task3961_missing_acceptance_is_a_visible_note (unit, pass).
+
     - AC4: the integration test above.
+
     make check-ci-fast: exit 0 (after listing the two review_prepare tests in scripts/ratchet-set.json).
 
-    Probe findings: (1) code_span: CommonMark strips one space each side only when both are present, so padding stays for ' x ' and for backtick-edged content; unit-tested. (2) The 0-item case of the summary prints 'ready'; advisory (NOTE) checks are not counted; unit-tested. (3) BUG-585: removing the hint does not dead-end agents, because the 'aida done' refusal off a TTY names 'aida role enter advisor' (checked by hand on the released binary). (4) No authority or gate path changed: the summary uses the same inspect(root, false) as before and only changes rendering.
+
+    Probe findings: (1) code_span: CommonMark strips one space each side only when both are present, so padding stays for '' x '' and for backtick-edged content; unit-tested. (2) The 0-item case of the summary prints ''ready''; advisory (NOTE) checks are not counted; unit-tested. (3) BUG-585: removing the hint does not dead-end agents, because the ''aida done'' refusal off a TTY names ''aida role enter advisor'' (checked by hand on the released binary). (4) No authority or gate path changed: the summary uses the same inspect(root, false) as before and only changes rendering.
+
 
     Fixes during review: ratchet-set listing for the new review_prepare tests.
-    Residual risks: users who relied on init's bwrap line now see it only via aida doctor; the batch prompt for a spec with empty acceptance still prints an empty section (prompt input, not the report).
-  created_at: 2026-11-28T06:00:02.992875892Z
-  modified_at: 2026-11-28T06:00:02.992875892Z
+
+    Residual risks: users who relied on init''s bwrap line now see it only via aida doctor; the batch prompt for a spec with empty acceptance still prints an empty section (prompt input, not the report).'
+  created_at: 2026-11-28 06:00:02.992875+00:00
+  modified_at: 2026-11-28 06:00:02.992875+00:00
   session_id: 01a220a91a56
   harness_version: 2.1.319 (Claude Code)
 - id: 01a220c3-f083-75e1-95db-f280f651d570
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `task-3961-init-output-short` at head `5739c066c3c358346a0305bfa1d4bb72411ba59c`.'
-  created_at: 2026-11-28T06:07:21.731468532Z
-  modified_at: 2026-11-28T06:07:21.731468532Z
+  created_at: 2026-11-28 06:07:21.731468+00:00
+  modified_at: 2026-11-28 06:07:21.731468+00:00
   session_id: 01a220a91a56
 - id: 01a220d1-4a15-7681-970b-8b41036ea674
   author: aida-orchestrator
   content: 'Shelved by leases::shelve_spec_on_failure during reviewer: verdict:request-changes'
-  created_at: 2026-11-28T06:21:56.629122092Z
-  modified_at: 2026-11-28T06:21:56.629122092Z
+  created_at: 2026-11-28 06:21:56.629122+00:00
+  modified_at: 2026-11-28 06:21:56.629122+00:00
   session_id: 01a220ce58fd
 - id: 01a220d1-e699-7283-8e9f-0f00e63596e8
   author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: TASK-3961 meets its four acceptance criteria in its own tests, but it breaks two existing tests that still expect the old output. That matches the red CI at this head (cli-1, fast compile, Build). AC1 is verified by lane_host::task3961_first_run_summary_is_one_line_without_fail and aida-cli/tests/task_3961_init_output_short.rs: no FAIL lines, no UsernsBlocked, exactly one `aida doctor --lane-host` pointer, advisory checks not counted. AC2 is verified by the same integration test: the advisor hint is removed, and the implementer sentence, global-roles lines and bypass line now print only under --verbose. BUG-585 is not reopened, because punt_done.rs:582''s off-TTY refusal still names `aida role enter advisor`. AC3 is verified by task3961_code_spans_are_unpadded_unless_needed and task3961_missing_acceptance_is_a_visible_note. The padding rule follows CommonMark: pad only for backtick-edged, space-wrapped or blank content. AC4 is verified by task_3961_init_output_short.rs. Blocking: (1) bug_2752_codex_init_and_advisor_launch (aida-cli/tests/support/codex_init.py:99) runs `aida init` without --verbose and asserts that ''global roles installed'' is printed. init_cmd.rs:5320 now hides that line, so the test fails. (2) review_prepare.rs:3595 (s5_comment_over_cap_goes_on_stdin_truncated_with_fences_balanced) asserts the truncation note ends with ''` report.md `''. The note is built with code_span (review_prepare.rs:1716), which now prints ''`report.md`'', so the test fails. Both need updating to the new output, for example by passing --verbose to the codex_init.py init call or dropping that assertion, and by changing the s5 expectation to ''`report.md`''. After that, re-check CI for anything else these jobs hid.. No triage reason was given.'
-  created_at: 2026-11-28T06:22:36.697081620Z
-  modified_at: 2026-11-28T06:22:36.697081620Z
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: TASK-3961 meets its four acceptance criteria in its own tests, but it breaks two existing tests that still expect the old output. That matches the red CI at this head (cli-1, fast compile, Build). AC1 is verified by lane_host::task3961_first_run_summary_is_one_line_without_fail and aida-cli/tests/task_3961_init_output_short.rs: no FAIL lines, no UsernsBlocked, exactly one `aida doctor --lane-host` pointer, advisory checks not counted. AC2 is verified by the same integration test: the advisor hint is removed, and the implementer sentence, global-roles lines and bypass line now print only under --verbose. BUG-585 is not reopened, because punt_done.rs:582''s off-TTY refusal still names `aida role enter advisor`. AC3 is verified by task3961_code_spans_are_unpadded_unless_needed and task3961_missing_acceptance_is_a_visible_note. The padding rule follows CommonMark:
+    pad only for backtick-edged, space-wrapped or blank content. AC4 is verified by task_3961_init_output_short.rs. Blocking: (1) bug_2752_codex_init_and_advisor_launch (aida-cli/tests/support/codex_init.py:99) runs `aida init` without --verbose and asserts that ''global roles installed'' is printed. init_cmd.rs:5320 now hides that line, so the test fails. (2) review_prepare.rs:3595 (s5_comment_over_cap_goes_on_stdin_truncated_with_fences_balanced) asserts the truncation note ends with ''` report.md `''. The note is built with code_span (review_prepare.rs:1716), which now prints ''`report.md`'', so the test fails. Both need updating to the new output, for example by passing --verbose to the codex_init.py init call or dropping that assertion, and by changing the s5 expectation to ''`report.md`''. After that, re-check CI for anything else these jobs hid.. No triage reason was given.'
+  created_at: 2026-11-28 06:22:36.697081+00:00
+  modified_at: 2026-11-28 06:22:36.697081+00:00
 - id: 01a220d1-f1bc-7ec2-b083-ed959191b3de
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (TASK-3961):
+  content: 'REVIEW FINDINGS TO ADDRESS (TASK-3961):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 5739c066c3c3
+
     Recorded: 2026-11-28T06:21:48.240600474+00:00
+
     Findings:
-    1. [blocking_tier: p1] Regression in an existing test: aida-cli/tests/bug_2752_codex_init.rs runs aida-cli/tests/support/codex_init.py, whose last step (line 99) runs `aida init --footprint full --agent codex ...` without --verbose and asserts that 'global roles installed' is in the output. This PR adds `Ok(_) if !*verbose => {}` (aida-cli-lib/src/init_cmd.rs:5320), which hides that line, so bug_2752_codex_init_and_advisor_launch fails. This is consistent with the red CI (cli-1) job at 5739c066. Fix: update codex_init.py to the new contract, for example by adding --verbose to the init tuple or by dropping or inverting that assertion.
-    2. [blocking_tier: p1] Regression in an existing lib test: review_prepare.rs:3595 (s5_comment_over_cap_goes_on_stdin_truncated_with_fences_balanced) asserts that the posted comment ends with 'findings omitted; full report at ` report.md `'. The note is built with code_span(full_report) (review_prepare.rs:1716), and the new code_span prints '`report.md`' without padding, so the assertion fails. This is consistent with the red CI (fast compile, exit 101) job. Fix: change the expected note to '`report.md`'. Also scan the other prepare and comment tests for padded-span expectations.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-28T06:22:39.548770793Z
-  modified_at: 2026-11-28T06:22:39.548770793Z
+
+    1. [blocking_tier: p1] Regression in an existing test: aida-cli/tests/bug_2752_codex_init.rs runs aida-cli/tests/support/codex_init.py, whose last step (line 99) runs `aida init --footprint full --agent codex ...` without --verbose and asserts that ''global roles installed'' is in the output. This PR adds `Ok(_) if !*verbose => {}` (aida-cli-lib/src/init_cmd.rs:5320), which hides that line, so bug_2752_codex_init_and_advisor_launch fails. This is consistent with the red CI (cli-1) job at 5739c066. Fix: update codex_init.py to the new contract, for example by adding --verbose to the init tuple or by dropping or inverting that assertion.
+
+    2. [blocking_tier: p1] Regression in an existing lib test: review_prepare.rs:3595 (s5_comment_over_cap_goes_on_stdin_truncated_with_fences_balanced) asserts that the posted comment ends with ''findings omitted; full report at ` report.md `''. The note is built with code_span(full_report) (review_prepare.rs:1716), and the new code_span prints ''`report.md`'' without padding, so the assertion fails. This is consistent with the red CI (fast compile, exit 101) job. Fix: change the expected note to ''`report.md`''. Also scan the other prepare and comment tests for padded-span expectations.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-28 06:22:39.548770+00:00
+  modified_at: 2026-11-28 06:22:39.548770+00:00
 history:
 - id: 01a22080-0acd-7123-bb30-50e7fe96392e
   author: joe
-  timestamp: 2026-11-28T04:53:12.013055311Z
+  timestamp: 2026-11-28 04:53:12.013055+00:00
   changes: []
 - id: 01a2209f-1df6-7902-804d-9d2ffb02af8c
   author: joe
-  timestamp: 2026-11-28T05:27:08.534496030Z
+  timestamp: 2026-11-28 05:27:08.534496+00:00
   changes: []
 - id: 01a220a9-5303-7a23-9504-a9077694a509
   author: aida-session-start
-  timestamp: 2026-11-28T05:38:17.475289637Z
+  timestamp: 2026-11-28 05:38:17.475289+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a220bd-c19f-7101-85a5-0bb6a855cc45
   author: dirtlab
-  timestamp: 2026-11-28T06:00:36.511376783Z
+  timestamp: 2026-11-28 06:00:36.511376+00:00
   session_id: 01a220a91a56
   harness_version: 2.1.319 (Claude Code)
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a220c6-5319-7473-b11f-7625b53c27c7
+  author: dirtlab
+  timestamp: 2026-11-28 06:09:58.041821+00:00
+  changes: []
 - id: 01a220d1-4a15-7681-970b-8b3dc30d162a
   author: aida-orchestrator
-  timestamp: 2026-11-28T06:21:56.629119269Z
+  timestamp: 2026-11-28 06:21:56.629119+00:00
   session_id: 01a220ce58fd
   changes:
   - field_name: status
@@ -131,7 +166,7 @@ history:
     new_value: NeedsAttention
 - id: 01a220d1-e699-7283-8e9f-0efa31f479dd
   author: joe
-  timestamp: 2026-11-28T06:22:36.697060344Z
+  timestamp: 2026-11-28 06:22:36.697060+00:00
   changes:
   - field_name: status
     old_value: NeedsAttention
@@ -146,5 +181,5 @@ filed_at:
   vendor: claude
 implementation_info:
   implemented: true
-  implemented_at: 2026-11-28T06:00:36.462713637Z
+  implemented_at: 2026-11-28 06:00:36.462713+00:00
   implemented_by: dirtlab
