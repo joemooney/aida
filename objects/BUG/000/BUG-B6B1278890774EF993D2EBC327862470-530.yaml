@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T08:25:33.453173985Z
-modified_at: 2026-11-28T01:08:29.999010737Z
+modified_at: 2026-11-28T01:08:33.936997738Z
 req_type: Bug
 tags:
 - admission
@@ -203,6 +203,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3487): advisor_loop_train.rs bug2769 tests: TEST_HOLD_WARN_MS is set to 100 and never reset. That leaks a 100ms threshold into other tests of the same process that run run_passes, such as the task_1993 BUG-2703 fixture. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T01:08:18.401014934Z
   modified_at: 2026-11-28T01:08:18.401014934Z
+- id: 01a21fb2-6211-7d21-a5a1-9f1c1da8e0f5
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3488): Efficiency follow-up: on a wanted poll, train_wanted repeats the forge reads (discover plus per-change CI, required checks and head reads up to the first eligible change) that the pass then makes again under the claim. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:08:33.936997738Z
+  modified_at: 2026-11-28T01:08:33.936997738Z
 history:
 - id: 01a216f9-22fb-70e0-8a0d-85c17cff229f
   author: joe
