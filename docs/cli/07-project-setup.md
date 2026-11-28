@@ -24,12 +24,16 @@ After enabling previously disabled CI/CD, start a pipeline for the pushed branch
 in GitLab. On a resumed repository, commit and push any newly generated pipeline.
 <!-- trace:STORY-2701 | ai:codex -->
 
-`aida init --report-allowlists` previews the sandbox entries to be tailored, and writes nothing.
+`aida init --report-allowlists` previews the sandbox entries to be tailored.
 It takes the enabled agents from `--agent` or PATH detection, and the forge hosts from every git
 remote (a `github.com` remote adds its API, asset and archive hosts). For each agent it lists
 the entries, such as Claude's `sandbox.network.allowedDomains`, `[contained] allowed_hosts`, and
 `[contained.vendors] codex = "native"` for Codex. With no remote, no forge hosts are listed.
 `--format json` prints the same report as JSON.
+Add `--write` to apply the report: it shows the entries it will add, then appends them to
+`.claude/settings.json` and `.aida/config.toml`. Entries you already have are kept, a value you
+set yourself (such as another Codex posture) is left alone, and running it again changes nothing.
+An interactive run without `--write` asks before writing; other runs only report.
 <!-- trace:STORY-2838 | ai:claude -->
 
 ---

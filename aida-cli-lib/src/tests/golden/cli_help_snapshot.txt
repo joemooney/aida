@@ -23761,7 +23761,12 @@ Options:
       --report-allowlists
           Report the sandbox allowlist and permission entries init would set for each enabled agent
           (from `--agent` or PATH detection), using the forge hosts your git remotes name. Writes
-          nothing. Honors the global `--format json`
+          nothing unless you pass `--write` or confirm when asked. Honors the global `--format json`
+
+      --write
+          With `--report-allowlists`, add the reported entries to each file after showing them.
+          Additive: entries already there are kept, and a second run changes nothing. Without it, an
+          interactive run asks first
 
   -h, --help
           Print help (see a summary with '-h')
@@ -57416,7 +57421,7 @@ Working on aida itself
       {
         "name": "report-allowlists",
         "takes_value": false,
-        "help": "Report the sandbox allowlist and permission entries init would set for each enabled agent (from `--agent` or PATH detection), using the forge hosts your git remotes name. Writes nothing. Honors the global `--format json`"
+        "help": "Report the sandbox allowlist and permission entries init would set for each enabled agent (from `--agent` or PATH detection), using the forge hosts your git remotes name. Writes nothing unless you pass `--write` or confirm when asked. Honors the global `--format json`"
       },
       {
         "name": "sibling",
@@ -57442,6 +57447,11 @@ Working on aida itself
         "name": "with-memories",
         "takes_value": false,
         "help": "Also write the starter memory pack — generic AIDA-using discipline as Claude Code project memories. Opt-in; off by default so first-time projects start with an empty memory dir"
+      },
+      {
+        "name": "write",
+        "takes_value": false,
+        "help": "With `--report-allowlists`, add the reported entries to each file after showing them. Additive: entries already there are kept, and a second run changes nothing. Without it, an interactive run asks first"
       }
     ],
     "hidden": false

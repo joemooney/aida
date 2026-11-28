@@ -3,19 +3,28 @@
 // trace:STORY-2838 | ai:claude
 use crate::config_commit::CONFIG_REL_PATH;
 
-/// One `(file, key, entries)` setting init would write.
-pub(crate) type AllowlistSetting = (&'static str, &'static str, Vec<String>);
+/// One `(file, key, entries, scalar)` setting init would write; a scalar
+/// setting holds one value rather than a list.
+pub(crate) type AllowlistSetting = (&'static str, &'static str, Vec<String>, bool);
 
 /// The settings init would tailor for `agent` (an init agent-selection name)
 /// given the detected forge `hosts`. An unknown agent gets none.
 pub(crate) fn allowlist_settings(agent: &str, hosts: &[String]) -> Vec<AllowlistSetting> {
-    let contained = || (CONFIG_REL_PATH, "contained.allowed_hosts", hosts.to_vec());
+    let contained = || {
+        (
+            CONFIG_REL_PATH,
+            "contained.allowed_hosts",
+            hosts.to_vec(),
+            false,
+        )
+    };
     match agent {
         "claude" => vec![
             (
                 ".claude/settings.json",
                 "sandbox.network.allowedDomains",
                 hosts.to_vec(),
+                false,
             ),
             contained(),
         ],
@@ -25,6 +34,7 @@ pub(crate) fn allowlist_settings(agent: &str, hosts: &[String]) -> Vec<Allowlist
                 CONFIG_REL_PATH,
                 "contained.vendors.codex",
                 vec!["native".to_string()],
+                true,
             ),
         ],
         "antigravity" => vec![contained()],
