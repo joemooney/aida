@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 0f9abd22eab158ed35fc58e668c10ddc5f5c96c0
 
   Efficiency follow-up: on a wanted poll, train_wanted repeats the forge reads (discover plus per-change CI, required checks and head reads up to the first eligible change) that the pass then makes again under the claim. All seats share one gh rate budget. Consider passing the pre-scan's discovery or eligible set into the pass, or keeping the pre-scan to local evidence first. This is not a correctness defect: idle polls make the same reads as before, without the claim.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T09:24:37.843959609Z
-modified_at: 2026-11-28T01:08:38.416484431Z
+modified_at: 2026-11-28T01:08:40.439277440Z
 req_type: Task
 tags:
 - carried-from:BUG-2769
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21fb2-7b77-7560-be9c-21c9da5c8d5a
+  author: joe
+  timestamp: 2026-11-28T01:08:40.439275212Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 0f9abd22eab158ed35fc58e668c10ddc5f5c96c0
   branch: pr-4640
