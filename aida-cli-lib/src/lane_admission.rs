@@ -534,21 +534,36 @@ fn admit_job(
     }
 }
 
+/// The admission settings for one job. A job that builds nothing (the
+/// fast gate, which runs source gates with `--no-build`) takes no host
+/// compile slot, so it never queues behind lanes that are compiling; the
+/// memory floor and `CARGO_BUILD_JOBS` still apply.
+// trace:TASK-3537 | ai:claude
+fn job_settings(mut settings: Settings, compiles: bool) -> Settings {
+    if !compiles {
+        settings.max_compile_concurrency = None;
+    }
+    settings
+}
+
 /// Admit one lane job under the host's `/etc/aida/lanes.toml`. Unset knobs
-/// admit at once, as before. Tests never contend with the host's lanes.
-// trace:TASK-3911 | ai:claude
+/// admit at once, as before. `compiles` is false for a job that builds
+/// nothing, which skips the compile-slot cap. Tests never contend with the
+/// host's lanes.
+// trace:TASK-3911 TASK-3537 | ai:claude
 pub(crate) fn admit_lane_job(
+    compiles: bool,
     stop: &std::sync::atomic::AtomicBool,
     mut on_wait: impl FnMut(&str),
 ) -> Result<Option<JobAdmission>> {
     #[cfg(test)]
     {
-        let _ = &mut on_wait;
+        let _ = (&mut on_wait, compiles);
         admit_job(&Settings::default(), "", || Ok(u64::MAX), stop, |_| {})
     }
     #[cfg(not(test))]
     {
-        let settings = Settings::load()?;
+        let settings = job_settings(Settings::load()?, compiles);
         admit_job(
             &settings,
             COMPILE_SLOT_PREFIX,
@@ -686,6 +701,67 @@ mod tests {
         assert!(admit_job(&settings, &prefix, || Ok(0), &stop, |_| {})
             .unwrap()
             .is_none());
+    }
+
+    // A job that builds nothing starts while every compile slot is held,
+    // and still waits on the job memory floor; a compiling job still queues.
+    // trace:TASK-3537 | ai:claude
+    #[test]
+    fn task_3537_non_compiling_job_skips_full_compile_slots() {
+        let prefix = TestHost::prefix();
+        let _held = TestHost::hold(&prefix, 0);
+        let stop = std::sync::atomic::AtomicBool::new(false);
+        let gate = admit_job(
+            &job_settings(compile_cap(1), false),
+            &prefix,
+            || Ok(u64::MAX),
+            &stop,
+            |why| panic!("the fast gate queued: {why}"),
+        )
+        .unwrap()
+        .expect("not stopped");
+        assert!(gate._slot.is_none(), "the fast gate took a compile slot");
+
+        let gib = std::cell::Cell::new(2);
+        let mut waits = Vec::new();
+        admit_job(
+            &job_settings(
+                Settings {
+                    min_job_memory_headroom_gib: Some(8),
+                    ..compile_cap(1)
+                },
+                false,
+            ),
+            &prefix,
+            || Ok(gib.get() * KIB_PER_GIB),
+            &stop,
+            |why| {
+                waits.push(why.to_string());
+                gib.set(16);
+            },
+        )
+        .unwrap()
+        .expect("not stopped");
+        assert_eq!(waits.len(), 1, "{waits:?}");
+        assert!(waits[0].contains("job floor"), "{waits:?}");
+
+        let mut compile_waits = Vec::new();
+        let compiling = admit_job(
+            &job_settings(compile_cap(1), true),
+            &prefix,
+            || Ok(u64::MAX),
+            &stop,
+            |why| {
+                compile_waits.push(why.to_string());
+                stop.store(true, std::sync::atomic::Ordering::Relaxed);
+            },
+        )
+        .unwrap();
+        assert!(compiling.is_none(), "a compiling job started on a full host");
+        assert!(
+            compile_waits[0].contains("all 1 host compile slots"),
+            "{compile_waits:?}"
+        );
     }
 
     #[test]
