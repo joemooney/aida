@@ -53,7 +53,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T03:41:07.856444039Z
-modified_at: 2026-11-28T03:52:13.258583187Z
+modified_at: 2026-11-28T04:10:35.899008076Z
 req_type: Story
 tags:
 - containment
@@ -119,6 +119,25 @@ comments:
   modified_at: 2026-11-28T03:49:17.447949685Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a22058-db1a-70b0-aaca-dc183e2fc48c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 17cb9e23ef (round 2 on #4785). Scope: the two CI guard fixes only. Vendor names and the Codex-default check moved to vendors/init_allowlists.rs. The report reuses detected_agent_selection and AgentSelection::names. The config path now uses config_commit::CONFIG_REL_PATH. No ledger or inventory edits.
+    Evidence: aida-ci-guards story_2539 + bug_1723, 15 passed. init_allowlist_report tests, 4 passed. make check-ci-fast exit 0.
+    Probes: the agent order is unchanged (names() order matches the old if-chain). Fallback to all when nothing is detected is preserved (detected_agent_selection falls back before the Codex add; the old code added Codex first, and the result is the same). An unknown agent name gets no settings, but parse_agent_selection only yields the three known names.
+    Residual risk: the vendor helper matches on init selection names and has no test of its own; the report tests cover all three arms through build_allowlist_report.
+  created_at: 2026-11-28T04:10:23.898868558Z
+  modified_at: 2026-11-28T04:10:23.898868558Z
+  session_id: 01a220497869
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a22059-09fb-77e1-85b7-90a6858cd21f
+  author: dirtlab
+  content: 'Correction to the self-review at 17cb9e23ef: the report tests cover only the claude and codex arms of vendors/init_allowlists.rs. The antigravity arm (contained.allowed_hosts only) is untested. It was untested before this round too; the arm moved unchanged. Leaving it for slice 2 per the fix-only brief.'
+  created_at: 2026-11-28T04:10:35.899008076Z
+  modified_at: 2026-11-28T04:10:35.899008076Z
+  session_id: 01a220497869
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e0f7-c069-77f2-b73d-5d3a4f0f8d52
   author: joe
