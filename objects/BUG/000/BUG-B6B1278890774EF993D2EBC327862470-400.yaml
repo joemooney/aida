@@ -24,7 +24,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T15:56:38.844395276Z
-modified_at: 2026-11-16T18:50:13.400399841Z
+modified_at: 2026-11-28T00:43:37.817613534Z
 req_type: Bug
 comments:
 - id: 01a1e515-0c70-7ba3-aded-c75d7b0dbffc
@@ -190,6 +190,11 @@ comments:
   modified_at: 2026-11-16T18:49:58.232545144Z
   session_id: 01a1e5ac6367
   harness_version: codex-cli 0.167.0
+- id: 01a21f9b-8dd9-7292-8cd7-909612fa2779
+  author: joe
+  content: 'ESCALATE ruling (advisor aida-d3 2026-11-27 17:58; applied by product-15): DESIGN. Keep open as NEEDS SKETCH; no lane until a sketch is signed.'
+  created_at: 2026-11-28T00:43:37.817613534Z
+  modified_at: 2026-11-28T00:43:37.817613534Z
 history:
 - id: 01a1e515-4235-7d53-afb4-824bca318dc2
   author: joe
