@@ -70,6 +70,12 @@ comments:
   created_at: 2026-11-28T09:14:43.803400388Z
   modified_at: 2026-11-28T09:14:43.803400388Z
   session_id: 01a2214b4de1
+- id: 01a22177-dc40-7322-ad6f-50ac60d6614d
+  author: aida-orchestrator
+  content: 'Shelved by leases::shelve_spec_on_failure during reviewer: verdict:request-changes'
+  created_at: 2026-11-28T09:23:53.024020454Z
+  modified_at: 2026-11-28T09:23:53.024020454Z
+  session_id: 01a2216f6457
 history:
 - id: 01a22146-948a-7032-ad96-95a74d9a14d6
   author: joe
@@ -91,6 +97,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a22177-dc40-7322-ad6f-50934e8f2392
+  author: aida-orchestrator
+  timestamp: 2026-11-28T09:23:53.024016562Z
+  session_id: 01a2216f6457
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6d3ca942ec2e4a042f45c48bc90773576e06ffdc
   branch: main
