@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T01:24:58.703993536Z
-modified_at: 2026-11-28T04:44:55.796826293Z
+modified_at: 2026-11-28T04:56:19.156755463Z
 req_type: Task
 tags:
 - leases
@@ -137,6 +137,12 @@ comments:
   modified_at: 2026-11-28T04:44:55.796826293Z
   session_id: 01a220620bac
   harness_version: 2.1.319 (Claude Code)
+- id: 01a22082-e5d4-7533-be5a-32b9d535d754
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3891-release-dead-reservations` at head `4e6343e0f223086bdc1445e411c9397a29bc9c38`.'
+  created_at: 2026-11-28T04:56:19.156618404Z
+  modified_at: 2026-11-28T04:56:19.156618404Z
+  session_id: 01a220620bac
 history:
 - id: 01a2104e-a7aa-72b2-9133-1db6dc6cea6c
   author: joe
