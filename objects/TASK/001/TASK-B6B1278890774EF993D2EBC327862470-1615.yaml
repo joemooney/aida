@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:31:49.783028382Z
-modified_at: 2026-11-28T04:55:50.738857615Z
+modified_at: 2026-11-28T05:03:06.148138113Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -54,6 +54,12 @@ comments:
   modified_at: 2026-11-28T04:55:27.749936363Z
   session_id: 01a22073d460
   harness_version: 2.1.319 (Claude Code)
+- id: 01a22089-1ba4-72a0-913e-890a9bd30554
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3957-hook-no-red` at head `db76bf17561d5f3d0412619f2857904639cfeb10`.'
+  created_at: 2026-11-28T05:03:06.148134745Z
+  modified_at: 2026-11-28T05:03:06.148134745Z
+  session_id: 01a22073d460
 history:
 - id: 01a22035-c5e0-7e70-a058-780324cd7502
   author: joe
