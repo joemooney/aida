@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T13:12:13.855583833Z
-modified_at: 2026-11-28T01:10:06.493167964Z
+modified_at: 2026-11-28T01:16:36.363982451Z
 req_type: Bug
 tags:
 - admission
@@ -269,6 +269,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3495): AC2 display wiring is untested: the new manual_waiter line in `aida advisor loops train-status` (advisor_loop_service.rs status_value/status_lines) and in `aida pr train --check` text/JSON (pr_train_check.rs check_report) has no test; bug2771 test only... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T01:09:54.489602431Z
   modified_at: 2026-11-28T01:09:54.489602431Z
+- id: 01a21fb9-be8c-76c1-91ec-d3b98e19d728
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3534): Abandoned waiter blocks the auto-train for up to WAITER_TTL_SECS (15 min): admission_owner.rs record_waiter persists after a manual train gives up, and an operator who never retries leaves the auto-train yielding every pass with no clear/cancel surface... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:16:36.363982451Z
+  modified_at: 2026-11-28T01:16:36.363982451Z
 history:
 - id: 01a217ff-2dc1-7641-9cda-5abfd4de3de4
   author: joe
