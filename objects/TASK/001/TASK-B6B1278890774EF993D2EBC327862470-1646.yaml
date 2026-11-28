@@ -1,0 +1,24 @@
+id: 01a22147-5e9f-7c61-9fb3-85b8709a4488
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1646
+agreed_id: TASK-3964
+title: pr train --check runs the stacked build dry run (STORY-2894 sketch Q4)
+description: |-
+  Advisor aida-d3 2026-11-28 01:36 (sketch Q4: yes, as a separate task). pr train --check reported #4320 and #4321 as eligible minutes before train #4339 ejected them, because --check never stacks.
+
+  ## Acceptance
+  - AC1: pr train --check runs the same offline stacked build dry run the train uses (stack the candidate on main plus earlier members, regenerate registered files) and reports a would-eject instead of yes when the stacked diff changes hand-written content.
+  - AC2: bounded time; a test with two PRs that conflict only when stacked.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T08:30:55.135407163Z
+modified_at: 2026-11-28T08:30:55.135407163Z
+req_type: Task
+filed_at:
+  code_sha: 6d3ca942ec2e4a042f45c48bc90773576e06ffdc
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0039f0fc146
+  vendor: claude
