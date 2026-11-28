@@ -1,0 +1,31 @@
+id: 01a22174-d308-7d70-852f-951601ade929
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1649
+title: 'Review follow-up: Telemetry privacy in other repos: the .gitignore line only affects AIDA''s own repo, which '
+description: |-
+  From STORY-3120
+  Reviewed sha: 46c45d8538e1bbecd7b695f1f8c764a7dbb4c300
+
+  Telemetry privacy in other repos: the .gitignore line only affects AIDA's own repo, which already ignores .aida/*. persist_review_telemetry_and_sarif (aida-cli-lib/src/review_prepare.rs) writes .aida/review-telemetry/sarif/<id>.sarif.json, holding finding messages that can quote code, with default 0644 permissions. It also adds no self-ignoring .gitignore inside .aida/review-telemetry/, so in a community repo `git add .` commits the archive. Write a .gitignore ('*') into the directory, create the files 0600, and add a test.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-28T09:20:34.056562901Z
+modified_at: 2026-11-28T09:20:34.056562901Z
+req_type: Task
+tags:
+- carried-from:STORY-3120
+- finding-hash:df67c512
+- from-review:STORY-3120
+relationships:
+- rel_type: References
+  target_id: 01a21102-e2f1-7e62-9354-693f46b82d22
+  created_at: 2026-11-28T09:20:52.532630368Z
+filed_at:
+  code_sha: 46c45d8538e1bbecd7b695f1f8c764a7dbb4c300
+  branch: pr-4779
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6d3ca942ec2
+  vendor: claude
+  session: 01a2216f34ff

@@ -1,0 +1,31 @@
+id: 01a22175-1bb6-7d80-99bc-ad79090b7126
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1650
+title: 'Review follow-up: resolve_ab_arm_assignment (aida-core/src/review_engine.rs:2466) uses arm.to_ascii_lowercas'
+description: |-
+  From STORY-3120
+  Reviewed sha: 46c45d8538e1bbecd7b695f1f8c764a7dbb4c300
+
+  resolve_ab_arm_assignment (aida-core/src/review_engine.rs:2466) uses arm.to_ascii_lowercase().contains("adversarial"), so --ab-arm non-adversarial (or a committed review-rules ab_arm with that substring) turns on the challenger pass without --adversarial. Match exact arm names.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-28T09:20:52.662214156Z
+modified_at: 2026-11-28T09:20:52.662214156Z
+req_type: Task
+tags:
+- carried-from:STORY-3120
+- finding-hash:95ff79ae
+- from-review:STORY-3120
+relationships:
+- rel_type: References
+  target_id: 01a21102-e2f1-7e62-9354-693f46b82d22
+  created_at: 2026-11-28T09:21:10.688006734Z
+filed_at:
+  code_sha: 46c45d8538e1bbecd7b695f1f8c764a7dbb4c300
+  branch: pr-4779
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6d3ca942ec2
+  vendor: claude
+  session: 01a2216f34ff

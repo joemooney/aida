@@ -1,0 +1,31 @@
+id: 01a22175-a98a-7d31-931f-4323d211fe23
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1652
+title: 'Review follow-up: sanitize_unescaped_json_inner_quotes (aida-core/src/review_engine.rs, parse_runner_finding'
+description: |-
+  From STORY-3120
+  Reviewed sha: 46c45d8538e1bbecd7b695f1f8c764a7dbb4c300
+
+  sanitize_unescaped_json_inner_quotes (aida-core/src/review_engine.rs, parse_runner_findings_json fallback) has no ambiguity detection. Any repair that re-parses is accepted, even when another way of splitting the quotes was possible. The TASK-3947 note asked it to fail closed when the repair is ambiguous. No authority is added (a runner can emit valid JSON directly, and the coverage ledger is still enforced), but reject repairs whose quote placement is ambiguous.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-28T09:21:28.970282571Z
+modified_at: 2026-11-28T09:21:28.970282571Z
+req_type: Task
+tags:
+- carried-from:STORY-3120
+- finding-hash:b311bbc3
+- from-review:STORY-3120
+relationships:
+- rel_type: References
+  target_id: 01a21102-e2f1-7e62-9354-693f46b82d22
+  created_at: 2026-11-28T09:21:47.192113411Z
+filed_at:
+  code_sha: 46c45d8538e1bbecd7b695f1f8c764a7dbb4c300
+  branch: pr-4779
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6d3ca942ec2
+  vendor: claude
+  session: 01a2216f34ff
