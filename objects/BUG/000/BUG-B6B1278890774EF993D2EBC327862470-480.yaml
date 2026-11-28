@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T22:23:06.366822385Z
-modified_at: 2026-11-23T03:58:35.228652532Z
+modified_at: 2026-11-28T00:43:51.669420765Z
 req_type: Bug
 tags:
 - carry-over
@@ -56,6 +56,11 @@ comments:
   created_at: 2026-11-23T03:58:35.228646583Z
   modified_at: 2026-11-23T03:58:35.228646583Z
   session_id: 01a20685db43
+- id: 01a21f9b-c3f5-7553-9343-18bb9c9c28dd
+  author: joe
+  content: 'ESCALATE ruling (advisor aida-d3 2026-11-27 17:58; applied by product-15): AC AMENDED. An approval carries across an update-branch head ONLY when the merge was clean (no conflict resolution) AND the PR''s own patch-id vs main is unchanged (the TASK-1960 rule); otherwise a fresh review is required. Returned to Approved.'
+  created_at: 2026-11-28T00:43:51.669420765Z
+  modified_at: 2026-11-28T00:43:51.669420765Z
 history:
 - id: 01a20686-2c33-7f80-990c-8c96d428e03c
   author: aida-session-start
