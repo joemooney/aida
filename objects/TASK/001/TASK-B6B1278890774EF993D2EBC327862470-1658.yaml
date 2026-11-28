@@ -17,13 +17,21 @@ description: |-
   - AC1: every agent-CLI --version probe above (and the forge-bin one) goes through ONE shared bounded helper (reuse run_bounded / command_output_with_timeout_io): a short timeout (e.g. 5s), stdin=/dev/null, kill on timeout, reported as 'did not answer --version within Ns' (not a hang, not 'not installed').
   - AC2: a test with a fake agent binary that sleeps forever asserts the probe returns within the bound for init detection and for the codex probes.
   - AC3: a ratchet or test fails if a new Command::...arg("--version") spawn of an agent CLI bypasses the helper.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T10:10:57.877165375Z
-modified_at: 2026-11-28T10:10:57.877165375Z
+modified_at: 2026-11-28T10:17:33.028893927Z
 req_type: Task
+history:
+- id: 01a221a8-fe64-7bc2-974f-f6caa7d2859a
+  author: aida-session-start
+  timestamp: 2026-11-28T10:17:33.028892653Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: eb18c450c68d9170041ea975e6283dcb02975138
   branch: main
