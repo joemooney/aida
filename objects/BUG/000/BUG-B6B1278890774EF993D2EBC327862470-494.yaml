@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T17:55:22.742700627Z
-modified_at: 2026-11-28T00:58:54.732016172Z
+modified_at: 2026-11-28T01:01:50.279034615Z
 req_type: Bug
 tags:
 - landing
@@ -226,6 +226,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3441): already_on_base (aida-cli-lib/src/base_patch_equivalents.rs:30-43) excludes ^stop for EVERY single-parent fork point, so with several fork points (a branch merged in from a newer main) the base window starts at the NEWEST fork and landed squashes older... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T00:58:41.048972725Z
   modified_at: 2026-11-28T00:58:41.048972725Z
+- id: 01a21fac-3947-77f2-9a7d-a2ab80cf26ec
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3457): Patch-id equality also drops a branch commit that reapplies a change main later reverted (same patch-id as the original main commit), so its spec trailer leaves the squash body and ship_gate_spec_records (pr_service.rs:181) even though the PR... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:01:50.279034615Z
+  modified_at: 2026-11-28T01:01:50.279034615Z
 history:
 - id: 01a21493-66a0-7fc3-951d-2127ee12973e
   author: joe
