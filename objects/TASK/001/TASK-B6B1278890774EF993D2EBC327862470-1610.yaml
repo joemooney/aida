@@ -14,12 +14,35 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:26:56.215965481Z
-modified_at: 2026-11-28T03:37:05.066819259Z
+modified_at: 2026-11-28T03:39:59.541044605Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a22014-1672-7093-9f8f-09bbbefcbf09
   created_at: 2026-11-28T03:27:46.030901480Z
+comments:
+- id: 01a2203d-04b5-74c1-afe0-541f39a97c32
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - AC1 (unit + command-level): `should_auto_commit_scaffold` truth table updated (non-TTY default → leave uncommitted; `--commit` → commit; TTY → prompt default No); unit test that the init summary lists each path with its line count; `init_cmd_task_631` tests.
+    - AC2 (fixture, real git repo): new test runs `complete_init_scaffolding` in a fresh repo with the default mode and asserts HEAD unchanged and the files present but untracked; `--commit` mode test asserts HEAD advanced.
+    - AC3 (configuration/help + callers): `--commit` flag (alias `--commit-scaffold` kept) help text says scripts/CI that relied on the commit must pass it; help golden regenerated; CI shell callers that relied on the commit (`tests/test_bug_1796_normal_two_remote_pull_byte_identical.sh`, `scripts/multi-clone-harness.sh`) pass `--commit`; env-var doc updated.
+
+    ### Expected files
+    - `aida-cli-lib/src/init_cmd.rs` (decision fn, commit fn, `complete_init_scaffolding` mode enum, flag help)
+    - `aida-cli-lib/src/tests/init_cmd_task_631_init_self_commit_tests_inline_tests.rs` (+ other inline tests calling `complete_init_scaffolding`)
+    - `aida-cli-lib/src/tests/golden/cli_help_snapshot.txt`, `docs/environment-variables.md`, the two shell callers
+
+    ### Ambiguities / conflicts as questions
+    - AC1 "shows what it will write": the listing is printed at the commit decision (after files are on disk, before any commit), not as a pre-write dry run. Acceptable?
+    - When the default leaves files uncommitted, init will NOT enqueue the old "Commit AIDA scaffolding" onboarding spec (it would take TASK-1 from the user and shift IDs in every test); it prints the plain git command instead.
+  created_at: 2026-11-28T03:39:59.541044605Z
+  modified_at: 2026-11-28T03:39:59.541044605Z
+  session_id: 01a2203a1ff4
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a22031-de1f-7b30-a729-5d2554ae7cad
   author: joe
