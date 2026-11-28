@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T19:18:29.828946179Z
-modified_at: 2026-11-28T01:14:09.023937517Z
+modified_at: 2026-11-28T01:14:13.052999955Z
 req_type: Bug
 tags:
 - lanes
@@ -91,6 +91,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3520): Test gap (deferred): the new tests exercise retry_transient_admission_with with synthetic outcomes and admission_gap directly, but nothing exercises the wiring: retire_with''s mapping of WriterAdmissionUnknown{transient:true} to... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T01:13:56.947545197Z
   modified_at: 2026-11-28T01:13:56.947545197Z
+- id: 01a21fb7-8ebd-7713-a675-2cf2e28b0f48
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3521): Wording: when the retries are spent on writers that run a deleted binary, the final error still says they ''should exit on their own'' (retire.rs WriterAdmissionUnknown Display). Its only next step is the dry run. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:14:13.052999955Z
+  modified_at: 2026-11-28T01:14:13.052999955Z
 history:
 - id: 01a2194e-f4af-7583-8d6e-242d135b3492
   author: joe
