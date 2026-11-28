@@ -53,7 +53,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T03:41:07.856444039Z
-modified_at: 2026-11-28T04:21:00.989787265Z
+modified_at: 2026-11-28T07:24:53.130246573Z
 req_type: Story
 tags:
 - containment
@@ -151,6 +151,20 @@ comments:
   modified_at: 2026-11-28T04:22:07.615336163Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2210a-ea0a-7411-8edd-dbc62cf0d8dc
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 1a6a7ff7ae (branch story-2838-s2-init-write, base origin/integration fb1f8edfba; PR #4805). Slice 2 only (Refs): `aida init --report-allowlists --write` (or an interactive yes) writes the reported entries.
+    Acceptance evidence (S2 brief): [behavioral-test] write puts the entries in both configs, and a second run is byte-identical (write_adds_reported_entries_keeps_user_entries_and_is_idempotent). User entries and comments are kept. A user-set codex posture is kept and the unselected Claude file is untouched (write_keeps_a_user_set_vendor_posture_and_skips_unselected_agents). Without --write no file changes (without_write_no_file_changes). Nested DIR gives no remotes (a_dir_nested_in_an_enclosing_repo_reports_no_remotes). A missing config is refused before any write (write_refuses_before_any_change_when_a_target_is_unusable). Lane: 9 passed. Guards: story_2539 + bug_1723 passed in aida-ci-guards (15) and aida-cli-lib, and the help golden passed. make check-ci-fast exit 0.
+    Probes: (1) case: hosts dedupe case-insensitively against existing entries. (2) format: TOML comments preserved via toml_edit; an unparseable JSON/TOML errors before any write; an inline table is refused by set_nested. (3) multiplicity: a setting shared by Claude and Codex (contained.allowed_hosts) merges into one edit; empty hosts plan no edit. (4) symlinked settings.json (this repo's own layout) and a missing config are refused up front.
+    Fixes during review: a partial write was possible when the second target was unusable, so all targets are now checked first. A new AIDA_HEADLESS env read was flagged by the ExecContext ratchet and removed (no TTY means no prompt). The store-writer inventory was regenerated with 3 rows.
+    S1 nits: the shared host git builder, the enclosing-repo guard, a 5 s --version timeout, and the size (~270 non-test lines, over 250).
+    Residual risks: --write requires an initialized project. A mid-write failure after up-front checks can leave earlier files written. The interactive prompt path is untested. The golden was hand-edited but verified by the golden test.
+  created_at: 2026-11-28T07:24:53.130246573Z
+  modified_at: 2026-11-28T07:24:53.130246573Z
+  session_id: 01a220dbd95e
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e0f7-c069-77f2-b73d-5d3a4f0f8d52
   author: joe
