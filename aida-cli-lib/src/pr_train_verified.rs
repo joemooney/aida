@@ -595,7 +595,9 @@ fn collect(
             !originals.is_empty(),
             "train car has no original authorized approval"
         );
-        sources.push(json!({"pr": fresh.pr, "head": fresh.head, "branch": source.head_ref, "specs": ids, "originals": original_references(&live.project_root, &originals)?, "superseded": compact_bodies(&superseded_here)?, "metadata":metadata, "policy_specs":policy_specs, "mandate_ship_reason":fresh.live_cover().filter(|c| c.supervised_by_mode).map(|_| "supervised-by-mode")}));
+        sources.push(json!({"pr": fresh.pr, "head": fresh.head, "branch": source.head_ref, "specs": ids, "originals": original_references(&live.project_root, &originals)?, "superseded": compact_bodies(&superseded_here)?, "metadata":metadata, "policy_specs":policy_specs, "mandate_ship_reason":fresh.live_cover().filter(|c| c.supervised_by_mode).map(|_| "supervised-by-mode"),
+            // The recheck before the merge must find the same mandate. trace:STORY-3181 | ai:claude
+            "mandate": fresh.live_cover().map(|c| c.id.as_str())}));
         all_specs.extend(ids);
     }
     all_specs.sort();

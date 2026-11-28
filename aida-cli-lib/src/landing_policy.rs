@@ -352,8 +352,8 @@ impl LandingPolicy {
 
     /// Why the automatic train does not land a supervised PR under this
     /// policy, or `None` once it may. Off, the refusal names the setting.
-    /// On, the landing path is not built yet (the mandate cover and the
-    /// pre-merge recheck come in later slices), so it still refuses.
+    /// On, it still refuses: the mandate cover is built (S2), but the knob
+    /// stays inert until the pre-merge recheck and its tests land (S4).
     // trace:STORY-3181 | ai:claude
     pub(crate) fn auto_train_supervised_refusal(&self) -> Option<String> {
         Some(if self.auto_train_supervised_under_mandate {
@@ -753,7 +753,7 @@ mod story2897_landing_policy_tests {
         // Not yet a landing path: on still refuses, naming the setting.
         let why = p
             .auto_train_supervised_refusal()
-            .expect("on refuses until S2");
+            .expect("on refuses until S4");
         assert!(
             why.contains("is on, but") && why.contains(AUTO_TRAIN_SUPERVISED_KEY),
             "{why}"

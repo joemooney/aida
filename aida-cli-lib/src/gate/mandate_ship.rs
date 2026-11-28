@@ -433,8 +433,53 @@ pub(crate) fn mandate_ship_cover_for_ship(
     )
 }
 
-/// Recheck the original train decision after its hold release.
+/// [`mandate_ship_cover_for_ship`] for the AUTOMATIC train: bound here to
+/// [`crate::gate::mandate::auto_train_decision`], exact head only, so no
+/// carry-over proof and no stale-approval override.
+// trace:STORY-3181 | ai:claude
+pub(crate) fn mandate_auto_train_cover(
+    project_root: &std::path::Path,
+    main_worktree: &std::path::Path,
+    hold_root: &std::path::Path,
+    pr: u64,
+    known_ids: &[String],
+    head_branch: Option<&str>,
+    head: impl FnOnce() -> Option<String>,
+) -> std::result::Result<MandateCover, crate::gate::mandate::MandateRefusal> {
+    mandate_ship_cover(
+        project_root,
+        main_worktree,
+        hold_root,
+        pr,
+        known_ids,
+        head_branch,
+        head,
+        false,
+        crate::gate::mandate::auto_train_decision,
+        false,
+        None,
+    )
+}
+
+type Decide = fn(
+    &crate::gate::mandate::ShipCheck<'_>,
+) -> std::result::Result<String, crate::gate::mandate::MandateRefusal>;
+
+/// The decision a ship cover is bound to, and whether it proves carry-over:
+/// the automatic train's stricter one (exact head only), or a ship's.
+// trace:STORY-3181 | ai:claude
+fn decision_for(auto: bool) -> (Decide, bool) {
+    if auto {
+        (crate::gate::mandate::auto_train_decision, false)
+    } else {
+        (crate::gate::mandate::ship_decision, true)
+    }
+}
+
+/// Recheck the original train decision after its hold release (`auto`:
+/// under the automatic train's decision).
 // trace:BUG-2666 | ai:codex
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn recheck_train_release(
     project_root: &std::path::Path,
     main_worktree: &std::path::Path,
@@ -443,6 +488,7 @@ pub(crate) fn recheck_train_release(
     cover: &MandateCover,
     ids: &[String],
     head_branch: &str,
+    auto: bool,
 ) -> std::result::Result<MandateCover, crate::gate::mandate::MandateRefusal> {
     use crate::gate::mandate::MandateRefusal;
     let hold = cover
@@ -502,6 +548,7 @@ pub(crate) fn recheck_train_release(
     {
         return Err(MandateRefusal::MarkerMissing);
     }
+    let (decide, prove_carry_over) = decision_for(auto); // trace:STORY-3181 | ai:claude
     let fresh = mandate_ship_cover(
         project_root,
         main_worktree,
@@ -511,8 +558,8 @@ pub(crate) fn recheck_train_release(
         Some(head_branch),
         || Some(head.to_owned()),
         false,
-        crate::gate::mandate::ship_decision,
-        true,
+        decide,
+        prove_carry_over,
         Some(hold),
     )?;
     if &fresh != cover {
@@ -577,23 +624,31 @@ pub(crate) fn preview_ship_cover(
     ids: &[String],
     branch: &str,
     head: &str,
+    auto: bool,
 ) -> std::result::Result<MandateCover, crate::gate::mandate::MandateRefusal> {
-    preview_cover_deciding(
+    let (decide, prove_carry_over) = decision_for(auto); // trace:STORY-3181 | ai:claude
+    collect_mandate_cover(
         project_root,
         main_worktree,
         hold_root,
         pr,
         ids,
-        branch,
-        head,
-        crate::gate::mandate::ship_decision,
+        Some(branch),
+        || Some(head.to_string()),
+        false,
+        decide,
+        prove_carry_over,
+        None,
+        false,
     )
 }
 
-/// The read-only collection behind [`preview_ship_cover`], with the decision
-/// as a parameter so a test can pin preview/actual parity for a covering
-/// decision without fabricating approval authority.
+/// The read-only collection [`preview_ship_cover`] runs for a ship, with the
+/// decision as a parameter so a test can pin preview/actual parity for a
+/// covering decision without fabricating approval authority. Test-only.
 // trace:STORY-2893 | ai:claude
+// trace:STORY-3181 | ai:claude
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub(in crate::gate) fn preview_cover_deciding(
     project_root: &std::path::Path,

@@ -1,6 +1,6 @@
 //! STORY-3181 S1: the automatic train refuses every supervised PR unless the
 //! default branch's committed `[landing] auto_train_supervised_under_mandate`
-//! allows it, and in this slice it still refuses when it is on.
+//! allows it, and until S4 (the pre-merge recheck) it still refuses when on.
 // trace:STORY-3181 | ai:claude
 use super::*;
 

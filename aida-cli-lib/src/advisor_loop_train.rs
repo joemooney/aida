@@ -2,9 +2,24 @@
 // trace:STORY-2691 | ai:codex
 use super::*;
 
+/// [`eligible_in`] with the supervised lane closed.
+#[cfg(test)]
 pub(super) fn eligible(
     change: &forge::Change,
     evidence: &dyn ready::Evidence,
+) -> std::result::Result<(), crate::pr_train::MemberGateError> {
+    eligible_in(change, evidence, false)
+}
+
+/// The automatic train's member predicate. With the supervised lane open (`[landing]
+/// auto_train_supervised_under_mandate` on and an active mandate lifting
+/// supervision), a held PR passes on to the member gate, whose mandate cover
+/// decides; its approval must then be at the exact head.
+// trace:STORY-3181 | ai:claude
+pub(super) fn eligible_in(
+    change: &forge::Change,
+    evidence: &dyn ready::Evidence,
+    supervised_lane: bool,
 ) -> std::result::Result<(), crate::pr_train::MemberGateError> {
     use crate::pr_train::MemberGateError::{Refused, Unavailable};
     macro_rules! ensure {
@@ -26,19 +41,17 @@ pub(super) fn eligible(
         evidence.under_review(change).is_none(),
         "review still running"
     );
-    ensure!(
-        evidence
-            .hold(change)
-            .map_err(|e| Unavailable(format!("{e:#}")))?
-            .is_none(),
-        "merge hold present"
-    );
+    let held = evidence
+        .hold(change)
+        .map_err(|e| Unavailable(format!("{e:#}")))?
+        .is_some();
+    ensure!(!held || supervised_lane, "merge hold present");
     // The authoritative gate proves carry-over under protected fast policy;
     // strict policy and invalid proofs refuse there. CI below still binds head.
     // trace:STORY-2763 | ai:codex
     let approval = evidence.train_approval(change)?;
     ensure!(
-        approval.reviewed == change.head || approval.carried.is_some(),
+        approval.reviewed == change.head || (!held && approval.carried.is_some()),
         "approval must cover the head directly or by authoritative carry-over"
     );
     let mut checks = evidence
