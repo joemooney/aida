@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T08:29:38.066956Z
-modified_at: 2026-11-28T11:46:00.888427270Z
+modified_at: 2026-11-28T11:47:03.038306805Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -162,6 +162,17 @@ comments:
   content: Commit 3ab9a48e3e references this requirement
   created_at: 2026-11-28T11:46:00.888427270Z
   modified_at: 2026-11-28T11:46:00.888427270Z
+  session_id: 01a221f80acd
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a221fa-eefe-7f73-bcb0-3ea9d8bda608
+  author: dirtlab
+  content: |-
+    ## Round 3 (PR #4808, commit 3ab9a48e3e)
+    1. Gate-floor ratchets: gate/train_generated.rs now carries the `// mandate-gate` marker and is listed in GATE_KERNELS (story_1888_gate_paths_tests.rs). It imports only crate::gate::mandate_gates, so it meets the kernel reach rule. GATE_PROTECTED_PATHS is unchanged; the file is covered by the gate/ prefix.
+    2. Advisor mail on an out-of-outputs write (sketch section 4): S1 leaves it out on purpose. The refusal is recorded on stderr, in Built.regen_refused (journaled) and on the PR body's aida-train-regeneration-refused: line. The mail is follow-up work. This is noted in the PR body.
+    3. PR body corrected: the sandbox does not consult [contained] read_allowlist. It binds read-only the fixed TOOLCHAIN list, the python3/git install prefix (never one under home) and the base's generators. The temporary worktree is the only writable bind.
+  created_at: 2026-11-28T11:47:03.038306805Z
+  modified_at: 2026-11-28T11:47:03.038306805Z
   session_id: 01a221f80acd
   harness_version: 2.1.319 (Claude Code)
 history:
