@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T17:14:31.873888920Z
-modified_at: 2026-11-26T20:26:25.445308185Z
+modified_at: 2026-11-28T01:13:00.215005306Z
 req_type: Bug
 tags:
 - BUG-2763
@@ -154,6 +154,11 @@ comments:
   modified_at: 2026-11-26T19:41:26.655015914Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a21fb6-7237-7d02-aa77-80a3242bf041
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3516): Test gap: the production end closure in reclaim_retained_review_tree (`aida session end <lease> --yes --skip-ci` subprocess, aida-cli-lib/src/queue_cmd/work.rs:216-230) is never exercised. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:13:00.215005306Z
+  modified_at: 2026-11-28T01:13:00.215005306Z
 history:
 - id: 01a218dd-3006-7b12-a565-eb8e5e0a12d8
   author: joe
