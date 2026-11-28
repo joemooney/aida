@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 95866f79ae773d8edb6d2ab8f04cc105e6afc27c
 
   contained_lane.py preflight_refusal: `text[:LIMIT]` truncates from the END, so when the 20-line code-spanned tail exceeds 4096 chars the most recent (most diagnostic) probe lines are dropped and a closing backtick can be cut; it also bounds characters, not bytes (U+FFFD from errors='replace' is 3 bytes), so the docstring's '<= 4 KiB' is not guaranteed. Prefer trimming oldest tail lines until the encoded message fits.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-27T19:42:11.918919670Z
-modified_at: 2026-11-28T01:18:00.806363972Z
+modified_at: 2026-11-28T01:18:02.749837007Z
 req_type: Task
 tags:
 - carried-from:TASK-3927
@@ -41,6 +41,13 @@ history:
   author: joe
   timestamp: 2026-11-28T00:40:25.052391739Z
   changes: []
+- id: 01a21fbb-0ffd-7d51-867f-2710b36d1d32
+  author: joe
+  timestamp: 2026-11-28T01:18:02.749834878Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 95866f79ae773d8edb6d2ab8f04cc105e6afc27c
   branch: pr-4750
