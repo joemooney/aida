@@ -211,9 +211,10 @@ fn fetch_origin_branch(project_root: &std::path::Path, branch: &str) {
 /// `origin/<head>` it has may predate the lane's latest push. In that case
 /// both ends are re-fetched from origin (a stale `origin/<base>` would pull
 /// already-merged trailers into the range) and the range is
-/// `origin/<base>..origin/<head>`. Leaves the names untouched when `head`
-/// resolves locally or nothing on origin does, so the caller's `git log`
-/// error names the range.
+/// `origin/<base>..origin/<head>`. When `head` resolves locally, `base` is
+/// swapped for `origin/<base>` only if the local branch trails it (see
+/// [`fresher_base`]). Leaves the names untouched when nothing on origin
+/// resolves, so the caller's `git log` error names the range.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-035 | ai:claude
 pub(crate) fn resolve_log_range(
     project_root: &std::path::Path,
@@ -221,7 +222,7 @@ pub(crate) fn resolve_log_range(
     head: &str,
 ) -> (String, String) {
     if git_rev_resolves(project_root, head) {
-        return (base.to_string(), head.to_string());
+        return (fresher_base(project_root, base), head.to_string());
     }
     fetch_origin_branch(project_root, head);
     let remote_head = format!("origin/{head}");
@@ -236,6 +237,45 @@ pub(crate) fn resolve_log_range(
         base.to_string()
     };
     (base, remote_head)
+}
+
+/// `origin/<base>` when the local `<base>` is strictly behind it, else `base`.
+/// `aida ship` rebases a seat clone's branch onto `origin/<base>` but never
+/// advances the clone's local `<base>`, so `<base>..<head>` would carry the
+/// trailers of commits that already landed and the review story would link
+/// specs this PR never touched. A local `<base>` that is level with, ahead
+/// of or diverged from `origin/<base>` is kept: it may hold commits the
+/// remote lacks, and dropping it could pull those into the range instead.
+// trace:TASK-3518 | ai:claude
+fn fresher_base(project_root: &std::path::Path, base: &str) -> String {
+    let remote = format!("origin/{base}");
+    let mut cmd = aida_core::git_ops::host_git_command(project_root);
+    cmd.args([
+        "rev-list",
+        "--left-right",
+        "--count",
+        git_arg_guard::END_OF_OPTIONS,
+    ])
+    .arg(format!("{base}...{remote}"))
+    .arg("--");
+    let counts = crate::forge_lookup::deadline_output(cmd, std::process::Command::output)
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+    let behind = counts
+        .as_deref()
+        .and_then(|c| c.split_once('\t'))
+        .and_then(
+            |(ahead, behind)| match (ahead.parse::<u64>(), behind.parse::<u64>()) {
+                (Ok(0), Ok(n)) => Some(n),
+                _ => None,
+            },
+        );
+    if behind.is_some_and(|n| n > 0) {
+        remote
+    } else {
+        base.to_string()
+    }
 }
 
 /// Exclude an integration prefix whose exact tree already landed through a
