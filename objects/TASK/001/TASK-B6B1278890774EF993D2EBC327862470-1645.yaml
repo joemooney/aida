@@ -11,12 +11,12 @@ description: |-
   - AC3: the advisor's 01:16 requirements hold: deterministic regeneration (run twice → identical bytes), only registered paths may change, and the PR's own non-generated diff is re-verified unchanged (patch-id over non-generated paths).
   - AC4: tests: regeneration on a clean tree is a no-op; each section-4 failure mode refuses.
   - Touches gate/: needs a human merge.
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T08:29:38.066956Z
-modified_at: 2026-11-28T10:28:01.568892492Z
+modified_at: 2026-11-28T11:39:36.290187216Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -132,6 +132,12 @@ comments:
   created_at: 2026-11-28T10:28:01.568889052Z
   modified_at: 2026-11-28T10:28:01.568889052Z
   session_id: 01a2217b7a0f
+- id: 01a221f4-1eb3-7a11-a96a-5ab5c0b89261
+  author: aida-orchestrator
+  content: 'Shelved by leases::shelve_spec_on_failure during reviewer: verdict:request-changes'
+  created_at: 2026-11-28T11:39:36.499637073Z
+  modified_at: 2026-11-28T11:39:36.499637073Z
+  session_id: 01a221ef75ef
 history:
 - id: 01a22146-948a-7032-ad96-95a74d9a14d6
   author: joe
@@ -172,6 +178,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a221f4-1eb3-7a11-a96a-5aad1741e770
+  author: aida-orchestrator
+  timestamp: 2026-11-28T11:39:36.499634269Z
+  session_id: 01a221ef75ef
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6d3ca942ec2e4a042f45c48bc90773576e06ffdc
   branch: main
@@ -183,3 +197,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-28T09:07:45.179724Z
   implemented_by: dirtlab
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'REQUEST CHANGES at 4521f5d84a92 (TASK-3963, STORY-2894 S1; strict gate-tier review). The design matches the signed sketch. Generators are pinned from the base and ro-bound over the tip, and a car that changes a generator disables its entry. The bwrap sandbox is offline with one writable mount (the checkout) and clearenv/PYTHONSAFEPATH. The driver runs each entry twice, refuses writes outside the outputs, non-100644 modes and E2 violations, and rolls back. Rust re-checks the report, the sha256 and 100644 mode, stages only the reported paths in a private index, writes one canonical regen commit with no completion ID, and verify_structure re-checks it as the single last commit on the last car. Every refusal leaves the train as built. AC2: approval coverage is unchanged (add_car and patch-ids are untouched). AC3/AC4: determinism, registered paths only, unchanged car patch-ids, the clean-tip no-op and the section-4 refusals all have tests. One blocker: CI is red at this head because the new gate/train_generated.rs lacks the `// mandate-gate` marker and is not classified as a kernel/dispatch/orchestrator. Two gate-floor ratchets fail in CI (fast compile), which also fails Build (ubuntu-latest). Two non-blocking follow-ups: the sketch''s advisor mail on an outside-output refusal, and the PR body''s read_allowlist claim. The base is 2 commits ahead on .github/workflows/ci.yml; no finding depends on those commits.'
+  recovery_hint: address the review findings, move TASK-3963 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-28T11:39:36.290187216Z
