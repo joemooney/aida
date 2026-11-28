@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T12:55:29.623470732Z
-modified_at: 2026-11-28T01:09:33.492883998Z
+modified_at: 2026-11-28T01:10:10.171145948Z
 req_type: Task
 tags:
 - landing
@@ -123,6 +123,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3492): TASK-3917 follow-up: the 10-minute refusal cache (advisor_loop_train.rs Refusals/REJUDGE) is keyed only by (PR, head). State that changes without a head move is not seen for up to 10 minutes: an approval being recorded, CI turning green, a train... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T01:09:23.025824073Z
   modified_at: 2026-11-28T01:09:23.025824073Z
+- id: 01a21fb3-d9fb-72c1-8c7a-2eef9081c861
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3496): TASK-3917 follow-up: the read-only pre-scan (AutomaticPrescan::admits, LiveChecks read_only=true/request_full=false, pr_train.rs ~5830) refuses a PR whose full-tier CI is Missing or Failed without the side effect the real pass has in full_tier_gate... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:10:10.171145948Z
+  modified_at: 2026-11-28T01:10:10.171145948Z
 history:
 - id: 01a217f0-9b85-7542-b16e-c93c789c7c07
   author: joe
