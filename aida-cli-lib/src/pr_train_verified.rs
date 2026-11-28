@@ -884,7 +884,7 @@ fn wait_exact_tip_ci(
 
 /// Verify the existing objects, without rebuilding timestamped commits. Exact
 /// parent/message/tree and patch checks reject hand-edited Built/Car manifests.
-fn verify_structure(repo: &Path, train: &Built) -> Result<Vec<Value>> {
+pub(crate) fn verify_structure(repo: &Path, train: &Built) -> Result<Vec<Value>> {
     anyhow::ensure!(!train.cars.is_empty(), "empty train proof");
     let mut parent = train.base.clone();
     let mut seen = std::collections::HashSet::new();
@@ -936,6 +936,26 @@ fn verify_structure(repo: &Path, train: &Built) -> Result<Vec<Value>> {
             "parent": parent, "commit": car.commit, "patch_id": car_patch, "message": message, "tree": tree,
             "release_cover": car.member.release.as_ref().map(|cover| json!({"id":cover.id,"principal":cover.principal}))}));
         parent = car.commit.clone();
+    }
+    // At most one regeneration commit, last, on the last car. trace:TASK-3963 | ai:claude
+    if let Some(regen) = &train.regen {
+        let ancestry = git(repo, &["rev-list", "--parents", "-n", "1", &regen.commit])?;
+        anyhow::ensure!(
+            ancestry == format!("{} {}", regen.commit, parent),
+            "train regeneration commit parent changed"
+        );
+        let message = git(repo, &["show", "-s", "--format=%B", &regen.commit])?;
+        let touched =
+            super::regen::touched(repo, &parent, &regen.commit).map_err(anyhow::Error::msg)?;
+        crate::gate::train_generated::verify_regen(&message, &touched, regen)
+            .map_err(anyhow::Error::msg)?;
+        super::regen::ledger_check(repo, &parent, &regen.commit, &touched)
+            .map_err(anyhow::Error::msg)?;
+        proof.push(
+            json!({"regen": regen.commit, "parent": parent, "message": message,
+            "touched": touched, "report": regen.report}),
+        );
+        parent = regen.commit.clone();
     }
     anyhow::ensure!(parent == train.tip, "train tip or car count changed");
     Ok(proof)

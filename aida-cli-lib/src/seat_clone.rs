@@ -3823,6 +3823,8 @@ fn regenerate_repair_outputs(
         "--",
         "scripts/exec-context-legacy.json",
         "aida-cli-lib/src/tests/golden/cli_help_snapshot.txt", // trace:TASK-3803 | ai:codex
+        "scripts/store-writers.toml",                          // trace:TASK-3963 | ai:claude
+        "docs/showcase/search-data.js",                        // trace:TASK-3963 | ai:claude
         ".claude/skills",
         ".claude/commands",
         ".claude/hooks",
@@ -3951,6 +3953,8 @@ fn regenerate_repair_outputs(
         "Makefile",
         "scripts/check-exec-context.py",
         "scripts/check-template-hooks.py",
+        "scripts/check-store-writers.py", // trace:TASK-3963 | ai:claude
+        "docs/showcase/build.py",
     ]
     .iter()
     .enumerate()

@@ -31,6 +31,9 @@ pub(crate) use check::{next_actors, pr_train_check_handler, CheckOptions, NextAc
 pub(crate) mod culprit;
 #[path = "pr_train_journal.rs"]
 mod journal;
+// trace:TASK-3963 | ai:claude
+#[path = "pr_train_regen.rs"]
+pub(crate) mod regen;
 pub(crate) use journal::TrainJournalBusy;
 /// Holds the train run lock in `dir` until dropped (tests only).
 #[cfg(test)]
@@ -52,6 +55,9 @@ mod store_refresh;
 #[path = "pr_train_verified.rs"]
 mod verified;
 pub(crate) use verified::VerifiedTrainMerge;
+// trace:TASK-3963 | ai:claude
+#[cfg(test)]
+pub(crate) use verified::verify_structure;
 
 use anyhow::{Context, Result};
 use std::collections::VecDeque;
@@ -258,6 +264,13 @@ pub(crate) struct Built {
     pub tip: String,
     pub cars: Vec<Car>,
     pub dropped: Vec<Ejected>,
+    /// The tip's regeneration commit on top of the last car. trace:TASK-3963 | ai:claude
+    #[serde(default)]
+    pub regen: Option<crate::gate::train_generated::RegenCommit>,
+    /// Why the train did not regenerate (journaled with the train and named
+    /// in its PR body). trace:TASK-3963 | ai:claude
+    #[serde(default)]
+    pub regen_refused: Option<String>,
 }
 
 impl Built {
@@ -364,6 +377,8 @@ pub(crate) fn build(repo: &Path, base: &str, members: &[Member]) -> Result<Built
         tip,
         cars,
         dropped,
+        regen: None,
+        regen_refused: None,
     })
 }
 
@@ -3502,6 +3517,15 @@ pub(crate) fn train_pr_body(train: &Built) -> String {
     {
         s.push_str(&format!("Not in this train: #{} {}\n\n", d.pr, d.reason));
     }
+    if let Some(regen) = &train.regen {
+        s.push_str(&crate::gate::train_generated::pr_body_block(regen));
+        s.push('\n');
+    }
+    if let Some(why) = &train.regen_refused {
+        // A code span: generator output never renders as markup or a mention.
+        let why = why.replace('`', "'");
+        s.push_str(&format!("aida-train-regeneration-refused: `{why}`\n\n"));
+    }
     s.push_str(&members_line(&train.cars));
     s.push('\n');
     s
@@ -4018,6 +4042,7 @@ impl TrainForge for LiveTrainForge<'_> {
         }
         let mut train = build(&self.main_worktree, base, &accepted)?;
         train.dropped.extend(dropped);
+        regen::regenerate(&self.main_worktree, &self.project_root, &mut train);
         Ok(train)
     }
 

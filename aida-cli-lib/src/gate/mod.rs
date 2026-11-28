@@ -59,6 +59,8 @@ pub(crate) mod ship;
 pub(crate) mod solo_review;
 // BUG-HOME-048: completion trailers complete only the specs a PR covers.
 pub(crate) mod trailer_coverage;
+// STORY-2894 S1: generated files the train regenerates at its tip.
+pub(crate) mod train_generated;
 // STORY-2884: the project default for an unset execution mode.
 pub(crate) mod unset_mode;
 

@@ -15,10 +15,16 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
+import tomllib
 
 EXEC_CONTEXT_LEDGER = "scripts/exec-context-legacy.json"
 CLI_HELP_GOLDEN = "aida-cli-lib/src/tests/golden/cli_help_snapshot.txt"
+STORE_WRITERS = "scripts/store-writers.toml"
+# Train-run entries; the cheap ones are rerun to prove determinism.
+# trace:TASK-3963 | ai:claude
+TRAIN_ENTRIES = ("showcase-search", "store-writers")
 
 # The registry is host-owned. Mirror additions are enumerated from resolved
 # staged masters before generation, never from generator-created sources.
@@ -30,6 +36,13 @@ REGISTRY = (
                    ".agents/skills/aida-", ".aida/discipline/"),
      ("aida-core/templates/", "aida-core/src/", "Makefile", "scripts/check-template-hooks.py"),
      ("make", "sync-templates")),
+    # trace:TASK-3963 | ai:claude
+    ("showcase-search", ("docs/showcase/search-data.js",),
+     ("docs/", "aida-core/templates/.aida/discipline/"),
+     ("python3", "docs/showcase/build.py")),
+    ("store-writers", (STORE_WRITERS,),
+     ("**/*.rs", "scripts/", "aida-core/templates/", "hooks/", ".githooks/"),
+     ("python3", "scripts/check-store-writers.py", "--regenerate")),
     # Reuse the default-feature renderer exercised by CI. trace:TASK-3803 | ai:codex
     ("cli-help", (CLI_HELP_GOLDEN,),
      ("aida-cli-lib/src/", "Cargo.toml", "Cargo.lock"),
@@ -99,6 +112,82 @@ def expected_mirrors(masters):
             if registered(path, "120000", masters):
                 result[path] = "120000"
     return result
+
+
+def with_baseline(name, argv, base, scratch):
+    """store-writers refuses a conflicted inventory without explicit policy
+    evidence: the working inventory when it parses, else the pinned base's.
+    trace:TASK-3963 | ai:claude
+    """
+    if name != "store-writers":
+        return argv
+    try:
+        data = Path(STORE_WRITERS).read_bytes()
+        tomllib.loads(data.decode())
+    except (OSError, ValueError):
+        data = git("show", f"{base}:{STORE_WRITERS}")
+    baseline = Path(scratch, "store-writers-baseline.toml")
+    baseline.write_bytes(data)
+    return (*argv, "--baseline", str(baseline))
+
+
+def ledger_violation(old, new):
+    """E2 post-condition: reviewed rows are kept and new rows start blocked.
+    trace:TASK-3963 | ai:claude
+    """
+    def rows(data):
+        return {r.get("id"): r for r in tomllib.loads(data.decode()).get("writer", [])}
+    before, after = rows(old), rows(new)
+    for key, row in after.items():
+        if key in before and row != before[key]:
+            return "regeneration changed reviewed store-writers row " + repr(key)
+        if key not in before and row.get("disposition") != "blocked":
+            return "regeneration added a non-blocked store-writers row " + repr(key)
+    return None
+
+
+def train(base, names, budget):
+    """Regenerate the selected entries at a train tip and report each output.
+
+    Only the named train entries may run, only their outputs may change, a
+    rerun must change nothing, and any refusal rolls every write back.
+    trace:TASK-3963 | ai:claude
+    """
+    entries = [e for e in REGISTRY if e[0] in names]
+    if not names or len(entries) != len(set(names)) or not set(names) <= set(TRAIN_ENTRIES):
+        raise RuntimeError("train regeneration refuses entries: " + repr(names))
+    outputs = {p for e in entries for p in e[1]}
+    contents = {}
+    before = snapshot(contents)
+    deadline = time.monotonic() + budget
+    report = []
+    try:
+        with tempfile.TemporaryDirectory() as scratch:
+            for name, products, _, command in entries:
+                argv = with_baseline(name, command, base, scratch)
+                run_generator(argv, max(0.01, deadline - time.monotonic()), quiet=True)
+                first = snapshot()
+                run_generator(argv, max(0.01, deadline - time.monotonic()), quiet=True)
+                if snapshot() != first:
+                    raise RuntimeError(f"{name}: generator output is not deterministic")
+                report.append({"name": name, "argv": list(command), "status": 0, "outputs": [
+                    {"path": p, "before": before.get(p, (0, None))[1], "after": first.get(p, (0, None))[1]}
+                    for p in products]})
+        after = snapshot()
+        changed = {p for p in before.keys() | after.keys() if before.get(p) != after.get(p)}
+        if changed - outputs:
+            raise RuntimeError("generator wrote unregistered outputs: " + repr(sorted(changed - outputs)))
+        for path in changed:
+            if after.get(path, (None,))[0] != 0o644:
+                raise RuntimeError("generated output must stay a regular 100644 file: " + repr(path))
+        if STORE_WRITERS in changed:
+            violation = ledger_violation(contents[STORE_WRITERS], Path(STORE_WRITERS).read_bytes())
+            if violation:
+                raise RuntimeError(violation)
+    except BaseException as error:
+        kept = roll_back(before, snapshot(), contents)
+        raise RuntimeError(f"{error}; generator writes rolled back" + (f"; kept {kept!r}" if kept else "")) from error
+    return report
 
 
 class GeneratorLaunchError(OSError):
@@ -337,7 +426,9 @@ def main(base, phase, pack_outputs=(), budget=100.0):
                         raise RuntimeError("could not restore CLI help golden") from error
                     warning = f"snapshot regeneration failed: {error}; CI will verify"
             else:
-                run_generator(argv, max(0.01, deadline - time.monotonic()))
+                with tempfile.TemporaryDirectory() as scratch:
+                    run_generator(with_baseline(name, argv, base, scratch),
+                                  max(0.01, deadline - time.monotonic()))
         after = snapshot()
         unexpected = sorted(
             p for p in before.keys() | after.keys()
@@ -365,7 +456,10 @@ def main(base, phase, pack_outputs=(), budget=100.0):
     return warning
 
 
-if __name__ == "__main__":
+if __name__ == "__main__" and sys.argv[2] == "train":
+    print(json.dumps(train(sys.argv[1], json.loads(sys.argv[3]),
+                           float(sys.argv[4]) if len(sys.argv) > 4 else 300.0)))
+elif __name__ == "__main__":
     warning = main(sys.argv[1], sys.argv[2], json.loads(sys.argv[3]) if len(sys.argv) > 3 else (),
          float(sys.argv[4]) if len(sys.argv) > 4 else 100.0)
     if warning:

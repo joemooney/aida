@@ -151,6 +151,25 @@ The train still runs its own CI on the combined result before it merges. The
 full run on each head removes the failures a single PR would cause by itself;
 the train's run catches the ones that appear only when PRs are combined.
 
+Before that run, the train regenerates the showcase search data
+(`docs/showcase/search-data.js`) and the store-writer inventory
+(`scripts/store-writers.toml`) at its tip when two or more of its PRs touch
+their inputs. Each generator runs from the base branch's copy, never a PR's:
+when a PR changes a generator, the train does not regenerate that file. It
+runs twice in an offline sandbox that sees only a scratch checkout of the tip
+and the system toolchain (no home directory), and the second run must change
+nothing. A changed output becomes one
+`[AI:aida-train] chore(train): regenerate generated files` commit after the
+last PR's commit. That commit changes only those files, records each file's
+hashes and command in its trailers and in the train PR's
+`aida-train-regenerated:` block, and completes no spec. In the inventory,
+existing rows must stay as reviewed and new rows must start `blocked`.
+When a check fails, or the protected-path configuration cannot be read, the
+train is left as built and its PR body gives the reason on an
+`aida-train-regeneration-refused:` line. Commits that land
+before the tip can carry stale generated files; only the tip is tested.
+<!-- trace:TASK-3963 | ai:claude -->
+
 ## Overriding the check
 
 ```bash

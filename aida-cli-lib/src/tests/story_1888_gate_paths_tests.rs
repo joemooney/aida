@@ -3522,6 +3522,8 @@ const GATE_KERNELS: &[&str] = &[
     "role_authority.rs",
     "seat_authority.rs",
     "solo_review.rs",
+    // trace:TASK-3963 | ai:claude
+    "train_generated.rs",
 ];
 
 /// Every `gate/*.rs` source, by file name.

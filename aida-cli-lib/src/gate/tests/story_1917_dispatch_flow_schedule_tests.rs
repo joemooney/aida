@@ -1101,6 +1101,8 @@ fn task_2344_q2_mid_execution_authority_revocation_aborts_before_merge_and_rearm
                     })
                     .collect(),
                 dropped: vec![],
+                regen: None,
+                regen_refused: None,
             })
         }
         fn gate(&mut self, pr: u64) -> std::result::Result<crate::pr_train::Member, String> {
@@ -1771,6 +1773,8 @@ impl crate::pr_train::TrainForge for NativePorts<'_> {
                 })
                 .collect(),
             dropped: vec![],
+            regen: None,
+            regen_refused: None,
         })
     }
     fn gate(&mut self, _pr: u64) -> std::result::Result<crate::pr_train::Member, String> {

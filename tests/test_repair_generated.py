@@ -558,5 +558,80 @@ class RepairGenerationTests(unittest.TestCase):
         self.assertFalse(driver.registered('.claude/commands/custom.local.md', '120000'))
 
 
+class TrainRegenerationTests(unittest.TestCase):
+    """The driver's train phase: deterministic, registered paths only, E2.
+    trace:TASK-3963 | ai:claude
+    """
+    ROW = '{ id = "a", disposition = "blocked", blocker = "b" }'
+    INVENTORY = 'version = 2\nwriter = [\n  %s,\n]\n'
+
+    def tip(self, root, store_body, build_body='Path("docs/showcase/search-data.js").write_text("data\\n")\n'):
+        def git(*args):
+            return subprocess.run(('git', *args), cwd=root, check=True, capture_output=True, text=True).stdout
+        git('init', '-q', '-b', 'main')
+        (root / 'docs/showcase').mkdir(parents=True)
+        (root / 'scripts').mkdir()
+        (root / 'docs/showcase/search-data.js').write_text('data\n')
+        (root / 'scripts/store-writers.toml').write_text(self.INVENTORY % self.ROW)
+        prelude = 'import sys, time\nfrom pathlib import Path\n'
+        (root / 'docs/showcase/build.py').write_text(prelude + build_body)
+        (root / 'scripts/check-store-writers.py').write_text(
+            prelude + 'assert sys.argv[1:3] == ["--regenerate", "--baseline"]\n' + store_body)
+        git('add', '.')
+        git('-c', 'user.name=T', '-c', 'user.email=t@e.invalid', 'commit', '-qm', 'tip')
+        return git('rev-parse', 'HEAD').strip()
+
+    def train(self, store_body='', names='["showcase-search", "store-writers"]', **kw):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = self.tip(root, store_body, **kw)
+            out = subprocess.run(('python3', str(DRIVER), base, 'train', names), cwd=root,
+                                 capture_output=True, text=True)
+            status = subprocess.run(('git', 'status', '--porcelain'), cwd=root,
+                                    capture_output=True, text=True).stdout
+            return out, status
+
+    def test_clean_tip_regeneration_is_a_no_op(self):
+        out, status = self.train()
+        self.assertEqual(out.returncode, 0, out.stderr)
+        report = __import__('json').loads(out.stdout)
+        self.assertEqual([e['name'] for e in report], ['showcase-search', 'store-writers'])
+        for output in (o for e in report for o in e['outputs']):
+            self.assertEqual(output['before'], output['after'])
+        self.assertEqual(status, '')
+
+    def test_each_failure_mode_refuses_and_rolls_back(self):
+        write = 'Path("scripts/store-writers.toml").write_text(%r)\n'
+        cases = {
+            'non-zero exit status': 'sys.exit(3)\n',
+            'unregistered outputs': 'Path("scripts/other.txt").write_text("x")\n',
+            'is not deterministic': 'Path("scripts/store-writers.toml").write_text("version = 2 # " + str(time.time_ns()))\n',
+            'changed reviewed store-writers row': write % (self.INVENTORY % self.ROW.replace('"b"', '"edited"')),
+            'non-blocked store-writers row': write % (self.INVENTORY % (self.ROW + ',\n  { id = "n", disposition = "s2_typed" }')),
+        }
+        for reason, body in cases.items():
+            with self.subTest(reason):
+                out, status = self.train(body)
+                self.assertNotEqual(out.returncode, 0)
+                self.assertIn(reason, out.stderr)
+                self.assertIn('rolled back', out.stderr)
+                self.assertEqual(status, '')
+                self.assertEqual(out.stdout, '')
+
+    def test_only_cheap_train_entries_may_run(self):
+        for names in ('["cli-help"]', '["templates"]', '[]', '["store-writers", "nope"]'):
+            out, _ = self.train(names=names)
+            self.assertIn('train regeneration refuses entries', out.stderr)
+
+    def test_new_blocked_rows_are_reported(self):
+        row = self.ROW + ',\n  { id = "n", disposition = "blocked" }'
+        out, status = self.train('Path("scripts/store-writers.toml").write_text(%r)\n' % (self.INVENTORY % row),
+                                 names='["store-writers"]')
+        self.assertEqual(out.returncode, 0, out.stderr)
+        [entry] = __import__('json').loads(out.stdout)
+        self.assertNotEqual(entry['outputs'][0]['before'], entry['outputs'][0]['after'])
+        self.assertEqual(status, ' M scripts/store-writers.toml\n')
+
+
 if __name__ == '__main__':
     unittest.main()
