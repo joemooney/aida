@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: efe42749706c6242f8d43f7d112fd8b05003df13
 
   base_patch_equivalents::patch_ids runs `git patch-id --stable` without `--verbatim`, so patch-ids ignore whitespace (and line numbers). A branch commit that differs from a main commit only in whitespace, which matters in Python, YAML or Makefiles, is treated as already on base. already_on_base then drops it from the squash body and from ship spec records, so its trailer spec misses the supervised gate and auto-completion while its real delta still lands. Trailers are self-declared, so this opens no new authority bypass, but `--stable --verbatim` would make 'already on base' exact. File: aida-cli-lib/src/base_patch_equivalents.rs:176-181.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T02:24:33.020652566Z
-modified_at: 2026-11-28T01:02:58.647288353Z
+modified_at: 2026-11-28T01:03:00.785269323Z
 req_type: Task
 tags:
 - carried-from:BUG-2733
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21fad-4cb1-7941-ba44-d47cc3adfbfd
+  author: joe
+  timestamp: 2026-11-28T01:03:00.785267476Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: efe42749706c6242f8d43f7d112fd8b05003df13
   branch: pr-4598
