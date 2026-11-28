@@ -8,12 +8,12 @@ description: |-
   - AC2: a test (shell or python) simulates a failed download and asserts a non-zero exit and the message.
 
   Source: docs/plans/2026-11-27-fresh-user-walkthrough.md (on branch task-3951-fresh-user-walkthrough / PR #4782), section F2. Advisor aida-d3 2026-11-27 20:30 priority order; filed by product-15 for laning now (one spec per lane).
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:30:00.472477642Z
-modified_at: 2026-11-28T05:26:49.271854438Z
+modified_at: 2026-11-28T07:04:20.876860763Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -101,6 +101,22 @@ history:
   author: joe
   timestamp: 2026-11-28T05:26:49.401458506Z
   changes: []
+- id: 01a220f8-1c45-76d2-a7ee-9ba40c3e921a
+  author: aida-auto-bump
+  timestamp: 2026-11-28T07:04:20.805117901Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a220f8-1c8c-7411-9412-0549ea90afb6
+  timestamp: 2026-11-28T07:04:20.876854770Z
+  agent: aida
+  commit_sha: 1569d70eb4212a7a4a3b72ba3ed74df36cb8b8aa
+  summary: 'TASK-3954 PASS. AC1 verified: scripts/install.sh keeps set -euo pipefail, wraps the body in main() invoked on the last line so a truncated script is a syntax error and runs nothing, uses curl -f (HTTP status) with explicit exit-status checks on both the GitLab latest lookup and the asset download, refuses empty downloads ([ -s ]) and truncated/non-archive payloads (tar tzf before extraction), and download_failed() prints the URL plus ''Nothing was installed'' and exits 1 before any install step. Documented commands in README/getting-started(.md/.html) switch from curl|bash to curl -fsSL -o install.sh && bash install.sh so a failed fetch never runs. AC2 verified: tests/test_install_download_failure.py (auto-run via scripts/discover-python-tests.py in CI gates) stubs curl and asserts non-zero exit, URL and message for curl failure, empty download, cut-off archive, saved error page, missing offline archive, the exact README command, and a cut-off installer script; plus a positive --archive offline install for both hosts. store-writers.toml rows correctly reclassified <script> -> main with the new cp sink; search-data.js regenerated. Adversarial pass: arg-shift positions in curl stubs, relative --archive path (no cd), set -u on REPO/target in download_failed, usage() line range unchanged — no defects. Stale base (1 commit behind): no finding depends on base changes; evidence diff touches only PR files. CI: most jobs green at head, gates and lib-0 pending at review time.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
@@ -113,3 +129,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-28T04:06:52.671643310Z
   implemented_by: dirtlab
+  completed_at: 2026-11-28T07:04:20.805110589Z
+  completion_sha: 1569d70eb4212a7a4a3b72ba3ed74df36cb8b8aa
