@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-27T20:46:00.970449684Z
-modified_at: 2026-11-27T20:46:00.970449684Z
+modified_at: 2026-11-28T00:40:27.164557101Z
 req_type: Task
 tags:
 - carried-from:BUG-2787
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a21e60-60a7-7e40-8794-3f57fe6d6d2a
   created_at: 2026-11-27T20:46:18.252407390Z
+comments:
+- id: 01a21f98-a51c-76c1-9c6d-dded51512cca
+  author: joe
+  content: 'MERGED into STORY-3238 (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Hint wording for autobuild skip is part of open PR #4758.'
+  created_at: 2026-11-28T00:40:27.164557101Z
+  modified_at: 2026-11-28T00:40:27.164557101Z
 history:
 - id: 01a21f4e-3c65-7562-9e03-c28407f0770b
   author: joe
