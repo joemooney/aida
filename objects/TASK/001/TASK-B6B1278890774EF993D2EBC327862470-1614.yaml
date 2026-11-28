@@ -12,12 +12,32 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T03:31:21.556365075Z
-modified_at: 2026-11-28T04:25:40.341531263Z
+modified_at: 2026-11-28T04:31:05.228055652Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a22014-1672-7093-9f8f-09bbbefcbf09
   created_at: 2026-11-28T03:31:33.485151410Z
+comments:
+- id: 01a2206b-cc0c-7141-bf5b-0aa9d1b4e745
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit, aida-cli-lib):** init's loop stops hard-coding `TASK-1`; it asks the new store for the ID `aida add` would issue next (no-write `GitBackend::peek_spec_id`, the dry-run predictor doctor already uses) and prints that exact ID in every loop line. Test `first_task_example_matches_the_id_add_issues` inits a fresh store, renders the example, then mints a task through the same backend and asserts equality (case-insensitive), and asserts the rendered loop lines contain it and never `TASK-1`. Fallback when the store cannot be read: a neutral `<ID>` placeholder, never a fake short ID.
+
+    ### Expected files
+    - `aida-cli-lib/src/init_cmd.rs` (loop rendering + helper)
+    - new test module under `aida-cli-lib/src/tests/`
+    - `docs/first-project.md` (one note: real IDs on a local-only clone carry a long machine part)
+
+    ### Ambiguities / conflicts as questions
+    - Making `aida add` issue short IDs for local-only clones is an ID-allocation architecture change; I take the other AC branch (text matches real format). F7's advisor line is out of scope.
+  created_at: 2026-11-28T04:31:05.228055652Z
+  modified_at: 2026-11-28T04:31:05.228055652Z
+  session_id: 01a220669ee1
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a22035-56ee-7993-bddb-154d028cfb66
   author: joe
