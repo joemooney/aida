@@ -1115,6 +1115,16 @@ sites = 1
 channels = ["home", "write"]
 sites = 2
 
+# BUG-2783: names the OPERATOR's own codex config ($CODEX_HOME or ~/.codex,
+# user-owned) as a read-only bubblewrap bind source for the confined review
+# runner; AIDA never reads it, and a source resolving inside the checkout is
+# refused (launch/review_runner.rs
+# bug2783_confined_auth_source_never_lies_inside_the_checkout).
+# trace:BUG-2783 | ai:claude
+[readers."aida-cli-lib/src/vendors/review_runner.rs"]
+channels = ["other-file"]
+sites = 1
+
 [readers."aida-cli-lib/src/vendors/host_diagnostics.rs"]
 channels = ["home"]
 sites = 2

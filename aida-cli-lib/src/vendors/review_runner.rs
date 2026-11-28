@@ -27,11 +27,35 @@ pub(crate) struct ReviewVendor {
     /// never the automatic challenger and refuses `--post-comment`.
     // trace:STORY-3202 | ai:claude
     pub confinement_verified: bool,
-    /// Verified unable to read files beyond the prompt. Only such a vendor may
-    /// publish a PR comment: a prompt-injected diff could otherwise make it
-    /// quote a local secret.
+    /// Verified unable to read the user's files beyond the prompt. NOT "safe to
+    /// publish": a confined codex or agy still reads its own auth token, so
+    /// the publish gate is `RunnerCall::may_post` (this AND `post_allowed`).
     // trace:BUG-2783 | ai:claude
     pub no_read: bool,
+    /// Run inside bubblewrap with an empty HOME holding only these auth files:
+    /// the vendor's own tools can then read nothing else of the user's.
+    // trace:BUG-2783 | ai:claude
+    pub confined_auth: Option<ConfinedAuth>,
+    /// May publish a PR comment. A confined runner can still read its own auth
+    /// token, so only claude (no tools at all) posts until output redaction.
+    // trace:BUG-2783 | ai:claude
+    pub post_allowed: bool,
+}
+
+/// Where a confined vendor's own auth and config live: `dir` under HOME, or
+/// the directory `dir_env` names. Only `files` in it are bound, read-only, at
+/// `$HOME/<dir>/<file>`; an absent file is skipped.
+///
+/// | vendor | dir (or env)                   | files                                 |
+/// |--------|--------------------------------|---------------------------------------|
+/// | codex  | `.codex` (`CODEX_HOME`)        | `auth.json`, `config.toml`            |
+/// | agy    | `.gemini/antigravity-cli`      | `antigravity-oauth-token`, `settings.json` |
+// trace:BUG-2783 | ai:claude
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ConfinedAuth {
+    pub dir: &'static str,
+    pub dir_env: Option<&'static str>,
+    pub files: &'static [&'static str],
 }
 
 /// A review runner that exited because it is not signed in for headless use.
@@ -40,7 +64,17 @@ pub(crate) struct ReviewVendor {
 pub(crate) struct AuthRequired {
     pub vendor: &'static str,
     pub stderr: String,
+    /// The run was bubblewrap-confined, so its auth file was read-only.
+    // trace:BUG-2783 | ai:claude
+    pub confined: bool,
 }
+
+/// Why a confined run's auth can fail where an unconfined one would not: the
+/// vendor's own token refresh cannot rewrite its read-only auth bind.
+// trace:BUG-2783 | ai:claude
+pub(crate) const CONFINED_AUTH_HINT: &str = "inside the review confinement its auth file is \
+     read-only, and a token refresh needs a writable auth file; run the vendor CLI once \
+     outside AIDA to refresh";
 
 impl std::fmt::Display for AuthRequired {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -49,7 +83,11 @@ impl std::fmt::Display for AuthRequired {
             "{} is not signed in for non-interactive use; `aida doctor --lane-host` names \
              the fix (stderr: {})",
             self.vendor, self.stderr
-        )
+        )?;
+        if self.confined {
+            write!(f, "; {}: {CONFINED_AUTH_HINT}", self.vendor)?;
+        }
+        Ok(())
     }
 }
 
@@ -115,6 +153,8 @@ const CLAUDE: ReviewVendor = ReviewVendor {
     confinement_verified: true,
     // `--tools ""` leaves the session with no file-read tool at all.
     no_read: true,
+    confined_auth: None,
+    post_allowed: true,
 };
 
 /// Codex: read-only sandbox, no session file; `-` reads the prompt from stdin.
@@ -132,11 +172,25 @@ const CODEX: ReviewVendor = ReviewVendor {
     efforts: &["low", "medium", "high", "xhigh"],
     effort_as_config: true,
     print_timeout: None,
-    auth_failure: &[],
+    // A rejected or unrefreshable token: inside bubblewrap its auth.json is a
+    // read-only bind, so a refresh that must rewrite it fails. trace:BUG-2783 | ai:claude
+    auth_failure: &[
+        "could not be refreshed",
+        "refresh token",
+        "401 unauthorized",
+        "not logged in",
+    ],
     // Tool use is confined; its whole-disk read scope is BUG-2783's.
     confinement_verified: true,
-    // `--sandbox=read-only` still reads any file the user can.
-    no_read: false,
+    // `--sandbox=read-only` reads anything visible, so the runner sees only
+    // the bubblewrap view: system dirs, TLS/DNS files and its own auth.
+    no_read: true,
+    confined_auth: Some(ConfinedAuth {
+        dir: ".codex",
+        dir_env: Some("CODEX_HOME"),
+        files: &["auth.json", "config.toml"],
+    }),
+    post_allowed: false,
 };
 
 /// Antigravity: print mode with the empty `--print=` value, so the prompt is
@@ -168,8 +222,14 @@ pub(crate) const AGY: ReviewVendor = ReviewVendor {
         "not logged into antigravity",
     ],
     confinement_verified: false,
-    // Its read deny is unverified, and reads were seen allowed anywhere.
-    no_read: false,
+    // Reads were seen allowed anywhere, so it runs in the bubblewrap view.
+    no_read: true,
+    confined_auth: Some(ConfinedAuth {
+        dir: ".gemini/antigravity-cli",
+        dir_env: None,
+        files: &["antigravity-oauth-token", "settings.json"],
+    }),
+    post_allowed: false,
 };
 
 /// agy's session-only settings: deny every permission rule kind it names
@@ -180,10 +240,12 @@ const AGY_DENY_ALL_SETTINGS: &str = concat!(
     r#""execute_url(*)","download_url(*)"]}}"#
 );
 
-/// `agy models` for the lane-host auth probe: needs sign-in, sends no prompt.
+/// `agy models` for the lane-host auth probe: needs sign-in, sends no prompt,
+/// so it carries no untrusted input to confine.
 pub(crate) const AGY_AUTH_PROBE: ReviewVendor = ReviewVendor {
     argv: &["models"],
     print_timeout: None,
+    confined_auth: None,
     ..AGY
 };
 
