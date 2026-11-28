@@ -17,12 +17,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 4783` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-28T03:17:32.595872663Z
-modified_at: 2026-11-28T03:17:37.015141753Z
+modified_at: 2026-11-28T12:51:04.048691819Z
 req_type: Story
 relationships:
 - rel_type:
@@ -30,6 +30,12 @@ relationships:
   target_id: 01a21f7a-5390-7213-be48-1a18a4be7589
   created_at: 2026-11-28T03:17:37.015095408Z
   created_by: dirtlab
+comments:
+- id: 01a22235-a662-7e63-b78f-8141f3b41c47
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #4783 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-11-28T12:51:11.074628270Z
+  modified_at: 2026-11-28T12:51:11.074628270Z
 history:
 - id: 01a22028-913a-73a1-a645-534c6a675727
   author: dirtlab
@@ -41,6 +47,13 @@ history:
   author: joe
   timestamp: 2026-11-28T04:43:25.083075378Z
   changes: []
+- id: 01a22235-a662-7e63-b78f-815504b5f3d2
+  author: aida-auto-bump
+  timestamp: 2026-11-28T12:51:11.074633639Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: 3ec0cbc920ef1ded84799704064ae102e2f45329
   branch: task-3937-ratchet-only-set
@@ -50,3 +63,6 @@ filed_at:
   vendor: claude
   session: 01a2200f86b5
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-28T12:51:11.074625507Z
