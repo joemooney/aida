@@ -11,12 +11,12 @@ description: |-
   - AC3: the advisor's 01:16 requirements hold: deterministic regeneration (run twice → identical bytes), only registered paths may change, and the PR's own non-generated diff is re-verified unchanged (patch-id over non-generated paths).
   - AC4: tests: regeneration on a clean tree is a no-op; each section-4 failure mode refuses.
   - Touches gate/: needs a human merge.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T08:29:38.066956Z
-modified_at: 2026-11-28T11:41:39.356492055Z
+modified_at: 2026-11-28T11:44:12.654892482Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -212,6 +212,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a221f8-556e-7652-af07-28f68bad05c3
+  author: aida-session-start
+  timestamp: 2026-11-28T11:44:12.654890994Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6d3ca942ec2e4a042f45c48bc90773576e06ffdc
   branch: main
