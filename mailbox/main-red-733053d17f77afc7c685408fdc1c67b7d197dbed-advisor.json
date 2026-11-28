@@ -1,0 +1,18 @@
+{
+  "id": "main-red-733053d17f77afc7c685408fdc1c67b7d197dbed-advisor",
+  "thread_id": "main-red-733053d17f77afc7c685408fdc1c67b7d197dbed",
+  "from": "red-main-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795866084116,
+  "body": "Main is red at 733053d17f77afc7c685408fdc1c67b7d197dbed ([AI:claude] chore(integration): aida init reports the agent and forge-host allowlists it would set [promotion 56] (Refs STORY-2838) (#4790)).\nPR: #4790\nSpecs: STORY-2838\nFailing:\n- Build (ubuntu-latest) (https://github.com/joemooney/aida/actions/runs/46135984709/job/140962109920)\n  failed steps: Require every CI lane\n  | (the job log could not be read yet: `/usr/bin/gh api repos/{owner}/{repo}/actions/jobs/140962109920/logs` failed (exit status: 1))\nThe live binary stays on the last green commit, eb18c450c68d.\n\nIf the red survives an independent re-run or 30 minutes it is confirmed. Merging continues meanwhile.",
+  "subject": "main is red at 733053d17f77: Build (ubuntu-latest)",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
