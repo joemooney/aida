@@ -48,12 +48,12 @@ description: |-
   - [ ] `aida init --agent codex` does not create `.claude/settings.json` and documents/configures `[contained.vendors] codex = "native"` when contained posture is chosen.
   - [ ] `aida init` on a brand-new repo (no `origin` remote yet) detects custom forge hosts from `GH_HOST` / `GITLAB_HOST`, `git config` `insteadOf`, or `~/.config/gh/hosts.yml` / `~/.config/glab-cli/config.yml` and includes them in `[contained] allowed_hosts` (and `.claude/settings.json` when Claude is enabled).
   - [ ] `aida scaffold upgrade` and `aida scaffold refresh` additively merge missing `[contained] allowed_hosts` into `.claude/settings.json`'s `sandbox.network.allowedDomains` without clobbering existing user domains.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T03:41:07.856444Z
-modified_at: 2026-11-28T09:38:28.204168458Z
+modified_at: 2026-11-28T09:39:10.920878522Z
 req_type: Story
 tags:
 - containment
@@ -229,6 +229,11 @@ comments:
   modified_at: 2026-11-28T09:38:28.330524053Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a22185-ddc8-71b0-98fc-17f2782fe91b
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Advisor FIX-FIRST at 0c402489: the reviewer''s draft approved with 5 deferrals, but two of them harm users (settings data loss on a read error; a 0600→0644 permission widening) and must be fixed before init --write ships. The other three (shape errors caught mid-apply, the ENOENT retry delay, the interactive-prompt test gap) stay deferred.. No triage reason was given.'
+  created_at: 2026-11-28T09:39:10.920874735Z
+  modified_at: 2026-11-28T09:39:10.920874735Z
 history:
 - id: 01a1e0f7-c069-77f2-b73d-5d3a4f0f8d52
   author: joe
@@ -281,6 +286,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a22185-ddc8-71b0-98fc-17ed4677f194
+  author: joe
+  timestamp: 2026-11-28T09:39:10.920847364Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: e351be429570bde045d975f8a19c733d65360ded
   branch: main
@@ -288,11 +300,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: e351be42957
   vendor: antigravity
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Advisor FIX-FIRST at 0c402489: the reviewer''s draft approved with 5 deferrals, but two of them harm users (settings data loss on a read error; a 0600→0644 permission widening) and must be fixed before init --write ships. The other three (shape errors caught mid-apply, the ENOENT retry delay, the interactive-prompt test gap) stay deferred.'
-  recovery_hint: address the review findings, move STORY-2838 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-28T09:38:28.204168458Z
