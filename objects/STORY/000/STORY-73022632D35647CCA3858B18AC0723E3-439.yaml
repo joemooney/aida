@@ -1,5 +1,6 @@
 id: 01a220ff-061e-77d1-925b-3e31c9c981ce
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-439
+agreed_id: STORY-3268
 title: 'Review PR-4803: [AI:claude] feat(landing): the auto-train lands supervised PRs covered by an active mandate, rechecked before merge [slice 2] (Refs STORY-3181)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a220da`) for branch `story-3181-s2-mandate-cover`.
@@ -35,6 +36,10 @@ history:
 - id: 01a220ff-38ca-79e3-a05e-577f2467d8c2
   author: dirtlab
   timestamp: 2026-11-28T07:12:06.858396691Z
+  changes: []
+- id: 01a2212a-8764-7ab2-aa74-7b22f6c7cc77
+  author: joe
+  timestamp: 2026-11-28T07:59:25.028027935Z
   changes: []
 filed_at:
   code_sha: 4b06a37b464472f759637aecf25042f98a4e33c2

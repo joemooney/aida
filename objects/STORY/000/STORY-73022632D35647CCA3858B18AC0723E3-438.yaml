@@ -1,5 +1,6 @@
 id: 01a220f7-78a3-7df3-930d-117f37451086
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-438
+agreed_id: STORY-3267
 title: 'Review PR-4802: [AI:claude] test(contracts): temp-project teardown no longer races the cache-refresh worker (TASK-3962)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a220db`) for branch `task-3962-contract-teardown-race`.
@@ -39,6 +40,10 @@ history:
   timestamp: 2026-11-28T07:12:29.179962843Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+  changes: []
+- id: 01a2212a-868e-71e1-977d-d70737a8fa04
+  author: joe
+  timestamp: 2026-11-28T07:59:24.814134534Z
   changes: []
 filed_at:
   code_sha: 4b06a37b464472f759637aecf25042f98a4e33c2
