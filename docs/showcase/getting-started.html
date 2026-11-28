@@ -58,18 +58,41 @@ aida init</code></pre>
 <p>The full footprint scaffolds project guidance and agent skills for selected profiles; <code>--agent</code> chooses profiles explicitly. The CLI is the default tool surface for agents with shell access. MCP registration is opt-in with <code>--with-mcp</code>; <code>aida mcp-serve</code> provides the stdio server for MCP clients. Check the <a href="../agents/aida-mcp-install-matrix.md">client setup matrix</a> for your harness. Agent permissions, project policy and review authority still need deliberate configuration.</p>
 <p><code>aida init</code> also installs Git commit hooks. By default they do not refuse a commit because of its message. If a commit subject does not follow the <code>type(scope): summary (TASK-12)</code> style AIDA uses to link commits to specs, the hook prints one <code>hint:</code> line. To skip the hooks, run <code>aida init --no-hooks</code>.</p>
 <p>Operators can follow the <a href="setup.html">supported setup and storage guide</a>.</p>
-<p>Before creating specs in a fresh clone of an <a href="../../README.md#cloning-an-existing-aida-project">existing AIDA project</a>, run <code>aida init</code> (or <code>aida node acquire</code>) in the clone to establish its local identity. Follow the project&#x27;s onboarding guidance and preserve existing adoption/configuration choices. Operators can consult the <a href="../cli/07-project-setup.md">setup reference</a> and <a href="../cli/10-storage.md">storage reference</a>. The <a href="../first-project.md">first-project walkthrough</a> is a detailed command-oriented exercise for operators and agents; ordinary users can start with the conversational journey below.</p>
-<h2 id="3-start-with-a-conversation">3. Start with a conversation</h2>
+<p>Before creating specs in a fresh clone of an <a href="../../README.md#cloning-an-existing-aida-project">existing AIDA project</a>, run <code>aida init</code> (or <code>aida node acquire</code>) in the clone to establish its local identity. Follow the project&#x27;s onboarding guidance and preserve existing adoption/configuration choices. Operators can consult the <a href="../cli/07-project-setup.md">setup reference</a> and <a href="../cli/10-storage.md">storage reference</a>. The <a href="../first-project.md">first-project walkthrough</a> is a detailed command-oriented exercise for operators and agents; ordinary users can start with the steps below.</p>
+<h2 id="3-record-your-first-spec">3. Record your first spec</h2>
+<p>     tests/test_getting_started_commands.py. Keep them working as written. --&gt;</p>
+<p>A spec records one piece of intended behaviour and how you will know it is done. Your agent normally writes specs for you, but you can add one yourself:</p>
+<pre><code>aida add &quot;Greet by name with a configurable greeting&quot; --description &quot;## Acceptance
+- greet() takes an optional greeting and defaults to Hello&quot;
+aida list</code></pre>
+<p><code>aida add</code> prints <code>Added: &lt;ID&gt; - &lt;title&gt;</code>. Copy that ID: a new project with no shared remote yet issues long IDs such as <code>TASK-905719A8BC5840788657098B0B860D11-001</code>. Then read the spec back:</p>
+<pre><code>aida show &lt;ID&gt;</code></pre>
+<p>Replace <code>&lt;ID&gt;</code> with the ID that <code>aida add</code> printed. The <code>## Acceptance</code> section is what a review checks against.</p>
+<h2 id="4-prepare-your-first-review">4. Prepare your first review</h2>
+<p>Make a small change on a branch and commit it. For example, after editing a tracked file (run <code>git add</code> first for a new file):</p>
+<pre><code>git switch -c greeting
+git commit -am &quot;feat: configurable greeting&quot;
+aida review prepare --from main --specs &lt;ID&gt;</code></pre>
+<p><code>aida review prepare</code> runs locally and sends nothing to an agent. It prints a report:</p>
+<ul>
+<li><strong>Mode</strong>: <code>range</code> when you pass <code>--from main</code> (the commits on your branch; use your default branch&#x27;s name if it is not <code>main</code>). Without <code>--from</code>, it reviews your uncommitted changes instead.</li>
+<li><strong>Linked AIDA Requirement Acceptance Criteria</strong>: the acceptance criteria of the specs you named with <code>--specs</code>.</li>
+<li><strong>Reviewable File Inventory</strong>: every changed file. A review must account for each one.</li>
+<li><strong>Token-Budgeted Semantic Review Batches</strong>: the files grouped into pieces small enough for one reviewer pass.</li>
+<li><strong>Active Path-Scoped Review Playbooks</strong>: the checklist that applies to each kind of file, such as Python or general code.</li>
+</ul>
+<p>To have an agent review the batches, add <code>--run-review</code>: <code>aida review prepare --run-review --from main</code>. It uses Claude Code by default (<code>--agent codex</code> selects the Codex CLI), so that agent&#x27;s CLI must be installed, on your <code>PATH</code> and signed in.</p>
+<h2 id="5-start-with-a-conversation">5. Start with a conversation</h2>
 <p>Tell your AIDA-aware agent what you want to build. For example:</p>
 <blockquote><p>Add a way to export invoices. Before implementing it, record the agreed behavior and acceptance criteria in AIDA. Ask me about choices that affect customers.</p></blockquote>
 <p>You remain the developer. Explore alternatives, change your mind and review the result in your usual editor and pull-request workflow. The agent uses AIDA commands to read existing intent, capture agreed requirements, record decisions and connect changes to the relevant specs. You do not need to memorize requirement-mutation commands to begin.</p>
-<h2 id="4-make-the-record-part-of-the-work">4. Make the record part of the work</h2>
+<h2 id="6-make-the-record-part-of-the-work">6. Make the record part of the work</h2>
 <p>Ask the agent to show what it recorded before implementation. Correct missing constraints or misunderstood intent. As implementation reveals new facts, ask it to update the record and explain material changes.</p>
 <p>At a stopping point, ask: &quot;What intent did we capture, what did we implement, and what is still unresolved?&quot; The capture skill can help an agent sweep the conversation for missed requirements. Capture depends on the configured agent following the project guidance and invoking the tools; AIDA does not automatically record every utterance or observe work outside those tools.</p>
-<h2 id="5-return-with-context">5. Return with context</h2>
+<h2 id="7-return-with-context">7. Return with context</h2>
 <p>Later, ask the agent to find the requirement or decision behind a behavior before changing it. Specs, comments, relationships and code traces provide starting points for maintenance and enhancement. A colleague can use the same project record to understand the agreed behavior and contribute a change.</p>
 <p>The record needs care: check that acceptance criteria match the intended outcome and that the implementation and links remain current. Unrecorded decisions cannot be recovered from the store by assumption.</p>
-<h2 id="6-choose-what-to-delegate">6. Choose what to delegate</h2>
+<h2 id="8-choose-what-to-delegate">8. Choose what to delegate</h2>
 <p>You can work conversationally throughout. Autonomous delivery is an option for suitable authorized work, not a prerequisite for onboarding. People can develop, review and collaborate while agents handle tracking and selected implementation steps. Execution mode and authority are separate: selecting a mode does not grant permission to approve or merge.</p>
 <p>Read the <a href="../what-is-aida.html">AIDA overview</a> for selectable autonomy and current limitations. AIDA is alpha software and supports Linux only.</p>
 <h2 id="uninstall">Uninstall</h2>

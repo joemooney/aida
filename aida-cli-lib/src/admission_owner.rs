@@ -554,15 +554,26 @@ pub(crate) fn manual_train_admission(
     })
 }
 
-/// The process that launched this manual train (the operator's retry loop or
-/// shell). The train itself exits when it gives up, so its waiter lives as
-/// long as whoever retries it. None when unknown or orphaned (TTL only).
-// trace:TASK-3924 | ai:claude
+/// The process that retries this manual train; its waiter lives as long as
+/// it does. The train itself exits when it gives up, so it cannot be its own
+/// owner. Inside an agent session the retrier is the agent client (each of
+/// its shell calls is a fresh, short-lived parent that would release the
+/// waiter at once); otherwise it is the parent (the operator's retry loop or
+/// shell). None when unknown or orphaned (TTL only).
+// trace:TASK-3924 trace:TASK-3541 | ai:claude
 fn retrier() -> Option<ProcIdentity> {
-    let parent = unsafe { libc::getppid() } as u32;
-    (parent > 1)
-        .then(|| ProcIdentity::capture(parent).ok())
-        .flatten()
+    let agent = crate::agent_registry::session_start_agent_pid(
+        std::process::id(),
+        &crate::agent_registry::detect_agent_type(),
+    );
+    retrier_identity(unsafe { libc::getppid() } as u32, agent)
+}
+
+/// [`retrier`] over a known parent and agent-client ancestor: the agent
+/// client when there is one, else the parent. trace:TASK-3541 | ai:claude
+fn retrier_identity(parent: u32, agent: Option<u32>) -> Option<ProcIdentity> {
+    let pid = agent.unwrap_or(parent);
+    (pid > 1).then(|| ProcIdentity::capture(pid).ok()).flatten()
 }
 
 /// A manual train's admission in FIFO order among waiting manual trains: one
@@ -2570,6 +2581,71 @@ mod tests {
         assert!(
             manual_waiters(root).is_empty(),
             "a recycled pid releases its waiter"
+        );
+        assert_eq!(yield_reason(root, "legacy auto-train"), None);
+    }
+
+    /// A train in a fake tree `train -> shell -> client`, where `shell` is a
+    /// live short-lived child and `client` is this test process with `cmd`
+    /// as its command line; returns the shell and the retrier it resolves.
+    fn train_under(cmd: &'static str) -> (std::process::Child, Option<ProcIdentity>) {
+        let shell = std::process::Command::new("sleep")
+            .arg("60")
+            .spawn()
+            .unwrap();
+        let (train, shell_pid, me) = (u32::MAX - 1, shell.id(), std::process::id());
+        let agent = crate::agent_registry::session_start_agent_pid_in(
+            train,
+            "claude",
+            |pid| {
+                (pid == train)
+                    .then_some(shell_pid)
+                    .or((pid == shell_pid).then_some(me))
+            },
+            |pid| match pid {
+                p if p == shell_pid => Some("bash -c claude-code: aida pr train 1".into()),
+                p if p == me => Some(cmd.into()),
+                _ => None,
+            },
+        );
+        (shell, retrier_identity(shell_pid, agent))
+    }
+
+    /// TASK-3541: inside an agent session the waiter belongs to the agent
+    /// client, so the exit of the one-off shell that ran the train does not
+    /// release it and the auto-train still yields to the retry.
+    // trace:TASK-3541 | ai:claude
+    #[test]
+    fn task3541_agent_session_waiter_outlives_its_short_lived_shell() {
+        let temp = zero_wait_train_fixture();
+        let root = temp.path();
+        let (mut shell, owner) = train_under("/usr/local/bin/claude --resume");
+        assert_eq!(owner, ProcIdentity::capture(std::process::id()).ok());
+        assert!(queued_train_admission(root, &[3541], owner, busy).is_err());
+        shell.kill().unwrap();
+        shell.wait().unwrap();
+        let order: Vec<_> = waiter_rows(root).into_iter().map(|r| r.1).collect();
+        assert_eq!(order, [vec![3541]], "the shell's exit keeps the waiter");
+        let reason = yield_reason(root, "legacy auto-train").expect("yielded to");
+        assert!(reason.starts_with("operator train for #3541 "), "{reason}");
+    }
+
+    /// TASK-3541: with no agent client above it (a `-c` shell that merely
+    /// mentions one does not count) the parent owns the waiter, and its exit
+    /// releases it. trace:TASK-3541 | ai:claude
+    #[test]
+    fn task3541_without_an_agent_session_the_parent_owns_the_waiter() {
+        let temp = zero_wait_train_fixture();
+        let root = temp.path();
+        let (mut shell, owner) = train_under("/bin/bash -l");
+        assert_eq!(owner, ProcIdentity::capture(shell.id()).ok());
+        assert!(queued_train_admission(root, &[3541], owner, busy).is_err());
+        assert_eq!(waiter_rows(root).len(), 1, "queued while the parent lives");
+        shell.kill().unwrap();
+        shell.wait().unwrap();
+        assert!(
+            manual_waiters(root).is_empty(),
+            "the parent's exit releases it"
         );
         assert_eq!(yield_reason(root, "legacy auto-train"), None);
     }
