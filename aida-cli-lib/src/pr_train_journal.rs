@@ -404,6 +404,133 @@ pub(super) fn run_history(dir: &Path) -> Vec<u64> {
         .collect()
 }
 
+/// A recovery waiting on its train's CI outside every lock: what its
+/// re-admitted pass re-validates. It withholds train admission from others
+/// and never grants anything. No `.json`/`.step` extension, so journal
+/// readers and older binaries ignore it. trace:TASK-3920 | ai:claude
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct Parked {
+    pub(crate) version: u32,
+    pub(crate) token: String,
+    pub(crate) branch: String,
+    pub(crate) change_id: Option<u64>,
+    pub(crate) step: String,
+    pub(crate) tip: String,
+    pub(crate) expected_main: String,
+    pub(crate) member_heads: Vec<(u64, String)>,
+    pub(crate) owner: aida_core::proc_identity::ProcIdentity,
+    /// When the parking pass took admission: its fairness position.
+    pub(crate) position: Time,
+    pub(crate) parked_at: Time,
+    pub(crate) deadline: Time,
+    pub(crate) expires_at: Time,
+}
+type Time = chrono::DateTime<chrono::Utc>;
+const PARKED: &str = "recovery.parked";
+/// The longest wait, the longest re-acquire grace, and the intent slack.
+const PARK_MAX_LIFETIME: i64 = 3600 + 3600 + 30;
+
+impl Parked {
+    /// Q1 (advisor): a ticketed resume matches by branch, tip and member
+    /// heads, only while the car set is exactly the parked one.
+    #[cfg_attr(not(test), allow(dead_code))] // the resume (slice 2) calls it
+    pub(super) fn matches(&self, entry: &Entry) -> bool {
+        let mut cars: Vec<_> = (entry.train.cars.iter())
+            .map(|c| (c.member.pr, c.member.head.clone()))
+            .collect();
+        let mut parked = self.member_heads.clone();
+        cars.sort();
+        parked.sort();
+        entry.branch == self.branch
+            && entry.train.tip == self.tip
+            && !cars.is_empty()
+            && cars == parked
+    }
+
+    pub(crate) fn describe(&self) -> String {
+        let at = |t: &Time| t.with_timezone(&chrono::Local).format("%H:%M").to_string();
+        let train = self
+            .change_id
+            .map_or(self.branch.clone(), |id| format!("PR #{id}"));
+        format!(
+            "auto-train recovery of train {train} parked since {} waiting on CI (position {}, expires {}; holds no lock)",
+            at(&self.parked_at), at(&self.position), at(&self.expires_at)
+        )
+    }
+}
+
+/// The parked recovery in effect at `now`: unexpired, its owner not dead,
+/// and no more than the lifetime left. With `prune` (under the admission
+/// serializer) an expired or dead owner's record is removed, an unparsable
+/// one after 30 s. trace:TASK-3920 | ai:claude
+pub(super) fn parked(dir: &Path, now: Time, prune: bool) -> Result<Option<Parked>> {
+    let path = dir.join(PARKED);
+    let body = match aida_core::seat_clone_detect::read_regular_file_result_with_limit(&path, 16384)
+    {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        body => body.context("the parked recovery record is unreadable")?,
+    };
+    let row = serde_json::from_str::<Parked>(&body).ok();
+    let stale = row.as_ref().map_or_else(
+        || {
+            let modified = std::fs::metadata(&path).and_then(|meta| meta.modified());
+            modified.is_ok_and(|at| at.elapsed().is_ok_and(|age| age.as_secs() >= 30))
+        },
+        |row| {
+            let dead = aida_core::proc_identity::observe(&row.owner, true);
+            row.expires_at <= now || matches!(dead, aida_core::proc_identity::Verdict::Dead(_))
+        },
+    );
+    if stale && prune {
+        match std::fs::remove_file(&path) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error)?,
+            _ => {}
+        }
+    }
+    let max = chrono::Duration::seconds(PARK_MAX_LIFETIME);
+    Ok(row.filter(|row| {
+        row.version == 1
+            && !stale
+            && row.expires_at.signed_duration_since(now) <= max
+            && row.expires_at.signed_duration_since(row.parked_at) <= max
+    }))
+}
+
+/// Persist durably (temporary file, fsync, rename, directory fsync), or
+/// with `None` remove the record only while it carries `token`; whether it
+/// changed anything. Callers hold the admission serializer.
+// trace:TASK-3920 | ai:claude
+#[cfg_attr(not(test), allow(dead_code))] // the park point (slice 2) calls it
+pub(super) fn park(dir: &Path, record: Option<&Parked>, token: &str) -> Result<bool> {
+    let path = dir.join(PARKED);
+    let Some(record) = record else {
+        let body = aida_core::seat_clone_detect::read_regular_file(&path).unwrap_or_default();
+        if serde_json::from_str::<Parked>(&body).is_ok_and(|r| r.token == token) {
+            std::fs::remove_file(&path)?;
+            File::open(dir)?.sync_all()?;
+            return Ok(true);
+        }
+        return Ok(false);
+    };
+    std::fs::create_dir_all(dir)?;
+    let temporary = dir.join(format!(".{}.tmp", uuid::Uuid::new_v4()));
+    let result = (|| -> Result<()> {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)?;
+        file.write_all(&serde_json::to_vec_pretty(record)?)?;
+        file.sync_all()?;
+        std::fs::rename(&temporary, &path)?;
+        Ok(File::open(dir)?.sync_all()?)
+    })();
+    let _ = std::fs::remove_file(temporary);
+    result
+        .context("could not persist the parked recovery record")
+        .map(|()| true)
+}
+
 impl ForgeRails<'_> {
     pub(super) fn with_journal(mut self, dir: &Path) -> Self {
         self.journal_dir = Some(dir.to_path_buf());
@@ -726,5 +853,54 @@ mod run_lock_tests {
             assert!(!path.exists());
             drop(retained);
         }
+    }
+}
+
+#[cfg(test)]
+mod task3920_parked_tests {
+    use super::*;
+
+    /// Q1: a parked record matches its entry only with the exact car set and
+    /// heads; it is read by no journal reader and removed only by its token.
+    // trace:TASK-3920 | ai:claude
+    #[test]
+    fn task3920_parked_matches_exact_cars_and_unparks_by_token() {
+        let entry = |prs: &[u64]| {
+            let cars = prs.iter().map(|pr| Car {
+                member: Member {
+                    pr: *pr,
+                    head: format!("{pr:040}"),
+                    ..Default::default()
+                },
+                commit: String::new(),
+                patch_id: String::new(),
+            });
+            let (base, tip, dropped) = ("b".repeat(40), "c".repeat(40), Vec::new());
+            Entry::new(
+                Built {
+                    base,
+                    tip,
+                    cars: cars.collect(),
+                    dropped,
+                },
+                "train/abc-1".into(),
+            )
+        };
+        let me = aida_core::proc_identity::ProcIdentity::capture(std::process::id()).unwrap();
+        let (parked, now) = (test_parked(me, 0, 60), chrono::Utc::now());
+        assert!(parked.matches(&entry(&[12, 11])));
+        assert!(!parked.matches(&entry(&[11])), "a member removed");
+        assert!(!parked.matches(&entry(&[11, 12, 13])), "a member added");
+        let mut moved = entry(&[11, 12]);
+        moved.train.cars[0].member.head = "f".repeat(40);
+        assert!(!parked.matches(&moved), "a member head moved");
+        let temp = tempfile::tempdir().unwrap();
+        let dir = temp.path();
+        assert!(park(dir, Some(&parked), "").unwrap());
+        assert_eq!(super::parked(dir, now, true).unwrap(), Some(parked.clone()));
+        assert!(!recovery_needed(dir).unwrap() && entries(dir).unwrap().is_empty());
+        assert!(!park(dir, None, "another token").unwrap());
+        assert!(park(dir, None, &parked.token).unwrap());
+        assert_eq!(super::parked(dir, now, true).unwrap(), None);
     }
 }

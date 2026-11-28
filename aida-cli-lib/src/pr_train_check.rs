@@ -340,6 +340,13 @@ fn check_report(
         "{}",
         render_check(base.as_deref(), &rows, &waiters, opts.json)?
     );
+    // A recovery parked on its train's CI (`train-status` has it as JSON).
+    // trace:TASK-3920 | ai:claude
+    if let Some(line) = main.as_deref().and_then(crate::pr_train::parked_line) {
+        if !opts.json {
+            println!("admission: {line}");
+        }
+    }
     let not_eligible = rows.iter().filter(|r| !r.eligible).count();
     anyhow::ensure!(
         not_eligible == 0,

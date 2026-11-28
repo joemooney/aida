@@ -31,6 +31,7 @@ pub(crate) use check::{next_actors, pr_train_check_handler, CheckOptions, NextAc
 pub(crate) mod culprit;
 #[path = "pr_train_journal.rs"]
 mod journal;
+pub(crate) use journal::Parked; // trace:TASK-3920 | ai:claude
 pub(crate) use journal::TrainJournalBusy;
 /// Holds the train run lock in `dir` until dropped (tests only).
 #[cfg(test)]
@@ -6122,6 +6123,46 @@ pub(crate) fn pr_head_pin_journals(root: &Path, pr: u64) -> Result<Vec<(String, 
 // trace:STORY-2857 | ai:codex
 pub(crate) fn admission_train_running(root: &Path) -> Result<bool> {
     journal::lock_held(&root.join(".aida/train"))
+}
+
+/// The parked auto-train recovery in effect, if any; `prune` only under the
+/// admission serializer. trace:TASK-3920 | ai:claude
+pub(crate) fn parked_recovery(root: &Path, prune: bool) -> Result<Option<Parked>> {
+    journal::parked(&root.join(".aida/train"), chrono::Utc::now(), prune)
+}
+
+/// Park, or with `None` unpark the record carrying `token`, under the
+/// admission serializer: acquirers' check-then-claim is ordered against it.
+#[cfg_attr(not(test), allow(dead_code))] // the park point (slice 2) calls it
+pub(crate) fn park_recovery(root: &Path, record: Option<&Parked>, token: &str) -> Result<bool> {
+    let dir = root.join(".aida/train");
+    crate::admission_owner::serialized(root, || journal::park(&dir, record, token))
+}
+
+/// A parked record owned by `owner`, parked `age` seconds ago, expiring in
+/// `ttl`, for train PR #900 with members #11 and #12.
+#[cfg(test)]
+pub(crate) fn test_parked(
+    owner: aida_core::proc_identity::ProcIdentity,
+    age: i64,
+    ttl: i64,
+) -> Parked {
+    let now = chrono::Utc::now();
+    let at = now - chrono::Duration::seconds(age);
+    let to = now + chrono::Duration::seconds(ttl);
+    serde_json::from_value(serde_json::json!({"version": 1, "token": uuid::Uuid::new_v4().to_string(),
+        "branch": "train/abc-1", "change_id": 900, "step": "Ci", "tip": "c".repeat(40), "expected_main": "b",
+        "member_heads": [[11, format!("{:040}", 11)], [12, format!("{:040}", 12)]], "owner": owner,
+        "position": at, "parked_at": at, "deadline": to, "expires_at": to}))
+    .unwrap()
+}
+
+/// The `train-status` / `--check` line for a parked recovery. Read-only.
+pub(crate) fn parked_line(root: &Path) -> Option<String> {
+    parked_recovery(root, false)
+        .ok()
+        .flatten()
+        .map(|p| p.describe())
 }
 
 /// Whether a journaled train awaits recovery: the auto-train's unclaimed
