@@ -1,0 +1,23 @@
+id: 01a22035-1d54-7a50-9f94-e4cceb1fc836
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1614
+agreed_id: TASK-3956
+title: 'First-run: init''s example spec ID matches the real ID format (F6)'
+description: |-
+  ## Acceptance
+  - AC1: the first-run guide and init output show the ID format aida add really issues (or aida add issues the short form init promises); a test pins that the text and the real format agree.
+
+  Source: docs/plans/2026-11-27-fresh-user-walkthrough.md (on branch task-3951-fresh-user-walkthrough / PR #4782), section F6. Advisor aida-d3 2026-11-27 20:30 priority order; filed by product-15 for laning now (one spec per lane).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T03:31:21.556365075Z
+modified_at: 2026-11-28T03:31:21.556365075Z
+req_type: Task
+filed_at:
+  code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c6
+  vendor: claude
