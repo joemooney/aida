@@ -5208,11 +5208,12 @@ fn run_init(matches: &clap::ArgMatches, ctx: &crate::cmdkit::DispatchCtx) -> any
     // trace:STORY-2838 | ai:claude
     if *report_allowlists {
         let json = ctx.globals.and_then(|g| g.format) == Some(crate::cmdkit::OutputFormat::Json);
-        return init_allowlist_report::run_report_allowlists(
-            &std::env::current_dir()?,
-            agent.as_deref(),
-            json,
-        );
+        // `aida init DIR` reports on DIR (not yet created → no remotes).
+        let root = match dir {
+            Some(d) => std::path::PathBuf::from(d),
+            None => std::env::current_dir()?,
+        };
+        return init_allowlist_report::run_report_allowlists(&root, agent.as_deref(), json);
     }
     // STORY-757: the markdown-only first run — scaffold just a `specs/`
     // folder + a runnable `aida why` demo, none of the orphan-branch / cache
