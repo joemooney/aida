@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T19:18:29.828946179Z
-modified_at: 2026-11-28T01:14:24.340715735Z
+modified_at: 2026-11-28T01:14:44.804154892Z
 req_type: Bug
 tags:
 - lanes
@@ -100,6 +100,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3521): Wording: when the retries are spent on writers that run a deleted binary, the final error still says they ''should exit on their own'' (retire.rs WriterAdmissionUnknown Display). Its only next step is the dry run. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T01:14:13.052999955Z
   modified_at: 2026-11-28T01:14:13.052999955Z
+- id: 01a21fb8-0ac4-76d0-8776-1f491f2b1f33
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3523): Duplicate salvage on retry: in reclaim_exited_branch_clone (aida-cli-lib/src/queue_cmd/work.rs:4251) each retry re-runs seat_clone::destroy. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:14:44.804154892Z
+  modified_at: 2026-11-28T01:14:44.804154892Z
 history:
 - id: 01a2194e-f4af-7583-8d6e-242d135b3492
   author: joe
