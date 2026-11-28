@@ -12,13 +12,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-27T23:04:01.491357777Z
-modified_at: 2026-11-28T00:39:49.495139983Z
+modified_at: 2026-11-28T00:39:52.064140133Z
 req_type: Task
 tags:
 - from-implementer:TASK-3869
 - kind:design-choice
 - review
 - severity:minor
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a21f49-24bf-7e50-a2ee-c4d4a2a3ca0e
+  created_at: 2026-11-28T00:39:52.064093881Z
+  created_by: joe
 comments:
 - id: 01a21f98-0aba-76b2-bb3f-afada643a558
   author: joe
@@ -37,6 +42,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Superseded
+- id: 01a21f98-27d5-78f2-ad99-d0d534aee3a1
+  author: joe
+  timestamp: 2026-11-28T00:39:55.093793705Z
+  changes: []
 filed_at:
   code_sha: 1ff82d81e3b8245fd22d371ed9dc2f34551832fc
   branch: task-3869-ac4-non-utf8
