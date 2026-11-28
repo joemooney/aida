@@ -1,0 +1,31 @@
+id: 01a220f7-78a3-7df3-930d-117f37451086
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-438
+title: 'Review PR-4802: [AI:claude] test(contracts): temp-project teardown no longer races the cache-refresh worker (TASK-3962)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a220db`) for branch `task-3962-contract-teardown-race`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4802>
+  - Branch: `task-3962-contract-teardown-race` → `main`
+
+  ## Covers
+
+  - TASK-3962
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4802` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T07:03:38.915863054Z
+modified_at: 2026-11-28T07:03:38.915863054Z
+req_type: Story
+filed_at:
+  code_sha: 4b06a37b464472f759637aecf25042f98a4e33c2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4b06a37b46
