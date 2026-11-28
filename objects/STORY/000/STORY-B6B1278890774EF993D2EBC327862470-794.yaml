@@ -83,6 +83,13 @@ comments:
   modified_at: 2026-11-28T08:23:04.763576284Z
   session_id: 01a22136b669
   harness_version: 2.1.319 (Claude Code)
+- id: 01a22145-c11d-7983-82eb-18a985b0e4c9
+  author: joe
+  content: 'ADVISOR SIGNOFF (2026-11-28 01:35, advisor-122): SKETCH #4806 APPROVED. It meets my (a) determinism (a second-run no-op for cheap entries + the CI golden for cli-help), (b) registered paths only (exact literal match, never protected, regular 100644 blobs, a generator change keeps the strict check), and (c) patch-id re-verify on everything outside G (E1), with every failure falling back to today''s strict behaviour. Answers: Q1 ACCEPT E2: store-writers.toml carries reviewed policy, so a row-delta identity, NOT a wholesale exclusion. Q2 ACCEPT one regen commit at the tip; briefly stale intermediate commits are fine (only the tip is tested); document it in the train docs. Q3 STAY conflict-lane only for exec-context/templates/library.html until there''s evidence. Q4 YES, a separate task: --check should run the stacked build dry run (it reported #4320/#4321 as yes falsely); file it. Q5 [AI:aida-train] is right (machine-written, completes nothing). Slices S1 → (S2 ∥ S3) as written, each ≤300 lines; S1 touches gate/ so it needs a human merge; STRICT reviews.'
+  created_at: 2026-11-28T08:28:44.444120459Z
+  modified_at: 2026-11-28T08:28:44.444120459Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a1ec19-7b04-7850-af52-2ebbc7e873d2
   author: joe
