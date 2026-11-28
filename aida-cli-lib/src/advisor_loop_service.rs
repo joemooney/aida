@@ -647,12 +647,26 @@ pub(crate) fn deputy_binary(
 /// The probe for this service's recorded live deputy host.
 // trace:BUG-2774 | ai:claude
 fn host_deputy_binary(state: Option<&Service>, live: &Path) -> Option<serde_json::Value> {
+    host_deputy_binary_at(state, live, proc_exe)
+}
+
+fn proc_exe(pid: u32) -> PathBuf {
+    PathBuf::from(format!("/proc/{pid}/exe"))
+}
+
+/// [`host_deputy_binary`] with the host's image link supplied by `exe`.
+// trace:TASK-3936 | ai:claude
+fn host_deputy_binary_at(
+    state: Option<&Service>,
+    live: &Path,
+    exe: impl Fn(u32) -> PathBuf,
+) -> Option<serde_json::Value> {
     let state = state?;
     let host = state.host.as_ref().filter(|h| h.alive())?;
     deputy_binary(
         &state.deputy,
         host.pid,
-        Path::new(&format!("/proc/{}/exe", host.pid)),
+        &exe(host.pid),
         live,
         crate::dev_build::binary_sha_label,
         std::time::SystemTime::now(),
@@ -685,9 +699,18 @@ fn deputy_binary_fix(deputy: &str) -> String {
 /// `aida doctor`'s finding for this service's deputy on an old binary.
 // trace:BUG-2774 | ai:claude
 pub(crate) fn deputy_binary_finding(root: &Path) -> Option<crate::DoctorFinding> {
+    deputy_binary_finding_at(root, proc_exe)
+}
+
+/// [`deputy_binary_finding`] with the host's image link supplied by `exe`.
+// trace:TASK-3936 | ai:claude
+pub(crate) fn deputy_binary_finding_at(
+    root: &Path,
+    exe: impl Fn(u32) -> PathBuf,
+) -> Option<crate::DoctorFinding> {
     let state = read(&directory(root, false).ok()??).ok()??;
     let live = crate::dev_build::default_live_dir().ok()?.join("aida");
-    let value = host_deputy_binary(Some(&state), &live)?;
+    let value = host_deputy_binary_at(Some(&state), &live, exe)?;
     Some(crate::DoctorFinding {
         category: DEPUTY_BINARY_CATEGORY.into(),
         id: format!("{}:{}", state.deputy, value["pid"]),
@@ -695,6 +718,47 @@ pub(crate) fn deputy_binary_finding(root: &Path) -> Option<crate::DoctorFinding>
         action: deputy_binary_fix(&state.deputy),
         safe_heal: false,
     })
+}
+
+/// Test fixture: a service receipt whose live deputy host is `pid`.
+// trace:TASK-3936 | ai:claude
+#[cfg(test)]
+pub(crate) fn write_test_host_receipt(root: &Path, deputy: &str, pid: u32) {
+    let binding = Binding {
+        grant: "fixture-grant".into(),
+        subject: "fixture-subject".into(),
+        principal: "fixture-principal".into(),
+        issued_at: Utc::now(),
+        delegations: Vec::new(),
+    };
+    let state = Service {
+        version: 1,
+        deputy: deputy.into(),
+        binding,
+        worker: None,
+        child_grant: None,
+        retired_grants: Vec::new(),
+        host_active: true,
+        host: Some(Identity::of(pid).unwrap()),
+        checked_at: None,
+        retry_after: Utc::now(),
+        last_exit: None,
+        image_handoff: false,
+    };
+    write(&directory(root, true).unwrap().unwrap(), &state).unwrap();
+}
+
+/// Test fixture: a stand-in for `/proc/<pid>/exe` of a deputy whose image a
+/// promotion removed — a link whose target carries the kernel's ` (deleted)`
+/// marker. Returns the link and the removed image path. No process or /proc
+/// layout is involved, so it is host independent.
+// trace:TASK-3936 | ai:claude
+#[cfg(test)]
+pub(crate) fn deleted_image_link(dir: &Path) -> (PathBuf, PathBuf) {
+    let image = dir.join("deputy-image").join("aida");
+    let link = dir.join("deputy-exe");
+    std::os::unix::fs::symlink(format!("{} (deleted)", image.display()), &link).unwrap();
+    (link, image)
 }
 
 // A promotion is an orderly retirement, not a failed dispatch episode.
@@ -3639,6 +3703,51 @@ mod loop_tests {
         }
         let quiet = status_lines("running", &serde_json::json!({}), None, &[]);
         assert!(!quiet.iter().any(|l| l.contains("runs a")), "{quiet:?}");
+    }
+
+    // A receipt naming a live deputy on a deleted image yields a doctor
+    // finding that names the deputy, pid, binary and the fix; once the deputy
+    // is gone the finding clears. trace:TASK-3936 | ai:claude
+    #[test]
+    fn task3936_deputy_on_a_deleted_image_is_reported_with_pid_binary_and_fix() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let mut env = crate::test_env::AmbientGuard::hermetic(root, None);
+        env.set_key("AIDA_DEV_LIVE_DIR", root);
+        let (exe, image) = deleted_image_link(root);
+        let at = |exe: PathBuf| move |_: u32| exe.clone();
+        assert!(
+            deputy_binary_finding_at(root, at(exe.clone())).is_none(),
+            "no receipt"
+        );
+        // The test process hosts the receipt, so the host is alive anywhere.
+        let pid = std::process::id();
+        write_test_host_receipt(root, "night", pid);
+
+        let finding = deputy_binary_finding_at(root, at(exe)).expect("a deputy on a deleted image");
+        assert_eq!(finding.category, DEPUTY_BINARY_CATEGORY);
+        assert_eq!(finding.id, format!("night:{pid}"));
+        assert!(!finding.safe_heal);
+        for part in [
+            format!("deputy night (pid {pid}) runs a deleted binary"),
+            format!("{} (deleted)", image.display()),
+            format!("{NAME} blocks behind it"),
+            "restart the deputy on the live build with the binding reset".into(),
+            "`aida advisor loops rebind --deputy night`".into(),
+        ] {
+            assert!(finding.summary.contains(&part), "{part}: {}", finding.summary);
+        }
+        assert!(finding.action.contains("restart the deputy"), "{}", finding.action);
+        assert!(finding.action.contains("rebind --deputy night"), "{}", finding.action);
+
+        let live = root.join("aida");
+        std::fs::write(&live, "live").unwrap();
+        let on_live = root.join("live-exe");
+        std::os::unix::fs::symlink(&live, &on_live).unwrap();
+        assert!(
+            deputy_binary_finding_at(root, at(on_live)).is_none(),
+            "a deputy on the live build"
+        );
     }
 }
 
