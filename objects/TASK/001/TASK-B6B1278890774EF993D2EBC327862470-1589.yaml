@@ -9,12 +9,12 @@ description: |-
   - AC1: a fixture test over deputy_binary_finding (advisor_loop_service.rs) with a fake deputy receipt on a stale/deleted binary asserts the finding names the deputy, pid, binary and the restart fix.
   - AC2: a doctor_cmd.rs test with two services reporting the same deputy:pid id (the deputy-binary / stale-deputy alias) asserts ONE deduplicated finding.
   - AC3: test-only.
-status: InProgress
+status: Done
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T23:18:00.049566692Z
-modified_at: 2026-11-28T01:59:27.912157660Z
+modified_at: 2026-11-28T02:14:00.849634082Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -121,6 +121,12 @@ comments:
   modified_at: 2026-11-28T01:59:27.912157660Z
   session_id: 01a21fd2b6f1
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21fee-4d91-78f3-87fe-51e8498ff3ae
+  author: aida-publication-done
+  content: Implementer push b209dd272981 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-28T02:14:00.849633600Z
+  modified_at: 2026-11-28T02:14:00.849633600Z
+  session_id: 01a21fd2b6f1
 history:
 - id: 01a21f4d-52bb-7912-beea-868359f153f8
   author: joe
@@ -166,6 +172,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21fee-4d91-78f3-87fe-51d3cae1bf79
+  author: aida-publication-done
+  timestamp: 2026-11-28T02:14:00.849631431Z
+  session_id: 01a21fd2b6f1
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 0fba3d42ee966dab2866ad59a9ffbe96d2b0e23d
   branch: main
