@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: bc5438855b63b22bf94baf3687a0ee3b4d1ca1c6
 
   Patch-ids are computed from `git log -p` without --binary/--full-index, so a binary-only change hashes as a `Binary files a/X and b/X differ` stanza. Two commits that change the same binary path to different contents (with identical text hunks) share a patch-id, so a genuinely new branch commit is reported as already on base and its specs are dropped from train/ship resolution. textconv-lossy diffs collide the same way. review_carryover::patch_id uses --binary --full-index to avoid this. Add those flags and a collision test.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T01:18:54.810845159Z
-modified_at: 2026-11-28T01:02:42.338306180Z
+modified_at: 2026-11-28T01:02:44.325064702Z
 req_type: Task
 tags:
 - carried-from:BUG-2733
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21fad-0c65-7841-a9bf-27b6d252d705
+  author: joe
+  timestamp: 2026-11-28T01:02:44.325062652Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: bc5438855b63b22bf94baf3687a0ee3b4d1ca1c6
   branch: pr-4598
