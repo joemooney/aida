@@ -144,6 +144,13 @@ comments:
   created_at: 2026-11-28T04:18:26.787834848Z
   modified_at: 2026-11-28T04:18:26.787834848Z
   session_id: 01a220497869
+- id: 01a22063-e4c6-76c1-b81e-deb80610c903
+  author: joe
+  content: 'INTEGRATION: S1 promoted to main as p56 #4790 (Refs STORY-2838). Linear cherry-pick of fb1f8edfbad on main 11781feb5de; the patch-id matches the squash and the PR head (f24974a27d49).'
+  created_at: 2026-11-28T04:22:07.615336163Z
+  modified_at: 2026-11-28T04:22:07.615336163Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1e0f7-c069-77f2-b73d-5d3a4f0f8d52
   author: joe
