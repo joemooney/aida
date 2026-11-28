@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T04:07:56.087585344Z
-modified_at: 2026-11-28T01:05:13.410109896Z
+modified_at: 2026-11-28T01:05:26.344691769Z
 req_type: Bug
 tags:
 - ci
@@ -33,6 +33,10 @@ relationships:
 - rel_type: Supersedes
   target_id: 01a2164b-b098-77e3-8b52-98fb6dcd50bc
   created_at: 2026-11-28T01:05:09.367367013Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a2164b-352b-7793-9b6d-9c72dadc8b1e
+  created_at: 2026-11-28T01:05:26.344621188Z
   created_by: joe
 comments:
 - id: 01a2160d-eeef-7062-893e-275166cdaa6d
@@ -198,6 +202,10 @@ history:
 - id: 01a21faf-4a0d-77f2-8d3a-01f78cf16c01
   author: joe
   timestamp: 2026-11-28T01:05:11.181842711Z
+  changes: []
+- id: 01a21faf-8c61-7aa1-855f-bca27bd1f6cc
+  author: joe
+  timestamp: 2026-11-28T01:05:28.161199996Z
   changes: []
 processing_record:
 - id: 01a216b3-f805-71d1-9712-acfd2266c302
