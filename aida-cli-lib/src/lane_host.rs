@@ -117,6 +117,34 @@ fn binary_check(
     }
 }
 
+/// Advisory row: how far the live binary is behind origin/main and why the
+/// autobuild is skipping. None when it is not behind or that is unknown.
+// trace:BUG-2787 | ai:claude
+fn autobuild_check(root: &Path, built: &str, now: i64, log: Option<&Path>) -> Option<Check> {
+    use crate::dev_fresh::{check as fresh, FreshLimits, Freshness};
+    let any = FreshLimits {
+        max_behind: u32::MAX,
+        max_hours: u32::MAX,
+    };
+    let (Freshness::Fresh { behind, hours } | Freshness::Stale { behind, hours }) =
+        fresh(root, built, now, any)
+    else {
+        return None;
+    };
+    if behind == 0 {
+        return None;
+    }
+    let note = crate::dev_fresh::autobuild_note(log, root);
+    let detail = crate::dev_fresh::behind_line(behind, hours, note.as_ref().map(|n| n.0.as_str()));
+    Some(advisory(check(
+        "autobuild",
+        note.is_none(),
+        false,
+        detail,
+        note.as_ref().map_or("", |n| n.1.as_str()),
+    )))
+}
+
 fn wrap_check(explicit: Option<bool>) -> Check {
     check(
         "os-wrap",
@@ -397,7 +425,9 @@ fn inspect(root: &Path, live_store: bool) -> Vec<Check> {
     }
     // trace:STORY-3202 | ai:claude
     let names: Vec<_> = vendors.iter().map(|v| v.as_str()).collect();
-    let probe = crate::vendors::host_diagnostics::agy_lane_probe(&names, &env, home.as_deref());
+    // `live_store` is false only for `report` (aida init): no outward agy call.
+    let probe =
+        crate::vendors::host_diagnostics::agy_lane_probe(&names, &env, home.as_deref(), live_store);
     checks.extend(probe);
     if vendors.is_empty() {
         checks.push(check(
@@ -431,6 +461,14 @@ fn inspect(root: &Path, live_store: bool) -> Vec<Check> {
         crate::upgrade_release::build_git_dirty(),
         main.as_deref(),
     );
+    // A behind dev binary also says why the autobuild is not promoting.
+    // trace:BUG-2787 | ai:claude
+    let behind = (dev_build && same_project && !binary.pass)
+        .then(|| {
+            let log = crate::dev_fresh::autobuild_log_path();
+            autobuild_check(root, built, chrono::Utc::now().timestamp(), log.as_deref())
+        })
+        .flatten();
     checks.push(if dev_build || !live_store {
         binary
     } else {
@@ -440,6 +478,7 @@ fn inspect(root: &Path, live_store: bool) -> Vec<Check> {
             crate::upgrade_release::build_git_dirty(),
         )
     });
+    checks.extend(behind);
     let store = root.join(".aida-store");
     let head = git(&store, &["rev-parse", "HEAD"]);
     let remote = live_store
@@ -1205,5 +1244,96 @@ mod tests {
                 );
             }
         }
+    }
+
+    // trace:BUG-2787 | ai:claude
+    #[test]
+    fn behind_binary_row_names_autobuild_skip_streak_and_hint() {
+        fn git(repo: &Path, args: &[&str], date: Option<&str>) -> String {
+            let mut cmd = crate::test_git::git_command();
+            cmd.arg("-C")
+                .arg(repo)
+                .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
+                .args(args)
+                .env_remove("GIT_DIR")
+                .env_remove("GIT_WORK_TREE")
+                .env_remove("GIT_INDEX_FILE");
+            if let Some(date) = date {
+                cmd.env("GIT_AUTHOR_DATE", date)
+                    .env("GIT_COMMITTER_DATE", date);
+            }
+            let out = cmd.output().expect("git runs");
+            assert!(
+                out.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        }
+        let commit = |repo: &Path, secs: i64| {
+            let date = format!("@{secs} +0000");
+            let args = ["commit", "-q", "--allow-empty", "--no-verify", "-m", "c"];
+            git(repo, &args, Some(&date));
+            git(repo, &["rev-parse", "--short", "HEAD"], None)
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        git(repo, &["init", "-q", "-b", "main"], None);
+        let t0 = 1_700_000_000;
+        let built = commit(repo, t0);
+        let now = t0 + 12 * 3600;
+        for age in [9, 2] {
+            commit(repo, now - age * 3600);
+        }
+        git(
+            repo,
+            &["update-ref", "refs/remotes/origin/main", "HEAD"],
+            None,
+        );
+        let dirty = "skip: primary checkout must be on main with no visible tracked changes or other hidden entries";
+        let log = repo.join("fake-autobuild.log");
+        std::fs::write(
+            &log,
+            format!(
+                "2026-11-27 01:00:01 promoted and verified: abc\n\
+                 2026-11-27 02:00:01 {dirty}\n\
+                 2026-11-27 02:30:01 {dirty}\n\
+                 2026-11-27 03:00:01 {dirty}\n"
+            ),
+        )
+        .unwrap();
+
+        let row = autobuild_check(repo, &built, now, Some(&log)).expect("behind");
+        assert_eq!(row.id, "autobuild");
+        assert!(!row.required, "the autobuild row is advisory");
+        assert!(!row.pass, "a skip streak is reported as a failing advisory");
+        assert_eq!(
+            row.detail,
+            "live binary 9h / 2 change(s) behind main; autobuild skipping since \
+             2026-11-27 02:00:01 (last 2026-11-27 03:00:01): primary checkout must be \
+             on main with no visible tracked changes or other hidden entries"
+        );
+        assert!(
+            row.fix
+                .contains(&format!("git -C {} status", repo.display())),
+            "{}",
+            row.fix
+        );
+        assert!(row.fix.contains("scripts/aida-autobuild.sh"), "{}", row.fix);
+
+        // A streak ended by a promotion: the row still says how far behind, with no skip note.
+        std::fs::write(
+            &log,
+            format!(
+                "2026-11-27 02:00:01 {dirty}\n2026-11-27 03:00:01 promoted and verified: abc\n"
+            ),
+        )
+        .unwrap();
+        let row = autobuild_check(repo, &built, now, Some(&log)).expect("behind");
+        assert!(row.pass, "{}", row.detail);
+        assert_eq!(row.detail, "live binary 9h / 2 change(s) behind main");
+        // Not behind: no row.
+        let head = git(repo, &["rev-parse", "--short", "HEAD"], None);
+        assert!(autobuild_check(repo, &head, now, Some(&log)).is_none());
     }
 }

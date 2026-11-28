@@ -569,6 +569,15 @@ fn train_lock(root: &Path, now: DateTime<Utc>) -> Result<Option<crate::pr_train:
 pub(crate) fn scan(
     exec: &aida_core::exec_context::ExecContext,
 ) -> Result<(Policy, Vec<DoctorFinding>)> {
+    scan_listing(exec, crate::stalled_reviews::open_prs)
+}
+
+/// [`scan`] with the forge's open-PR listing injected, so a test drives the
+/// whole job without a forge. trace:TASK-3931 | ai:claude
+fn scan_listing(
+    exec: &aida_core::exec_context::ExecContext,
+    list: impl FnOnce(&Path) -> Result<Vec<serde_json::Value>>,
+) -> Result<(Policy, Vec<DoctorFinding>)> {
     let root = exec.project_root();
     let policy = Policy::read(crate::read_project_config_value(root).as_ref())?;
     if !policy.enabled {
@@ -608,7 +617,7 @@ pub(crate) fn scan(
         train: &|number, head| train_state(&train_root, number, head),
     };
     let mut ready = Vec::new();
-    for pr in crate::stalled_reviews::open_prs(root)? {
+    for pr in list(root)? {
         ready.extend(ready_of(&pr, &lookups)?);
     }
     let lock = train_lock(&train_root, now)?.map(|e| {

@@ -173,6 +173,18 @@ linkage parser hash and portable-skill registration. TASK-1717's store lock
 suite remains FULL: it exercises real subprocesses and interprocess lock barriers,
 rather than a source inventory.
 
+`.gitattributes` routes `scripts/ratchet-set.json` through the
+`aida-json-union` merge driver (`scripts/json-union-merge.py`), so parallel PRs
+that add disjoint tests merge cleanly. Host merges for a lane (rework
+preparation and the publication merge of a moved PR head) register the driver
+from the primary checkout, never from the seat. Residual: if that script is
+absent or unreadable inside the sandbox (for example, outside a strict
+`read_allowlist`), the wrapper falls back to `git merge-file`. A conflicting
+addition then leaves standard conflict markers, and a clean text merge passes
+as it would under git's default driver. Neither side's addition is silently
+dropped.
+<!-- trace:TASK-3932 | ai:claude -->
+
 Sandboxed headless seats must not run `make check-ci-fast` directly:
 containment evidence fixtures require sockets, ratchets invoke Cargo, and the
 aggregate exceeds a single 60-second seat tool call. Native host-published seats

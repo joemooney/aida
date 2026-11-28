@@ -635,3 +635,132 @@ fn story_3131_s2_retained_block_is_the_held_reviews_cause() {
     let findings = evaluate(&[queued], &policy, now, Some(now), None, "main");
     assert_eq!(findings[0].category, CATEGORY);
 }
+
+/// The scheduled `doctor check landing-drought --fail-on-findings` job, end to
+/// end through `scan()`: every cause present at once is reported, and only the
+/// failing ones fail the job. trace:TASK-3931 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_3931_scheduled_job_reports_every_cause_through_scan() {
+    use crate::gate::ledger::{ledger_dir, store::ledger_file, EventBody, GateEvent};
+    use aida_core::exec_context::{Environment, ExecContext, SystemClock, ToolPaths};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let now = Utc::now();
+    let ago = (now - TimeDelta::minutes(120)).to_rfc3339();
+    let out = crate::test_git::git_command()
+        .arg("-C")
+        .arg(root)
+        .args(["init", "-q", "-b", "main"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let out = crate::test_git::git_command()
+        .arg("-C")
+        .arg(root)
+        .args(["commit", "-q", "--allow-empty", "-m", "init"])
+        .env("GIT_COMMITTER_DATE", &ago)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    // PR-4's spec is drain mode, so it waits for the train, not an operator.
+    // Written directly: a whole-store save needs writer authority.
+    std::fs::create_dir_all(root.join(".aida-store")).unwrap();
+    std::fs::write(root.join(".aida-store/metadata.yaml"), "{}").unwrap();
+    let object = root.join(".aida-store/objects/STORY/000/STORY-4.yaml");
+    std::fs::create_dir_all(object.parent().unwrap()).unwrap();
+    let mut spec = aida_core::models::Requirement::new("Drain".into(), String::new());
+    spec.spec_id = Some("STORY-4".into());
+    spec.execution_mode = Some(aida_core::ExecutionMode::Drain);
+    std::fs::write(&object, serde_yaml::to_string(&spec).unwrap()).unwrap();
+    // Approvals at the head for PR-4 (train lock) and PR-5 (red CI).
+    std::fs::create_dir_all(ledger_dir(root)).unwrap();
+    crate::gate::ledger::bindings::bootstrap(root).unwrap();
+    for number in [4, 5] {
+        let record = serde_json::json!({"verdict": "approved", "reviewed_sha": HEAD});
+        let mut event = GateEvent::new(
+            ChangeKey::pr(number),
+            EventBody::Verdict {
+                record: record.as_object().unwrap().clone(),
+            },
+        );
+        (event.at, event.seq) = (ago.clone(), 1);
+        let line = format!("{}\n", serde_json::to_string(&event).unwrap());
+        std::fs::write(ledger_file(root, ChangeKey::pr(number)), line).unwrap();
+    }
+    // The watcher holds PR-2's attempt at its head; PR-3 is not admitted yet.
+    let watch = root.join(".aida/review-watch");
+    std::fs::create_dir_all(&watch).unwrap();
+    let state = serde_json::json!({
+        "version": 1, "repository": "fixture", "max_concurrent": 1,
+        "entries": {"PR-2": {"notices": {}, "attempts": [{
+            "head": HEAD, "token": "t", "vendor": null, "phase": "completed", "identity": null
+        }]}},
+    });
+    std::fs::write(watch.join("state.json"), state.to_string()).unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    let private = std::fs::Permissions::from_mode(0o600);
+    std::fs::set_permissions(watch.join("state.json"), private).unwrap();
+    std::fs::create_dir_all(root.join(".aida/train")).unwrap();
+    let _lock = crate::pr_train::hold_run_lock_for_test(&root.join(".aida/train")).unwrap();
+    let row = |number: u64, conclusion: &str| {
+        let mut pr = listing(number);
+        pr["baseRefName"] = "main".into();
+        pr["statusCheckRollup"][0]["conclusion"] = conclusion.into();
+        pr["statusCheckRollup"][0]["completedAt"] = ago.clone().into();
+        pr
+    };
+    let mut conflict = row(1, "SUCCESS");
+    conflict["mergeable"] = "CONFLICTING".into();
+    let prs = vec![
+        conflict,
+        row(2, "SUCCESS"),
+        row(3, "SUCCESS"),
+        row(4, "SUCCESS"),
+        row(5, "FAILURE"),
+    ];
+    let exec = ExecContext::new(
+        Environment::default(),
+        None,
+        root.into(),
+        root.into(),
+        ToolPaths::default(),
+        std::sync::Arc::new(SystemClock::default()),
+    );
+    let (policy, findings) = scan_listing(&exec, |_| Ok(prs)).unwrap();
+    let rows: Vec<_> = findings
+        .iter()
+        .map(|f| (f.id.as_str(), f.category.as_str(), f.summary.as_str()))
+        .collect();
+    let has = |id: &str, category: &str, cause: &str| {
+        assert!(
+            rows.iter()
+                .any(|(i, c, s)| *i == id && *c == category && s.contains(cause)),
+            "{id} {category} {cause:?} missing from {rows:#?}"
+        );
+    };
+    has("PR-1", CATEGORY, "merge conflict with no repair lane");
+    has("PR-2", CATEGORY, "review held at the current head");
+    has("PR-3", INFO_CATEGORY, "review waiting for watcher capacity");
+    has(
+        "PR-4",
+        INFO_CATEGORY,
+        "waiting for the running train (lock held",
+    );
+    has("PR-5", CATEGORY, "red required check (build)");
+    has("main", INFO_CATEGORY, "no landing on main for 120m");
+    assert_eq!(findings.len(), 6, "{rows:#?}");
+    assert_eq!(
+        failing(&findings),
+        3,
+        "conflict, held review and red CI fail"
+    );
+    assert_eq!(
+        policy.fail_reason(failing(&findings)).as_deref(),
+        Some("3 landing-drought findings to investigate")
+    );
+}
