@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 50a3387de5d419d7cd3289c74837234c1febea0c
 
   scripts/check-ratchets.py MANUAL_SURFACE (lines ~30-33) misses CLI-surface files: clap derives (#[derive(Args|Subcommand|Parser)]) also live in aida-cli-lib/src/*_cmd.rs and other modules (e.g. memories_cmd.rs, autonomy_cmd.rs, goal_cmd.rs, help.rs, gate_cmd.rs, maintenance_schedule.rs), so a flag added there without regenerating the help golden makes local `make check-ratchets --manual auto` skip docs/cli/verify-manual.py. The brief asked 'when unsure, run it'. CI's Ratchet set step still runs it unconditionally (--manual always), so this is a local-coverage gap only. Follow-up: widen the set (e.g. any aida-cli-lib/src/**/*.rs whose diff touches clap attributes) or match *_cmd.rs.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-27T04:35:45.208196302Z
-modified_at: 2026-11-28T01:17:12.059229694Z
+modified_at: 2026-11-28T01:17:13.959456669Z
 req_type: Task
 tags:
 - carried-from:BUG-2782
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-27T04:59:28.404613356Z
   changes: []
+- id: 01a21fba-5167-7aa1-a48b-97b0d4500c19
+  author: joe
+  timestamp: 2026-11-28T01:17:13.959454382Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 50a3387de5d419d7cd3289c74837234c1febea0c
   branch: pr-4720
