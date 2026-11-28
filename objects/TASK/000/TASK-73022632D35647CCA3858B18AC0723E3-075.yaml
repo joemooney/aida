@@ -1,0 +1,28 @@
+id: 01a221c1-5088-7a30-ad09-501b4f82fcf8
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-075
+title: Bound init's codex mcp list/add subprocesses like the --version probe
+description: |
+  aida-cli-lib/src/init_cmd.rs complete_init_scaffolding: after the now-bounded `codex --version` gate, `codex mcp list` and `codex mcp add aida -- aida mcp-serve` still run via plain `.output()` with inherited stdin and no timeout. If codex answers --version but blocks on mcp (login, network), `aida init --with-mcp` can still hang. Route both through command_output_with_timeout_io with stdin=/dev/null.
+
+  Raised by the implementer while working TASK-3965.
+  Branch: task-3965-bounded-version-probes  ·  Commit: 65f5c03712  ·  PR #4811
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T10:44:06.920515745Z
+modified_at: 2026-11-28T10:44:06.920515745Z
+req_type: Task
+tags:
+- from-implementer:TASK-3965
+- kind:followup-suggestion
+- severity:minor
+filed_at:
+  code_sha: 65f5c037121497c077b8f10cdfda963c0040d60c
+  branch: task-3965-bounded-version-probes
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eb18c450c6
+  vendor: claude
+  session: 01a221a8c1a6
+  harness_version: 2.1.319 (Claude Code)
