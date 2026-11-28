@@ -264,6 +264,10 @@ pub(crate) struct Built {
     /// The tip's regeneration commit on top of the last car. trace:TASK-3963 | ai:claude
     #[serde(default)]
     pub regen: Option<crate::gate::train_generated::RegenCommit>,
+    /// Why the train did not regenerate (journaled with the train and named
+    /// in its PR body). trace:TASK-3963 | ai:claude
+    #[serde(default)]
+    pub regen_refused: Option<String>,
 }
 
 impl Built {
@@ -371,6 +375,7 @@ pub(crate) fn build(repo: &Path, base: &str, members: &[Member]) -> Result<Built
         cars,
         dropped,
         regen: None,
+        regen_refused: None,
     })
 }
 
@@ -3512,6 +3517,11 @@ pub(crate) fn train_pr_body(train: &Built) -> String {
     if let Some(regen) = &train.regen {
         s.push_str(&crate::gate::train_generated::pr_body_block(regen));
         s.push('\n');
+    }
+    if let Some(why) = &train.regen_refused {
+        // A code span: generator output never renders as markup or a mention.
+        let why = why.replace('`', "'");
+        s.push_str(&format!("aida-train-regeneration-refused: `{why}`\n\n"));
     }
     s.push_str(&members_line(&train.cars));
     s.push('\n');

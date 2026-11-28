@@ -22,6 +22,9 @@ pub(crate) struct TrainEntry {
     pub outputs: &'static [&'static str],
     pub inputs: &'static [&'static str],
     pub argv: &'static [&'static str],
+    /// The generator's own files. The train runs the base's copy; a car that
+    /// changes one disables the entry for that train.
+    pub generators: &'static [&'static str],
     pub class: TrainClass,
     /// The train runs it. `cli-help` needs a cargo build (S3 decides).
     pub train_run: bool,
@@ -33,6 +36,7 @@ pub(crate) const TRAIN_GENERATED: &[TrainEntry] = &[
         outputs: &["docs/showcase/search-data.js"],
         inputs: &["docs/", "aida-core/templates/.aida/discipline/"],
         argv: &["python3", "docs/showcase/build.py"],
+        generators: &["docs/showcase/build.py"],
         class: TrainClass::Derived,
         train_run: true,
     },
@@ -41,6 +45,7 @@ pub(crate) const TRAIN_GENERATED: &[TrainEntry] = &[
         outputs: &["scripts/store-writers.toml"],
         inputs: &["**/*.rs", "scripts/", "aida-core/templates/", "hooks/", ".githooks/"],
         argv: &["python3", "scripts/check-store-writers.py", "--regenerate"],
+        generators: &["scripts/check-store-writers.py"],
         class: TrainClass::KeyedLedger,
         train_run: true,
     },
@@ -53,6 +58,7 @@ pub(crate) const TRAIN_GENERATED: &[TrainEntry] = &[
             "-p", "aida-cli-lib", "--lib", "--", "--exact",
             "command_registry::story_1728_command_registry_tests::help_surface_matches_golden_snapshot",
         ],
+        generators: &["aida-cli-lib/src/", "Cargo.toml", "Cargo.lock"],
         class: TrainClass::Derived,
         train_run: false,
     },
@@ -111,6 +117,42 @@ fn input_matches(pattern: &str, path: &str) -> bool {
         Some(suffix) => path.ends_with(suffix),
         None if pattern.ends_with('/') => path.starts_with(pattern),
         None => path == pattern,
+    }
+}
+
+/// The entries whose generator no car changes. Generators always run from
+/// the train base; a car that edits one keeps that entry's strict check.
+pub(crate) fn base_trusted(
+    entries: &[&'static TrainEntry],
+    car_paths: &[Vec<String>],
+) -> (Vec<&'static TrainEntry>, Vec<String>) {
+    let mut warnings = Vec::new();
+    let trusted = entries
+        .iter()
+        .copied()
+        .filter(|e| {
+            let changed = car_paths
+                .iter()
+                .flatten()
+                .find(|p| e.generators.iter().any(|g| input_matches(g, p)));
+            if let Some(path) = changed {
+                warnings.push(format!(
+                    "train regeneration of {} disabled: a car changes its generator {path}",
+                    e.name
+                ));
+            }
+            changed.is_none()
+        })
+        .collect();
+    (trusted, warnings)
+}
+
+/// A refusal reason as one bounded line, for the journal and PR body.
+pub(crate) fn refusal_line(why: &str) -> String {
+    let line = why.split_whitespace().collect::<Vec<_>>().join(" ");
+    match line.char_indices().nth(400) {
+        Some((at, _)) => format!("{}...", &line[..at]),
+        None => line,
     }
 }
 

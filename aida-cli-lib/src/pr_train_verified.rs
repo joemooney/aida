@@ -951,6 +951,10 @@ fn verify_structure(repo: &Path, train: &Built) -> Result<Vec<Value>> {
             .map_err(anyhow::Error::msg)?;
         super::regen::ledger_check(repo, &parent, &regen.commit, &touched)
             .map_err(anyhow::Error::msg)?;
+        proof.push(
+            json!({"regen": regen.commit, "parent": parent, "message": message,
+            "touched": touched, "report": regen.report}),
+        );
         parent = regen.commit.clone();
     }
     anyhow::ensure!(parent == train.tip, "train tip or car count changed");
