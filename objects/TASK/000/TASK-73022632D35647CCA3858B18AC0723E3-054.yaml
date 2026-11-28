@@ -13,12 +13,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-26T17:26:51.396539455Z
-modified_at: 2026-11-26T17:26:51.396539455Z
+modified_at: 2026-11-28T00:31:39.925375891Z
 req_type: Task
 tags:
 - from-implementer:BUG-2775
 - kind:bug-spotted
 - severity:minor
+comments:
+- id: 01a21f90-9995-7440-82a8-1c421f4d904b
+  author: joe
+  content: 'APPROVED (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): agent_errors.rs still takes msg.lines().next() on origin/main; render {err:#} chain. Small.'
+  created_at: 2026-11-28T00:31:39.925375891Z
+  modified_at: 2026-11-28T00:31:39.925375891Z
 history:
 - id: 01a218e6-eaae-7570-8b7b-68adb3fac1de
   author: joe
