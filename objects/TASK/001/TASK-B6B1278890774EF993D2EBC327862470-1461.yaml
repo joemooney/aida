@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 696fd8422f05691585f0f2f06339b8f5a0aaa397
 
   aida-cli-lib/src/doctor/worktrees.rs:1530-1540 — The write-ahead attestation event records outcome 'salvage destination <dest>' before rename_noreplace runs. When the rename then fails (EXDEV, EEXIST), or the lease-removal check fails, the command refuses and keeps the lease, but the durable event still says a salvage happened. Retries add more such events. Nothing in the record separates intent from completion. Record the event as an intent, or add a completion/failure record, so the audit trail shows what actually happened. The EXDEV case in repair_attestation.py should assert the event state.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-25T22:33:45.345375344Z
-modified_at: 2026-11-28T00:59:19.847039747Z
+modified_at: 2026-11-28T00:59:21.930629481Z
 req_type: Task
 tags:
 - carried-from:BUG-2755
@@ -41,6 +41,13 @@ history:
   author: joe
   timestamp: 2026-11-28T00:22:51.318143710Z
   changes: []
+- id: 01a21fa9-f5ca-7e82-93a0-5904cec492bf
+  author: joe
+  timestamp: 2026-11-28T00:59:21.930627106Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 696fd8422f05691585f0f2f06339b8f5a0aaa397
   branch: pr-4541
