@@ -8,12 +8,12 @@ description: |-
   ## Acceptance
   - AC1: when the lane's fast-gate receipt for the branch reads fail, salvage pushes to salvage/<lane> (never the PR branch) and the salvage note/comment says why (red fast-gate receipt, naming it).
   - AC2: tests: red receipt -> salvage/<lane> and PR branch untouched; green or absent receipt -> PR branch as before.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T20:02:07.738693828Z
-modified_at: 2026-11-27T21:19:36.391223965Z
+modified_at: 2026-11-28T00:14:57.042975455Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -181,6 +181,22 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a21f81-4bcc-7412-ae17-14525e2a76cf
+  author: aida-auto-bump
+  timestamp: 2026-11-28T00:14:56.972212628Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a21f81-4c12-76f2-bc5f-0f3cc7a70228
+  timestamp: 2026-11-28T00:14:57.042972113Z
+  agent: aida
+  commit_sha: c0959d17a1789fc48cd49cbe3e17adce9fc005b0
+  summary: 'TASK-3928 PASS. AC1: guarded_push (lane_salvage.rs:313-330) now consults lane_fast_gate::failed_receipt before the PR head guard; a receipt reading fail, or one that cannot be read (fail closed, matching refuse_failed_gate''s `?` on read errors), routes the push to salvage/<lane>, and the reason (naming the receipt path relative to main) flows into pr_refused and the salvage note. Marker semantics match refuse_failed_gate exactly (only `fail` vetoes; the BUG-2651 disk-full reclassification inside read applies to both). AC2: bug_3928_red_fast_gate_receipt_salvages_to_the_salvage_ref (PR branch untouched, salvage ref at tip, note names receipt), bug_3928_green_or_absent_receipt_fast_forwards_the_pr_branch (pass and absent -> PR branch fast-forwarded, no salvage ref), plus bug_3928_unreadable_... covering corrupt JSON and EACCES. No existing test weakened. CI fast compile and fast gates green at head; merge-hold-gate pending clearance (not a review blocker).'
+  punted:
+  - 'punted: TASK-3928: AC1 verified by bug_3928_red_fast_gate_receipt_salvages_to_the_salvage_ref (a red receipt leaves the PR branch at its head, pushes to salvage/<id>, and the note and PR comment name the receipt path). AC2 verified by that test plus bug_3928_green_or_absent_receipt_fast_forwards_the_pr_branch (pass and absent receipts fast-forward the PR branch, no salvage ref). The veto sits before the PR-head guard in guarded_push, and require_publication_branch still runs before the push. failed_receipt matches refuse_failed_gate''s semantics: fail-closed on a read error, disk-full fails reclassified as skipped. The one blocking finding is that the fail-closed unreadable-receipt path in the gate has no test (ADR-76 untested-path); there is also a wording nit. The head is 1 commit behind main, and that base commit (python tests, store mutation) does not touch the reviewed code. CI was pending at review time.'
+  review_verdict: approved
 filed_at:
   code_sha: 8e06142ac48de544984d38cafbfdb2b0a965fec5
   branch: main
@@ -188,3 +204,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 8e06142ac48
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-28T00:14:56.972206806Z
+  completion_sha: c0959d17a1789fc48cd49cbe3e17adce9fc005b0
