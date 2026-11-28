@@ -1,0 +1,24 @@
+id: 01a22033-e098-73d3-9596-5d8fee583a48
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1612
+agreed_id: TASK-3954
+title: 'First-run: the installer fails loudly on a failed download (F2)'
+description: |-
+  ## Acceptance
+  - AC1: the documented install pipeline (installer script) uses set -euo pipefail / checks curl's exit status and HTTP status, and prints a clear error naming the URL when the download fails; it never installs or reports success on a partial/empty download.
+  - AC2: a test (shell or python) simulates a failed download and asserts a non-zero exit and the message.
+
+  Source: docs/plans/2026-11-27-fresh-user-walkthrough.md (on branch task-3951-fresh-user-walkthrough / PR #4782), section F2. Advisor aida-d3 2026-11-27 20:30 priority order; filed by product-15 for laning now (one spec per lane).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T03:30:00.472477642Z
+modified_at: 2026-11-28T03:30:00.472477642Z
+req_type: Task
+filed_at:
+  code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c6
+  vendor: claude
