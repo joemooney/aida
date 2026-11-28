@@ -1,0 +1,31 @@
+id: 01a2204f-e4cc-7273-800a-25e1f6e7f21a
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1618
+title: 'Review follow-up: scripts/check-ratchets.py crate_tests: `#[cfg_attr(<pred>, ignore)]` is not recognised as '
+description: |-
+  From TASK-3937
+  Reviewed sha: 3ec0cbc920ef1ded84799704064ae102e2f45329
+
+  scripts/check-ratchets.py crate_tests: `#[cfg_attr(<pred>, ignore)]` is not recognised as ignoring a test (only literal `#[ignore...]` prefixes are), so such a test is counted as run and reported as an unlisted drift. Evaluate cfg_attr(…, ignore) with _cfg.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-28T04:00:36.556862297Z
+modified_at: 2026-11-28T04:00:36.556862297Z
+req_type: Task
+tags:
+- carried-from:TASK-3937
+- finding-hash:03eeb7fd
+- from-review:TASK-3937
+relationships:
+- rel_type: References
+  target_id: 01a21f7a-5390-7213-be48-1a18a4be7589
+  created_at: 2026-11-28T04:00:56.664510198Z
+filed_at:
+  code_sha: 3ec0cbc920ef1ded84799704064ae102e2f45329
+  branch: pr-4783
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c6
+  vendor: claude
+  session: 01a2204c21fe
