@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T08:29:38.066956Z
-modified_at: 2026-11-28T09:51:59.243624230Z
+modified_at: 2026-11-28T10:20:21.740868171Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -115,6 +115,15 @@ comments:
     Residual risks: live bwrap path unexercised locally (e.g. toolchain mounts on an unusual host); advisor mail for out-of-output writes is still not sent (refusal is journaled and in the PR body only); a store-writers train whose tip inventory does not parse now refuses (the sandbox has no objects for the base fallback), which is fail-closed.
   created_at: 2026-11-28T09:51:59.243624230Z
   modified_at: 2026-11-28T09:51:59.243624230Z
+  session_id: 01a2217b7a0f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a221ab-916c-72a1-af9b-accfccb9c14d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review (addendum)
+    Final HEAD: 4521f5d84a (pushed to #4808). Gate fixes after the first self-review comment: the spawn-contract test is Linux-only (portability ratchet); the timeout stub uses test_exec::write_executable; the required-live flag is read via Environment::capture (exec-context ratchet); scripts/store-writers.toml gains one blocked row for pin_generators|fs::write. make check-ci-fast: lane job j20261128T101107943-70-0, 47 gates passed, exit 0. train_generated: 14 passed (2 live bwrap tests SKIP here; CI's required-live gate runs them). aida-ci-guards --lib: 51 passed. Filter train: 474 passed.
+  created_at: 2026-11-28T10:20:21.740868171Z
+  modified_at: 2026-11-28T10:20:21.740868171Z
   session_id: 01a2217b7a0f
   harness_version: 2.1.319 (Claude Code)
 history:

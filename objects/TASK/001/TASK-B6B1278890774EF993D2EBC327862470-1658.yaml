@@ -22,8 +22,28 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T10:10:57.877165375Z
-modified_at: 2026-11-28T10:17:33.028893927Z
+modified_at: 2026-11-28T10:19:08.962835331Z
 req_type: Task
+comments:
+- id: 01a221aa-7522-7332-b2cb-f894de0cb031
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit + code):** new `probe_version`/`version_probe_available` in `bounded_process.rs` built on `command_output_with_timeout_io` (5s `VERSION_PROBE_TIMEOUT`, stdin=/dev/null, process-group kill on timeout, stderr note "`<bin>` did not answer --version within 5s"). init_cmd agent_cli_detected + codex MCP probe, scaffold installed_codex_version, compete binary_on_path, remote_create is_on_path routed through it.
+    - **AC2 (unit):** sleep-forever fake binary tests: helper returns TimedOut within bound; init `agent_cli_detected`, `installed_codex_version_of`, compete `binary_on_path`, remote_create `is_on_path` all return false within bound.
+    - **AC3 (unit ratchet):** test scanning aida-cli-lib/src production sources counting `.arg("--version")` per file against a fixed reviewed ledger; any new file/raised count fails and points at the helper.
+
+    ### Expected files
+    - aida-cli-lib/src/bounded_process.rs, lib.rs, init_cmd.rs, scaffold_cmd.rs, compete_cmd.rs, remote_create.rs, new tests file under aida-cli-lib/src/tests/
+
+    ### Ambiguities / conflicts as questions
+    - None (vendor-literal ledger counts kept identical).
+  created_at: 2026-11-28T10:19:08.962835331Z
+  modified_at: 2026-11-28T10:19:08.962835331Z
+  session_id: 01a221a8c1a6
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a221a8-fe64-7bc2-974f-f6caa7d2859a
   author: aida-session-start
