@@ -1,0 +1,31 @@
+id: 01a21f8a-043f-7cf3-9c46-cde7abccb982
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1598
+agreed_id: TASK-3942
+title: 'STORY-3120 S7e: <=32 KB full target-file context in diff batches, read only via open_confined on REVIEWABL'
+description: |-
+  Child slice of STORY-3120 (plan comment 87; list /tmp/claude-1000/story-3120-s7-s10-slices.md). Reference: origin/story-3120-ci-review @ a1777130882, ref commits 4b7e4d2ebfb.
+  Scope: <=32 KB full target-file context in diff batches, read only via open_confined on REVIEWABLE paths after classify_compiled, and passed through the same credential/inventory screen as the diff
+  Files: review_prepare.rs
+  Tier: STRICT (file read)
+  Depends on: -
+  Size: <=300 changed lines incl. tests. Track: integration.
+  Brief: /tmp/claude-1000/briefs/3120-S7e.md
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T00:24:28.479281232Z
+modified_at: 2026-11-28T00:24:28.479281232Z
+req_type: Task
+tags:
+- story-3120
+- strict
+filed_at:
+  code_sha: 84fe63bf7c647ba5c65d6b97d1ced29ae3be3596
+  branch: integration
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0fba3d42ee9
+  vendor: claude
+  session: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
