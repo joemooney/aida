@@ -1,0 +1,30 @@
+id: 01a221f5-3c10-7bb0-905c-0c31f9b06522
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-550
+agreed_id: BUG-2789
+title: A train driver killed after opening its train PR leaves the journal at 'Open, train PR not opened yet' and the green train PR orphaned
+description: |-
+  Found 2026-11-28 ~04:45 MST by advisor aida-d3; diagnosed by product-15. Trains #4813 (members #4777/#4778/#4783) and #4814 (#4806) opened their train PRs at ~11:00Z, then the driver process vanished. Their journals still said 'step Open, train PR not opened yet, last call GitHub command 39m ago', while #4813 was fully green with nobody to land it.
+
+  Cause (verified): no OOM (earlyoom showed 77% memory available; no kills in journalctl/dmesg). The seats' train loops run `timeout 5400 aida pr train ...` (90 min); e.g. pid 1912785 started ~02:48 MST, so SIGTERM hit at ~04:18 while the driver was waiting on train CI. The driver dies on SIGTERM without recording the train PR it had already opened.
+
+  ## Acceptance
+  - AC1: the journal records the opened train PR number (and head) BEFORE the next GitHub call after opening, atomically, so a killed driver leaves 'Open, train PR #N open'.
+  - AC2: on SIGTERM/SIGINT the driver checkpoints its journal (step + PR #) and exits cleanly; a resumed `aida pr train <same members>` adopts the open train PR instead of opening another.
+  - AC3: `aida pr train --status` shows an orphaned journal as 'orphaned at <step> with PR #N open (driver gone since <t>)' plus the one resume command.
+  - AC4: `aida pr train --abandon <id>` (or a --status --sweep) retires journals whose members have all landed or closed, with a dry run; today --status lists ~10 orphaned journals from 34-226h ago.
+  - AC5: docs/ops note: wrap seat train loops in a timeout longer than the train CI ceiling, or none (the driver has its own bounds).
+  - AC6: tests: SIGTERM after open → journal has PR #N; resume adopts it; abandon sweep retires only all-landed/closed journals.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T11:40:49.552942712Z
+modified_at: 2026-11-28T11:40:49.552942712Z
+req_type: Bug
+filed_at:
+  code_sha: 6f4bd7e2493be2ecd3d53b1b5baf26803d64abc3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eb18c450c68
+  vendor: claude

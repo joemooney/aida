@@ -309,7 +309,7 @@ blocks:
   type_prefix: BUG
   range_start: 2779
   range_end: 2878
-  next: 2789
+  next: 2790
   allocated_at: 2026-11-25T03:03:20.599022598Z
 - node_id: '1'
   owner: joe
