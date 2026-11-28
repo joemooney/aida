@@ -10,12 +10,12 @@ description: |-
   - AC4: tests pin the shortened output (no FAIL wall in a fresh repo).
 
   Source: docs/plans/2026-11-27-fresh-user-walkthrough.md, sections F4, F7, F15 (on main after #4782). Advisor aida-d3 2026-11-27 20:30 priority (g); grouped by area by product-15 for laning now.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T04:52:28.064803162Z
-modified_at: 2026-11-28T05:27:08.400929751Z
+modified_at: 2026-11-28T05:38:17.475291695Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -30,6 +30,13 @@ history:
   author: joe
   timestamp: 2026-11-28T05:27:08.534496030Z
   changes: []
+- id: 01a220a9-5303-7a23-9504-a9077694a509
+  author: aida-session-start
+  timestamp: 2026-11-28T05:38:17.475289637Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 4b06a37b464472f759637aecf25042f98a4e33c2
