@@ -9,12 +9,12 @@ description: |
 
   Raised by the implementer while working BUG-2782.
   Branch: bug-2782-ccf-no-build  ·  Commit: 71f95102f1  (PR link added on merge)
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T03:42:51.691935317Z
-modified_at: 2026-11-28T02:05:27.606453046Z
+modified_at: 2026-11-28T02:15:32.841589686Z
 req_type: Task
 tags:
 - ci-gates
@@ -43,6 +43,12 @@ comments:
   modified_at: 2026-11-28T02:05:27.606453046Z
   session_id: 01a21fd4d589
   harness_version: 2.1.319 (Claude Code)
+- id: 01a21fef-b4e9-7523-85d7-472f54cbee8a
+  author: aida-publication-done
+  content: Implementer push 1112f734e4ea declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-28T02:15:32.841589144Z
+  modified_at: 2026-11-28T02:15:32.841589144Z
+  session_id: 01a21fd4d589
 history:
 - id: 01a21b5f-6b8b-71d2-8aa7-afa09d55128b
   author: joe
@@ -62,6 +68,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a21fef-b4e9-7523-85d7-471a2de24e21
+  author: aida-publication-done
+  timestamp: 2026-11-28T02:15:32.841587445Z
+  session_id: 01a21fd4d589
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 71f95102f1d8c0bec2d04160642f479d442360a6
   branch: bug-2782-ccf-no-build
