@@ -196,6 +196,47 @@ class RepairAttestation(unittest.TestCase):
                         self.assertEqual(proc.returncode, 0)
                         self.assertEqual(state["releases"][0]["id"], id_)
 
+    # The bare sweep releases without a per-ID attestation, so it must refuse
+    # every non-operator caller and --yes/--json before it reads the forge.
+    # Without the gate this journal's PR (no forge here) is kept and the
+    # command exits 0, so each case below fails if its refusal is removed.
+    # trace:TASK-3891 | ai:claude
+    def test_bare_sweep_refuses_without_operator_authority(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subprocess.run(["git", "init", "-q", tmp], check=True)
+            directory = root / ".aida"
+            directory.mkdir()
+            journal = directory / "repair-journal.json"
+            entry = dict(key=dict(repository=tmp, pr=4376, original_head="660c0e87"),
+                         lane_id="01a2053df3e6", tree_path=tmp + "/closed-pr-tree",
+                         branch="repair", base="original-base", spawn="unknown",
+                         original_conflict_paths=["src/lib.rs"], reserved_at="earlier",
+                         dispatched_by="direct-rework")
+            journal.write_text(json.dumps(dict(version=1, entries=[entry])))
+            before = journal.read_text()
+            args = [os.environ["AIDA_BIN"], "doctor", "heal", "repair-reservations"]
+            env = dict(PATH=os.environ["PATH"], HOME=tmp, AIDA_OUTPUT_FORMAT="human")
+            # No terminal at all.
+            result = subprocess.run(args, stdin=subprocess.DEVNULL, capture_output=True,
+                                    text=True, env=env, cwd=tmp, timeout=30)
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("interactive TTY", result.stdout + result.stderr)
+            self.assertEqual(journal.read_text(), before)
+            for extra, flags, expected in [
+                ({"AIDA_AGENT_NAME": "worker"}, [], "AIDA-managed agent"),
+                ({"AIDA_AUTO_COMPLETE": "1"}, [], "requires a human operator"),
+                ({"AIDA_DEPUTY_JOB": "unconfirmed"}, [], "requires a human operator"),
+                ({}, ["--json"], "refuses --json"),
+                ({}, ["--yes"], "refuses --yes"),
+            ]:
+                result = subprocess.run(["script", "-qec", shlex.join(args + flags), "/dev/null"],
+                                        stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                                        env=env | extra, cwd=tmp, timeout=30)
+                self.assertNotEqual(result.returncode, 0, (extra, flags, result.stdout))
+                self.assertIn(expected, result.stdout)
+                self.assertEqual(journal.read_text(), before)
+
 
 if __name__ == "__main__":
     unittest.main()
