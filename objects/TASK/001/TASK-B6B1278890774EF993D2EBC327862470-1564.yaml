@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 1783608c2a472560286c5a4445f3bf009084e080
 
   aida-cli-lib/src/vendors/host_diagnostics.rs agy_auth_probe classifies Timeout with `e.to_string().contains("deadline")`. That matches the runner's message text, not a typed cause, so any agy failure whose stderr tail contains 'deadline' is reported as Timeout instead of Failed. The fix is a typed deadline error from RunnerCall::run, as AuthRequired already does for sign-in failures.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-27T08:01:50.441478640Z
-modified_at: 2026-11-28T00:38:05.342132701Z
+modified_at: 2026-11-28T00:38:08.173483641Z
 req_type: Task
 tags:
 - carried-from:STORY-3202
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21f96-862d-7af3-b91c-e48153b3d613
+  author: joe
+  timestamp: 2026-11-28T00:38:08.173481774Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 1783608c2a472560286c5a4445f3bf009084e080
   branch: pr-4716
