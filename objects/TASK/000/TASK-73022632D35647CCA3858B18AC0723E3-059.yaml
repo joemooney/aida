@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-27T06:09:31.745784818Z
-modified_at: 2026-11-28T02:23:47.769962982Z
+modified_at: 2026-11-28T02:39:40.338378074Z
 req_type: Task
 tags:
 - from-implementer:TASK-3924
@@ -31,6 +31,23 @@ comments:
   content: 'APPROVED (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Waiter keyed to parent pid; short-lived parents release at once. Needs identity rule + tests.'
   created_at: 2026-11-28T00:37:32.471347617Z
   modified_at: 2026-11-28T00:37:32.471347617Z
+- id: 01a22005-cb32-7082-9dec-177dddcd6e99
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 1d57c2f6f2 (git diff origin/main...HEAD: admission_owner.rs +85/-9, agent_registry.rs 1 line visibility).
+
+    **Delta over TASK-3925 (#4755)**: #4755 made identity the sorted PR set and lets a retry adopt a live waiter from any parent. It left the owner as getppid(), so a train run from an agent's one-off Bash call was released the moment that shell exited and BUG-2771's yield never applied. This PR sets the identity rule: the owner is the agent client ancestor (claude/codex/agy, found by the existing session_start_agent_pid walk) when there is one, else the parent as before.
+
+    **Evidence (behavioral, unit)**: task3541_agent_session_waiter_outlives_its_short_lived_shell (fake tree train->bash -c->client; the shell exits, the waiter stays and the auto-train yields). task3541_without_an_agent_session_the_parent_owns_the_waiter (no client, and a -c shell that mentions claude does not count; the parent's exit releases it). The 5 TASK-3924/3925 tests still pass. Lane job: 7 passed.
+
+    **Probes**: (1) The agent match reuses cmdline_matches_agent, so -c wrappers are not mistaken for clients. (3) No client: falls back to the parent. Client present: nearest one wins. (4) A contained seat that cannot see the client in /proc resolves None and falls back to the parent. If a client pid is found but its identity cannot be captured, the owner is None and only the TTL applies. (5) Waiters grant nothing, so no authority path changed and no test was weakened.
+
+    **Residual risk**: a waiter owned by a long-lived agent session or interactive shell that never retries holds the queue until the 15-minute TTL. aida advisor loops release-waiter <ID> clears it. This is unchanged and accepted.
+  created_at: 2026-11-28T02:39:40.338378074Z
+  modified_at: 2026-11-28T02:39:40.338378074Z
+  session_id: 01a21ff70ac3
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a21ba6-8191-77d3-960c-90dc7a8b9eba
   author: joe
