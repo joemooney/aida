@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: f694d9696a374985b149f9ee6227fe59e0e98c8e
 
   collect_doctor_findings_at gains an `exact: Option<&SessionLease>` parameter (aida-cli-lib/src/doctor_root.rs:886-893) that duplicates main's BUG-2739 targeted_stale_finding(project_root, id), which already produces the exact local stale finding. attest_clone_lease could call targeted_stale_finding instead, and the extra parameter and the None arguments in coordination.rs and story_1662_lane_env_tests.rs could be dropped.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T07:28:59.982558528Z
-modified_at: 2026-11-28T01:05:49.263652027Z
+modified_at: 2026-11-28T01:06:01.925614030Z
 req_type: Task
 tags:
 - carried-from:BUG-2755
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21fb0-1045-7d30-a2bd-e5dad4ddfc3a
+  author: joe
+  timestamp: 2026-11-28T01:06:01.925609478Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: f694d9696a374985b149f9ee6227fe59e0e98c8e
   branch: pr-4632
