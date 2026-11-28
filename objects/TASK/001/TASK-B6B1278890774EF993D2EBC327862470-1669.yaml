@@ -1,0 +1,31 @@
+id: 01a2224c-fe46-72b1-aa44-97b5f43f2ad4
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1669
+title: 'Review follow-up: E2 post-condition scope (aida-cli-lib/src/gate/train_generated.rs ledger_violation and scr'
+description: |-
+  From TASK-3963
+  Reviewed sha: dd85481f4923fcb0d8c707c20a5fad7306893198
+
+  E2 post-condition scope (aida-cli-lib/src/gate/train_generated.rs ledger_violation and scripts/repair-generated.py ledger_violation): only the `writer` array of scripts/store-writers.toml is compared. A regenerated `operation` or `mediated_route` table or a top-level `version` change is committed with no host re-check. This is not exploitable today, because the base-pinned generator forces operation rows to blocked and copies mediated_route verbatim. Follow-up: refuse a changed mediated_route, a non-blocked new operation row or a version change, so the guarantee does not rest on the generator alone. (Carried from the round-3 review; not addressed in this head.)
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-28T13:16:40.902941560Z
+modified_at: 2026-11-28T13:16:40.902941560Z
+req_type: Task
+tags:
+- carried-from:TASK-3963
+- finding-hash:15551632
+- from-review:TASK-3963
+relationships:
+- rel_type: References
+  target_id: 01a22146-3192-7311-ba67-22c16846dd7c
+  created_at: 2026-11-28T13:16:58.895227543Z
+filed_at:
+  code_sha: dd85481f4923fcb0d8c707c20a5fad7306893198
+  branch: pr-4808
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6f4bd7e2493
+  vendor: claude
+  session: 01a2224ac7a9
