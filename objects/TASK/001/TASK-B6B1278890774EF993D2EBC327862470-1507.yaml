@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T12:55:29.623470732Z
-modified_at: 2026-11-26T15:28:34.041443747Z
+modified_at: 2026-11-28T01:09:23.025824073Z
 req_type: Task
 tags:
 - landing
@@ -114,6 +114,11 @@ comments:
   created_at: 2026-11-26T14:04:30.048953525Z
   modified_at: 2026-11-26T14:04:30.048953525Z
   session_id: 01a217f59d73
+- id: 01a21fb3-21d1-79e1-9b8b-2d31d6ce13e8
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3492): TASK-3917 follow-up: the 10-minute refusal cache (advisor_loop_train.rs Refusals/REJUDGE) is keyed only by (PR, head). State that changes without a head move is not seen for up to 10 minutes: an approval being recorded, CI turning green, a train... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:09:23.025824073Z
+  modified_at: 2026-11-28T01:09:23.025824073Z
 history:
 - id: 01a217f0-9b85-7542-b16e-c93c789c7c07
   author: joe
