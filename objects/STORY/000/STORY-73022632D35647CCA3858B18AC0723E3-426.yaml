@@ -1,0 +1,31 @@
+id: 01a22035-f072-7f62-b7b0-0e49bf44819e
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-426
+title: 'Review PR-4784: [AI:claude] fix(repair): release repair reservations for closed or merged PRs with dead lanes, salvage first (TASK-3891)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a22017`) for branch `task-3891-release-dead-reservations`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4784>
+  - Branch: `task-3891-release-dead-reservations` → `main`
+
+  ## Covers
+
+  - TASK-3891
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4784` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T03:32:15.602683195Z
+modified_at: 2026-11-28T03:32:15.602683195Z
+req_type: Story
+filed_at:
+  code_sha: f0ad200d8c64921b6abe5991f80e30b157fbaa6c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0ad200d8c
