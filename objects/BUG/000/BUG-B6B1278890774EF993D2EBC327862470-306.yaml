@@ -8,10 +8,16 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-12T21:48:37.083633477Z
-modified_at: 2026-11-13T06:33:22.460223290Z
+modified_at: 2026-11-28T00:43:35.531887058Z
 req_type: Bug
 tags:
 - track:dell1
+comments:
+- id: 01a21f9b-84eb-72c2-b812-5395a8c4ac6f
+  author: joe
+  content: 'ESCALATE ruling (advisor aida-d3 2026-11-27 17:58; applied by product-15): DESIGN. Keep open as NEEDS SKETCH; no lane until a sketch is signed.'
+  created_at: 2026-11-28T00:43:35.531887058Z
+  modified_at: 2026-11-28T00:43:35.531887058Z
 history:
 - id: 01a1d364-8aff-7251-bcf2-0b673b7f7620
   author: joe
