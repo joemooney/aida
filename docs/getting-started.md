@@ -101,7 +101,7 @@ Replace `<ID>` with the ID that `aida add` printed. The `## Acceptance` section 
 
 ## 4. Prepare your first review
 
-Make a small change on a branch and commit it. For example, after editing a file:
+Make a small change on a branch and commit it. For example, after editing a tracked file (run `git add` first for a new file):
 
 ```bash
 git switch -c greeting
@@ -111,7 +111,7 @@ aida review prepare --from main --specs <ID>
 
 `aida review prepare` runs locally and sends nothing to an agent. It prints a report:
 
-- **Mode**: `range` when you pass `--from main` (the commits on your branch). Without `--from`, it reviews your uncommitted changes instead.
+- **Mode**: `range` when you pass `--from main` (the commits on your branch; use your default branch's name if it is not `main`). Without `--from`, it reviews your uncommitted changes instead.
 - **Linked AIDA Requirement Acceptance Criteria**: the acceptance criteria of the specs you named with `--specs`.
 - **Reviewable File Inventory**: every changed file. A review must account for each one.
 - **Token-Budgeted Semantic Review Batches**: the files grouped into pieces small enough for one reviewer pass.
