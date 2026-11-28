@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: d169b25498d0770d01241a37abe8cf81163753ec
 
   aida-cli-lib/src/coordination.rs:879-882: the new other-host branch of implementer_refusal ('on host X, heal the holder only if `aida doctor check leases` lists it') has no test; only the same-host ineligible and eligible branches are asserted. It is hint text only and decides no admission, so it is not a gate decision. Add one assertion with holder.host set to another host.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T15:35:09.232056973Z
-modified_at: 2026-11-28T01:12:01.149816693Z
+modified_at: 2026-11-28T01:12:03.125720225Z
 req_type: Task
 tags:
 - carried-from:BUG-2773
@@ -35,6 +35,13 @@ history:
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a21fb5-9335-7c41-bd8e-a74db3d90c1e
+  author: joe
+  timestamp: 2026-11-28T01:12:03.125718323Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: d169b25498d0770d01241a37abe8cf81163753ec
   branch: pr-4666
