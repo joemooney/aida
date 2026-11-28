@@ -10,12 +10,12 @@ description: |
   - AC2: each such landing records the mandate id in the train record and the landed spec's history, so `aida mandate status` and the audit trail show what it shipped.
   - AC3: when the mandate expires or is stopped, supervised PRs fall back to human-only on the next poll; a test.
   - AC4: set the knob to true in .aida/config.toml once it lands (a follow-up).
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T15:15:41.002272518Z
-modified_at: 2026-11-28T08:13:01.034168161Z
+modified_at: 2026-11-28T08:16:52.795794754Z
 req_type: Story
 tags:
 - landing
@@ -292,6 +292,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a2213a-843b-7931-8a6d-30b308e0156e
+  author: aida-session-start
+  timestamp: 2026-11-28T08:16:52.795790563Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: fd10cfd3049a6cdf799e17ca5d2d70b27f35d9d7
