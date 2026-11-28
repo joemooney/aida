@@ -900,6 +900,7 @@ aida review prepare --pr 42 --run-review --adversarial \
             <tr><td><code>1</code></td><td><code>--fail-on</code> matched, coverage failed, or the run was refused. Wins over 4.</td></tr>
             <tr><td><code>3</code></td><td>Not used by review prepare: the <code>--auto-complete</code> drive hard failure.</td></tr>
             <tr><td><code>4</code></td><td>Partial: challenger unavailable. The finder report and SARIF are still written, and its findings are marked unchallenged.</td></tr>
+            <tr><td><code>5</code></td><td>Nothing to review: no changed files in scope, so nothing was reviewed. Never reported as a pass.</td></tr>
           </table>
           <p class="card-subtitle" style="margin-top:14px;">OUTPUT RULES</p>
           <table>

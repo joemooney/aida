@@ -22,15 +22,21 @@ If you are already inside Claude Code, Codex CLI, or Antigravity, paste this pro
 For end users and CI runners (no Rust toolchain required), the [release installer](../scripts/install.sh) detects your Linux architecture (`x86_64` or `arm64`), downloads the release tarball (`aida-linux-x86_64.tar.gz` or `aida-linux-arm64.tar.gz`), and installs `aida`, `aida-server`, `aida-porcelain`, and the `aida-flow` symlink into `~/.local/bin/`:
 
 ```bash
-# Install the latest release from GitHub Releases into ~/.local/bin
-curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh | bash
+# Download the installer, then install the latest release into ~/.local/bin
+curl -fsSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh -o install.sh && bash install.sh
 
 # Pin a specific release tag or choose a custom install directory
-curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh | bash -s -- --version v0.16.0 --prefix ~/.local/bin
+bash install.sh --version v0.16.0 --prefix ~/.local/bin
 
 # Or install from a GitLab release host (or set AIDA_RELEASE_HOST=gitlab)
-curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh | bash -s -- --host gitlab
+bash install.sh --host gitlab
+
+# Offline: install a release tarball you downloaded on another machine
+bash install.sh --archive aida-linux-x86_64.tar.gz
 ```
+
+If a download fails, the installer prints the URL it could not fetch, installs
+nothing, and exits with an error.
 
 Ensure `~/.local/bin` is on your `PATH`, then verify and update later with:
 
