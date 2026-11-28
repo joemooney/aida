@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T08:51:09.419544492Z
-modified_at: 2026-11-28T01:06:59.840206844Z
+modified_at: 2026-11-28T01:07:03.650002944Z
 req_type: Bug
 tags:
 - agents
@@ -113,6 +113,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3481): aida-core/src/mailbox_lifecycle/activation.rs:234: the retention dry run still calls the unscoped scan() (every owner Dead, no age floor), so it reports a live owner''s leftovers as reapable. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T01:06:46.336761096Z
   modified_at: 2026-11-28T01:06:46.336761096Z
+- id: 01a21fb1-0162-7083-8a62-a61113764c35
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3482): aida-cli-lib/src/agent_registry_root.rs LeftoverOwners::probe is untested: the CLI test builds LeftoverOwners by hand, so the complete=false derivation (list_leases_strict_all error, PidObserver isolated) and the canonicalize-then-match of lease... [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:07:03.650002944Z
+  modified_at: 2026-11-28T01:07:03.650002944Z
 history:
 - id: 01a2173e-e582-7153-b482-a9c2c1f63d41
   author: joe
