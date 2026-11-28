@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-26T10:47:01.862391650Z
-modified_at: 2026-11-28T02:44:59.723390801Z
+modified_at: 2026-11-28T02:47:40.519943014Z
 req_type: Task
 tags:
 - from-implementer:BUG-2770
@@ -25,6 +25,11 @@ relationships:
   target_id: 01a21788-5844-7983-b20d-094815b58438
   created_at: 2026-11-28T00:27:27.274686470Z
   created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a2200c-f158-7c71-af22-57c63a437ebc
+  created_at: 2026-11-28T02:47:40.519928742Z
+  created_by: dirtlab
 comments:
 - id: 01a21f8c-0e94-7450-9ffc-816aff45e886
   author: joe
@@ -91,6 +96,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a2200d-2757-7090-9a2f-87e4d30c1afa
+  author: dirtlab
+  timestamp: 2026-11-28T02:47:42.679553662Z
+  changes: []
 filed_at:
   code_sha: 820435a1f67ddeb186c7d21b0615ceaefe079160
   branch: bug-2770-gc-scope
