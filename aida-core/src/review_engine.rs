@@ -48,6 +48,40 @@ impl FileChangeKind {
     }
 }
 
+/// Lossless, injective text form of a raw git path: valid UTF-8 is kept,
+/// `\` becomes `\\` and each byte outside valid UTF-8 becomes `\xHH`.
+/// `decode_path` returns the exact bytes. trace:TASK-3869 | ai:claude
+pub fn encode_path(bytes: &[u8]) -> String {
+    use std::fmt::Write;
+    let mut out = String::with_capacity(bytes.len());
+    for chunk in bytes.utf8_chunks() {
+        out.push_str(&chunk.valid().replace('\\', "\\\\"));
+        for b in chunk.invalid() {
+            write!(out, "\\x{b:02X}").unwrap();
+        }
+    }
+    out
+}
+
+/// The raw bytes `encode_path` encoded. A `\` starting no escape stays
+/// literal, so a hand-written path such as `a\b` keeps its bytes.
+// trace:TASK-3869 | ai:claude
+pub fn decode_path(text: &str) -> Vec<u8> {
+    let (bytes, mut out, mut i) = (text.as_bytes(), Vec::with_capacity(text.len()), 0);
+    while i < bytes.len() {
+        let hex = bytes
+            .get(i + 2..i + 4)
+            .and_then(|h| std::str::from_utf8(h).ok());
+        let byte = hex.filter(|h| h.bytes().all(|c| c.is_ascii_hexdigit()));
+        match (bytes[i], bytes.get(i + 1), byte) {
+            (b'\\', Some(b'\\'), _) => (out.push(b'\\'), i += 2),
+            (b'\\', Some(b'x'), Some(h)) => (out.push(u8::from_str_radix(h, 16).unwrap()), i += 4),
+            (b, ..) => (out.push(b), i += 1),
+        };
+    }
+    out
+}
+
 /// Raw entry describing one changed path discovered from git.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RawDiffEntry {
@@ -1575,9 +1609,10 @@ pub fn findings_to_sarif_json_with_suppressed(
         let start_line = start.max(1);
         let end_line = end.max(start_line);
 
-        // Encode path bytes so reserved characters remain part of the filename.
+        // Encode path bytes so reserved characters remain part of the filename;
+        // the raw bytes, not their text form. trace:TASK-3869 | ai:claude
         let mut uri = String::new();
-        for byte in f.path.bytes() {
+        for byte in decode_path(&f.path) {
             if byte.is_ascii_alphanumeric() || b"/-._~".contains(&byte) {
                 uri.push(char::from(byte));
             } else {
@@ -1814,6 +1849,27 @@ mod tests {
     }
 
     // trace:TASK-3872 | ai:codex
+    /// Raw path bytes survive the text form exactly, and distinct byte
+    /// strings never share one. trace:TASK-3869 | ai:claude
+    #[test]
+    fn t3869_path_text_form_is_lossless_and_injective() {
+        let cases: [&[u8]; 6] = [
+            b"caf\xe9.rs",
+            br"caf\xE9.rs",
+            br"a\\b",
+            "naïve.rs".as_bytes(),
+            b"\xff\\x",
+            b"",
+        ];
+        let encoded: BTreeSet<String> = cases.iter().map(|c| encode_path(c)).collect();
+        assert_eq!(encoded.len(), cases.len());
+        for c in cases {
+            assert_eq!(decode_path(&encode_path(c)), c);
+        }
+        assert_eq!(encode_path(b"caf\xe9.rs"), r"caf\xE9.rs");
+        assert_eq!(encode_path("naïve.rs".as_bytes()), "naïve.rs");
+    }
+
     #[test]
     fn h2b_compiled_globs_bound_expansion() {
         let rules = [String::from("*{*,x}/FoO")];
