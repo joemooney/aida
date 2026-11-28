@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-24T06:42:06.973969419Z
-modified_at: 2026-11-25T07:42:15.061792185Z
+modified_at: 2026-11-28T00:42:31.929758065Z
 req_type: Story
 tags:
 - admission
@@ -354,6 +354,11 @@ comments:
   content: 'DESIGN NOTES from rejected review follow-ups (2026-11-24 triage, product-15): TASK-3327: #4502 closed | TASK-3328: #4502 closed'
   created_at: 2026-11-25T07:42:15.061792185Z
   modified_at: 2026-11-25T07:42:15.061792185Z
+- id: 01a21f9a-8c79-7011-8b15-403ce37631b5
+  author: joe
+  content: 'RETURNED to Approved (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Advisor chose option B 11-24: TASK-3884 (approved) lands first; then critical-section slice. Keep behind TASK-3884.'
+  created_at: 2026-11-28T00:42:31.929758065Z
+  modified_at: 2026-11-28T00:42:31.929758065Z
 history:
 - id: 01a20c4a-e76c-7271-bf1a-1df105411cdc
   author: joe
