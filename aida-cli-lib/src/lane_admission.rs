@@ -757,7 +757,10 @@ mod tests {
             },
         )
         .unwrap();
-        assert!(compiling.is_none(), "a compiling job started on a full host");
+        assert!(
+            compiling.is_none(),
+            "a compiling job started on a full host"
+        );
         assert!(
             compile_waits[0].contains("all 1 host compile slots"),
             "{compile_waits:?}"
