@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-25T20:14:03.432463687Z
-modified_at: 2026-11-28T00:59:10.242514656Z
+modified_at: 2026-11-28T01:00:27.102031628Z
 req_type: Task
 tags:
 - ci
@@ -78,6 +78,11 @@ comments:
   content: 'DEFERRED FINDING (recorded from TASK-3443): The CI-cache finding is wired only into the light `aida doctor check disk-headroom` path; the full doctor path (doctor_cmd.rs ~846, scan_disk_headroom) does not include it, so `aida doctor` with all categories omits the alert. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
   created_at: 2026-11-28T00:58:58.708073917Z
   modified_at: 2026-11-28T00:58:58.708073917Z
+- id: 01a21faa-f45e-7ed3-9833-9d94ea942bd1
+  author: joe
+  content: 'DEFERRED FINDING (recorded from TASK-3451): Inconclusive CI-cache walk is silent: ci_cache_bytes returns None when the 10s CI_CACHE_WALK_BUDGET expires below the cap (aida-cli-lib/src/doctor/disk.rs ci_cache_bytes/ci_cache_finding), and ci_cache_finding maps None to no finding. [Joe sign-off 2026-11-27 17:58, STORY-3118 AC3; applied by product-15]'
+  created_at: 2026-11-28T01:00:27.102031628Z
+  modified_at: 2026-11-28T01:00:27.102031628Z
 history:
 - id: 01a21461-a683-7013-a237-4532cbf94a9a
   author: joe
