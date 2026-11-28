@@ -172,6 +172,10 @@ pub struct ReviewPreparationBundle {
     pub anchored_findings: Option<Vec<RawReviewFinding>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub adversarial: Option<AdversarialSummary>,
+    /// Set when no file is in scope: why there was nothing to review.
+    // trace:TASK-3953 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nothing_to_review: Option<String>,
 }
 
 // trace:TASK-3862 | ai:codex
@@ -186,7 +190,7 @@ fn load_review_rules(project_root: &Path) -> Result<ProjectReviewRulesConfig> {
 // trace:BUG-2779 STORY-3120 | ai:claude
 pub(crate) fn handle_review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
     review_prepare(args, storage).map_err(|e| {
-        if e.is::<PartialReviewExit>() {
+        if e.is::<PartialReviewExit>() || e.is::<NothingToReviewExit>() {
             e
         } else {
             anyhow::anyhow!("{e:#}")
@@ -269,6 +273,15 @@ fn review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
     if let Some(err) = read_error {
         return Err(err);
     }
+    // An empty scope is never a pass. trace:TASK-3953 | ai:claude
+    let nothing_to_review = inventory.reviewable_files.is_empty().then(|| {
+        let ends = (
+            base_ref.as_deref(),
+            head_ref.as_deref(),
+            merge_base.as_deref(),
+        );
+        nothing_to_review_message(&project_root, &mode, ends, &inventory, &args.path)
+    });
 
     // 4. Bundle reviewable files into semantic, token-bounded batches.
     let max_files = rules_cfg
@@ -332,7 +345,8 @@ fn review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
         Some(anchor_findings_with(&parsed, |path| {
             content_cache.get(path).cloned()
         }))
-    } else if let Some(trusted) = &trusted {
+    } else if let (Some(trusted), None) = (&trusted, &nothing_to_review) {
+        // No agent starts when nothing is in scope. trace:TASK-3953 | ai:claude
         // trace:STORY-3120 | ai:claude
         let parent_env = Environment::capture().to_pairs();
         let agent = run_review_agent(args.agent.as_deref(), trusted, &parent_env)?;
@@ -443,6 +457,7 @@ fn review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
         coverage_verification,
         anchored_findings,
         adversarial,
+        nothing_to_review,
     };
 
     let rendered = if args.json {
@@ -498,6 +513,17 @@ fn review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
         for result in marked.take(unchallenged.len()) {
             result["properties"] = serde_json::json!({ "unchallenged": true });
         }
+        // Zero results would read as a clean pass. trace:TASK-3953 | ai:claude
+        if let Some(why) = &bundle.nothing_to_review {
+            report["runs"][0]["invocations"] = serde_json::json!([{
+                "executionSuccessful": false,
+                "toolExecutionNotifications": [{
+                    "level": "warning",
+                    "message": { "text": format!("No files were reviewed. {why}") },
+                }],
+            }]);
+            report["runs"][0]["properties"] = serde_json::json!({ "filesReviewed": 0 });
+        }
         write_output(&project_root, path, &serde_json::to_string_pretty(&report)?)
             .with_context(|| format!("write SARIF {}", path.display()))?;
     }
@@ -510,6 +536,10 @@ fn review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
             .unwrap_or_else(|| format!("aida review prepare --pr {pr} --write <file>"));
         ensure_no_read_producers(&unconfined)?;
         post_review_comment(pr_forge(&project_root)?.as_ref(), pr, &bundle, &full_report)?;
+    }
+    // trace:TASK-3953 | ai:claude
+    if let Some(why) = bundle.nothing_to_review {
+        return Err(NothingToReviewExit(why).into());
     }
     if let (Some(threshold), Some(matches)) = (&args.fail_on, exceeded) {
         anyhow::ensure!(
@@ -1044,6 +1074,78 @@ impl std::fmt::Display for PartialReviewExit {
 }
 impl std::error::Error for PartialReviewExit {}
 
+/// `aida review prepare` exits 5 when no file is in scope: nothing was
+/// reviewed, so the run is neither a pass (0) nor a failure (1).
+// trace:TASK-3953 | ai:claude
+pub(crate) const NOTHING_TO_REVIEW_EXIT_CODE: i32 = 5;
+
+/// Carries [`NOTHING_TO_REVIEW_EXIT_CODE`] past the top-level error printer.
+#[derive(Debug)]
+pub(crate) struct NothingToReviewExit(String);
+impl std::fmt::Display for NothingToReviewExit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+impl std::error::Error for NothingToReviewExit {}
+
+/// Plain-English reason nothing is in scope, naming the resolved range, and
+/// a hint when committed-range modes miss uncommitted work.
+// trace:TASK-3953 | ai:claude
+fn nothing_to_review_message(
+    root: &Path,
+    mode: &str,
+    (base, head, merge_base): (Option<&str>, Option<&str>, Option<&str>),
+    inventory: &ClassifiedInventory,
+    paths: &[String],
+) -> String {
+    let short = |sha: Option<&str>| sha.unwrap_or("?").chars().take(12).collect::<String>();
+    // Refs and paths are code spans, so a hostile name renders inert.
+    let code = |text: &str| match text.contains('`') || text.chars().any(char::is_control) {
+        true => code_span(text),
+        false => format!("`{text}`"),
+    };
+    let excluded = inventory.excluded_files.len();
+    let files = if excluded == 0 {
+        "files"
+    } else {
+        "reviewable files"
+    };
+    let mut why = match mode {
+        "range" => format!(
+            "Nothing to review: no {files} changed between {} (merge base {}) and {}",
+            code(base.unwrap_or("?")),
+            short(merge_base),
+            short(head)
+        ),
+        "commit" => format!(
+            "Nothing to review: commit {} changes no {files}",
+            short(head)
+        ),
+        "scan" => format!("Nothing to review: no tracked {files} to scan"),
+        _ => format!("Nothing to review: the working tree has no {files} changed against HEAD"),
+    };
+    if !paths.is_empty() {
+        let scope: Vec<_> = paths.iter().map(|p| code(p)).collect();
+        why.push_str(&format!(" under {}", scope.join(", ")));
+    }
+    why.push('.');
+    match excluded {
+        0 => {}
+        1 => why.push_str(" 1 changed file is excluded from review."),
+        n => why.push_str(&format!(" {n} changed files are excluded from review.")),
+    }
+    let committed = matches!(mode, "range" | "commit");
+    let status = ["status", "--porcelain", "--untracked-files=no"];
+    if committed && git_text(root, &status).is_ok_and(|s| !s.trim().is_empty()) {
+        why.push_str(
+            " You have uncommitted changes, which a commit range does not include: \
+             commit them, then run this again.",
+        );
+    }
+    why
+}
+
 // trace:TASK-3862 | ai:codex
 fn git_rev_parse(root: &Path, rev: &str) -> Result<String> {
     let value = git_text(root, &["rev-parse", "--verify", "--end-of-options", rev])?;
@@ -1557,13 +1659,23 @@ fn report_pieces(bundle: &ReviewPreparationBundle) -> Vec<ReportPiece> {
         bundle.inventory.excluded_files.len(),
         bundle.batches.len()
     ));
+    // trace:TASK-3953 | ai:claude
+    if let Some(why) = &bundle.nothing_to_review {
+        out.push_str(&format!(
+            "## Nothing to review\n\n{why}\n\nNo files were reviewed, so this is not a pass.\n\n"
+        ));
+    }
 
     if let Some(cov) = &bundle.coverage_verification {
         out.push_str("## File Coverage Verification\n\n");
-        out.push_str(&format!(
-            "- **Passed**: `{}` ({}% of {} reviewable files accounted)\n",
-            cov.passed, cov.coverage_rate_pct, cov.total_reviewable
-        ));
+        if bundle.nothing_to_review.is_some() {
+            out.push_str("- **Passed**: not applicable (no files were reviewed)\n");
+        } else {
+            out.push_str(&format!(
+                "- **Passed**: `{}` ({}% of {} reviewable files accounted)\n",
+                cov.passed, cov.coverage_rate_pct, cov.total_reviewable
+            ));
+        }
         for file in &cov.not_reviewable_by_batch {
             out.push_str(&format!(
                 "- **Not reviewable by batch**: {}\n{}",
@@ -2203,7 +2315,13 @@ mod tests {
             write: Some(dest.clone()),
             ..Default::default()
         };
-        handle_review_prepare(&args, &store).unwrap(); // Either content read would fail UTF-8 decoding.
+        // Either content read would fail UTF-8 decoding; all-excluded is
+        // nothing to review. trace:TASK-3953 | ai:claude
+        let err = handle_review_prepare(&args, &store).unwrap_err();
+        assert_eq!(crate::exit_code_for_error(&err), 5, "{err:#}");
+        let msg = err.to_string();
+        assert!(msg.contains("no reviewable files changed"), "{msg}");
+        assert!(msg.contains("2 changed files are excluded"), "{msg}");
         let bundle: ReviewPreparationBundle =
             serde_json::from_slice(&std::fs::read(dest).unwrap()).unwrap();
         assert!(bundle.inventory.reviewable_files.is_empty());
@@ -3332,6 +3450,9 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
         std::fs::write(root.join("a.rs"), "a").unwrap();
         git_text(root, &["add", "a.rs"]).unwrap();
         let base = crate::test_git::commit_fixture(root);
+        std::fs::write(root.join("a.rs"), "b").unwrap();
+        git_text(root, &["add", "a.rs"]).unwrap();
+        crate::test_git::commit_fixture(root);
         let store = Storage::new(root.join("requirements.yaml"));
         let mut args = ReviewPrepareArgs {
             from: Some(base),
@@ -3458,6 +3579,7 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
                 note: Some("@note **bold**\n# heading".into()),
                 ..Default::default()
             }),
+            nothing_to_review: None,
         };
         let forge = crate::forge::fake::RecordingForge::new();
         post_review_comment(&forge, 42, &bundle, "out.md").unwrap();
@@ -3552,6 +3674,7 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             coverage_verification: None,
             anchored_findings: Some((0..150).map(|i| finding(i, message(i))).collect()),
             adversarial: None,
+            nothing_to_review: None,
         };
         let full = render_bundle_markdown(&bundle);
         assert!(full.chars().count() > 70_000, "{}", full.len());
@@ -4081,5 +4204,105 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             }
         }
         out + rest
+    }
+
+    /// An empty `--from` range with uncommitted work: no agent starts, the
+    /// report and SARIF say nothing was reviewed, and the exit code is 5.
+    // trace:TASK-3953 | ai:claude
+    #[test]
+    fn task3953_empty_range_says_nothing_to_review_never_a_pass() {
+        let temp = tempfile::tempdir().unwrap();
+        let (root, runner) = (temp.path().join("repo"), temp.path().join("runner"));
+        let marker = temp.path().join("runner-started");
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        let extra = [("AIDA_REVIEW_RUNNER_CMD", runner.to_str())];
+        let _guard = crate::test_env::AmbientGuard::hermetic_and(&root, None, &extra);
+        let store = Storage::new(root.join("requirements.yaml"));
+        git_text(&root, &["init", "-q"]).unwrap();
+        std::fs::write(root.join("greet.py"), "print(1)\n").unwrap();
+        git_text(&root, &["add", "-A"]).unwrap();
+        let head = crate::test_git::commit_fixture(&root);
+        std::fs::write(root.join("greet.py"), "print(2)\n").unwrap();
+        let body = format!("#!/bin/sh\ntouch '{}'\nexit 1\n", marker.display());
+        std::fs::write(&runner, body).unwrap();
+        let status = Command::new("chmod").arg("755").arg(&runner).status();
+        assert!(status.unwrap().success());
+        let args = ReviewPrepareArgs {
+            from: Some("HEAD".into()),
+            run_review: true,
+            json: true,
+            write: Some("out.json".into()),
+            sarif: Some("out.sarif".into()),
+            ..Default::default()
+        };
+        let err = handle_review_prepare(&args, &store).unwrap_err();
+        let code = crate::exit_code_for_error(&err);
+        assert_eq!(code, NOTHING_TO_REVIEW_EXIT_CODE, "{err:#}");
+        assert!(code == 5 && code != PARTIAL_REVIEW_EXIT_CODE);
+        let msg = err.to_string();
+        let range = format!(
+            "between `HEAD` (merge base {}) and {}",
+            &head[..12],
+            &head[..12]
+        );
+        assert!(
+            msg.starts_with("Nothing to review: no files changed"),
+            "{msg}"
+        );
+        assert!(msg.contains(&range), "{msg}");
+        assert!(msg.contains("You have uncommitted changes"), "{msg}");
+        assert!(!marker.exists(), "no agent starts on an empty range");
+        let read = |name: &str| std::fs::read_to_string(root.join(name)).unwrap();
+        let out: serde_json::Value = serde_json::from_str(&read("out.json")).unwrap();
+        assert_eq!(out["nothing_to_review"], msg.as_str());
+        assert!(out.get("coverage_verification").is_none(), "{out}");
+        let sarif: serde_json::Value = serde_json::from_str(&read("out.sarif")).unwrap();
+        let run = &sarif["runs"][0];
+        assert_eq!(run["results"], serde_json::json!([]));
+        assert_eq!(run["properties"]["filesReviewed"], 0);
+        let invocation = &run["invocations"][0];
+        assert_eq!(invocation["executionSuccessful"], false, "{sarif}");
+        let note = &invocation["toolExecutionNotifications"][0]["message"]["text"];
+        assert!(note
+            .as_str()
+            .unwrap()
+            .starts_with("No files were reviewed."));
+    }
+
+    /// A workspace with no changes: the Markdown report says nothing to
+    /// review and never prints a pass; no uncommitted-changes hint.
+    // trace:TASK-3953 | ai:claude
+    #[test]
+    fn task3953_clean_workspace_says_nothing_to_review() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let _guard = crate::test_env::AmbientGuard::hermetic(root, None);
+        let store = Storage::new(root.join("requirements.yaml"));
+        git_text(root, &["init", "-q"]).unwrap();
+        std::fs::write(root.join("a.rs"), "fn a() {}\n").unwrap();
+        git_text(root, &["add", "a.rs"]).unwrap();
+        crate::test_git::commit_fixture(root);
+        // Outside the repo: an untracked file is a workspace change.
+        let outside = tempfile::tempdir().unwrap();
+        let ledger = outside.path().join("ledger.json");
+        std::fs::write(&ledger, r#"{"files":[]}"#).unwrap();
+        let args = ReviewPrepareArgs {
+            verify_coverage: Some(ledger),
+            write: Some("out.md".into()),
+            ..Default::default()
+        };
+        let err = handle_review_prepare(&args, &store).unwrap_err();
+        assert_eq!(crate::exit_code_for_error(&err), 5, "{err:#}");
+        let msg = err.to_string();
+        let want = "Nothing to review: the working tree has no files changed against HEAD.";
+        assert_eq!(msg, want);
+        let md = std::fs::read_to_string(root.join("out.md")).unwrap();
+        assert!(
+            md.contains(&format!("## Nothing to review\n\n{want}\n")),
+            "{md}"
+        );
+        assert!(md.contains("this is not a pass"), "{md}");
+        assert!(md.contains("**Passed**: not applicable"), "{md}");
+        assert!(!md.contains("`true`"), "{md}");
     }
 }

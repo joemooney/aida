@@ -93,7 +93,9 @@
         "prepare_excludes_credentials_before_revision_reads",
         "root_credential_dirs_excluded_reported_and_refused_as_findings",
         "root_commit_preserves_unusual_git_paths",
-        "write_confines_new_and_existing_paths"
+        "write_confines_new_and_existing_paths",
+        "task3953_empty_range_says_nothing_to_review_never_a_pass",
+        "task3953_clean_workspace_says_nothing_to_review"
       ],
       "scope": "module"
     },
