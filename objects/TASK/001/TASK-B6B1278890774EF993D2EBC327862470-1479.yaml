@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: efe42749706c6242f8d43f7d112fd8b05003df13
 
   The new AC tests carry only `trace:BUG-2733` (comments say 'F4 (AC1)' / 'F5 (AC2)'), so `aida criteria` still lists BUG-2733.AC1 and AC2 as untraced although tests exist. Add per-criterion trace tags to bug_2733_promotion_branch_resolves_only_the_new_commits_spec, bug_2733_ship_gate_reads_only_the_new_commits_spec and bug_2733_train_refusal_names_only_the_new_commits_spec. File: aida-cli-lib/src/tests/bug_2733_base_patch_equivalents_tests.rs.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T02:24:33.549986181Z
-modified_at: 2026-11-28T01:03:57.085691394Z
+modified_at: 2026-11-28T01:03:59.123337265Z
 req_type: Task
 tags:
 - carried-from:BUG-2733
@@ -33,6 +33,13 @@ history:
   author: joe
   timestamp: 2026-11-26T05:11:50.436181024Z
   changes: []
+- id: 01a21fae-3093-7cf0-a0e1-015536a15b88
+  author: joe
+  timestamp: 2026-11-28T01:03:59.123332668Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: efe42749706c6242f8d43f7d112fd8b05003df13
   branch: pr-4598
