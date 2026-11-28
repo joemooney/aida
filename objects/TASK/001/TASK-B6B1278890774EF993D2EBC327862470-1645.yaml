@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T08:29:38.066956Z
-modified_at: 2026-11-28T11:41:35.867225684Z
+modified_at: 2026-11-28T11:41:39.356492055Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -143,6 +143,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: REQUEST CHANGES at 4521f5d84a92 (TASK-3963, STORY-2894 S1; strict gate-tier review). The design matches the signed sketch. Generators are pinned from the base and ro-bound over the tip, and a car that changes a generator disables its entry. The bwrap sandbox is offline with one writable mount (the checkout) and clearenv/PYTHONSAFEPATH. The driver runs each entry twice, refuses writes outside the outputs, non-100644 modes and E2 violations, and rolls back. Rust re-checks the report, the sha256 and 100644 mode, stages only the reported paths in a private index, writes one canonical regen commit with no completion ID, and verify_structure re-checks it as the single last commit on the last car. Every refusal leaves the train as built. AC2: approval coverage is unchanged (add_car and patch-ids are untouched). AC3/AC4: determinism, registered paths only, unchanged car patch-ids, the clean-tip no-op and the section-4 refusals all have tests. One blocker: CI is red at this head because the new gate/train_generated.rs lacks the `// mandate-gate` marker and is not classified as a kernel/dispatch/orchestrator. Two gate-floor ratchets fail in CI (fast compile), which also fails Build (ubuntu-latest). Two non-blocking follow-ups: the sketch''s advisor mail on an outside-output refusal, and the PR body''s read_allowlist claim. The base is 2 commits ahead on .github/workflows/ci.yml; no finding depends on those commits.. No triage reason was given.'
   created_at: 2026-11-28T11:41:35.867224354Z
   modified_at: 2026-11-28T11:41:35.867224354Z
+- id: 01a221f5-fe08-7e61-bf99-e6c37b66f1f6
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3963):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 4521f5d84a92
+    Recorded: 2026-11-28T11:38:37.799320048+00:00
+    Findings:
+    1. CI red, caused by this PR: the new gate module aida-cli-lib/src/gate/train_generated.rs fails two gate-floor ratchets in the CI (fast compile) Ratchet set step (job 140945042990, group story_1888_gate_paths). (1) gate::mandate_gates::story_1888_gate_paths_tests::every_floor_source_file_carries_the_marker (story_1888_gate_paths_tests.rs:600) reports 'floor files without a `// mandate-gate` line: ["aida-cli-lib/src/gate/train_generated.rs"]'. (2) every_gate_module_is_a_dispatch_module_a_kernel_or_an_orchestrator (story_1888_gate_paths_tests.rs:3632) reports 'gate/train_generated.rs: in 0 classes'. Build (ubuntu-latest) 'Require every CI lane' then fails because COMPILE=failure. AC1 claims the gate module with its floor ratchets, so the head cannot land. Fix: add the `// mandate-gate` marker line to gate/train_generated.rs and register it in exactly one class (it is pure decision logic, so GATE_KERNELS fits; otherwise the orchestrator inventory with a reason). Do not drop it from GATE_PROTECTED_PATHS. This does not depend on the base's newer ci.yml commits.
+    2. Sketch section 4 says that when a generator writes outside its entry's outputs, the refusal also sends an advisor mail naming the path. S1 records the refusal only on the stderr warning, Built.regen_refused (journaled) and the train PR body's aida-train-regeneration-refused: line (pr_train_regen.rs regenerate). The refusal itself works and is tested (task_3963_bwrap_a_generator_writing_outside_its_outputs_refuses). Follow-up: add the advisor mail, or record in the sketch that S1 leaves it out.
+    3. The PR body says the regeneration sandbox honours `[contained] read_allowlist`. pr_train_regen.rs toolchain()/sandbox_args bind only the fixed TOOLCHAIN list, the python3/git install prefix and the checkout; no read_allowlist is consulted. The behaviour is the stricter one, so only the PR description is inaccurate. Follow-up: correct the description, or wire the allowlist if it was intended.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-28T11:41:39.208629230Z
+  modified_at: 2026-11-28T11:41:39.208629230Z
 history:
 - id: 01a22146-948a-7032-ad96-95a74d9a14d6
   author: joe
