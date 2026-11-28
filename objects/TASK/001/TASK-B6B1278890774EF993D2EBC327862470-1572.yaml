@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-27T19:42:29.210691180Z
-modified_at: 2026-11-28T00:41:32.583561004Z
+modified_at: 2026-11-28T01:19:05.673963813Z
 req_type: Task
 tags:
 - carried-from:TASK-3927
@@ -26,6 +26,12 @@ relationships:
   target_id: 01a21e88-1e0b-75b0-a977-880e75d890f9
   created_at: 2026-11-28T00:41:32.583503775Z
   created_by: joe
+comments:
+- id: 01a21fbc-05ca-7073-b1cd-72eace171b8c
+  author: joe
+  content: Recorded as a finding on TASK-3927 (STORY-3118 AC3; Joe sign-off 2026-11-27 17:58). Closed.
+  created_at: 2026-11-28T01:19:05.673963813Z
+  modified_at: 2026-11-28T01:19:05.673963813Z
 history:
 - id: 01a21f4e-3c7d-7013-9572-a2cf50f7a586
   author: joe
