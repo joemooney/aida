@@ -97,6 +97,12 @@ comments:
   modified_at: 2026-11-28T08:28:44.444120459Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a22147-7bde-73b2-a137-8e798a34ecd3
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `story-2894-sketch` at head `9e501123047555586f93e4a0f94de42c188c0dfe`.'
+  created_at: 2026-11-28T08:31:02.622781646Z
+  modified_at: 2026-11-28T08:31:02.622781646Z
+  session_id: 01a22136b669
 history:
 - id: 01a1ec19-7b04-7850-af52-2ebbc7e873d2
   author: joe
