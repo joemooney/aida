@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-26T18:33:21.264151247Z
-modified_at: 2026-11-26T18:33:21.264151247Z
+modified_at: 2026-11-28T00:32:52.187444195Z
 req_type: Task
 tags:
 - carried-from:BUG-2772
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a21837-b568-7403-8cd2-306cdf771adb
   created_at: 2026-11-26T18:33:37.544096574Z
+comments:
+- id: 01a21f91-b3db-7033-81c9-52baa50c8638
+  author: joe
+  content: 'MERGED into TASK-3512 (grooming 2026-11-27 (product-15; advisor aida-d3 signoff 17:45)): Same divergence: BUG-2772 AC1 second clause (pin on no remote) not implemented.'
+  created_at: 2026-11-28T00:32:52.187444195Z
+  modified_at: 2026-11-28T00:32:52.187444195Z
 history:
 - id: 01a21925-3315-76c2-8d8b-321eac4b9d89
   author: joe
