@@ -1,0 +1,30 @@
+id: 01a22164-0d7d-74e2-bd8a-545742aa7a1e
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-074
+title: S1 lists cli-help in TRAIN_GENERATED but does not run it in the train (train_run=false)
+description: |
+  The sketch table lists cli-help as a derived train entry. Its regeneration runs cargo (a cold build took 12m42s), and its input glob (aida-cli-lib/src/) matches almost every train. In S1 coverage is unchanged, so every car has already passed the strict check and the tip golden is current: running it would cost minutes on nearly every train and produce no change. TrainEntry.train_run is therefore false for cli-help (aida-cli-lib/src/gate/train_generated.rs), and the driver's train phase refuses it (TRAIN_ENTRIES). S3, which excludes the golden from coverage, should turn it on and supply the offline cargo environment (CARGO_HOME, RUSTUP_HOME and a target directory), as the conflict lane does in seat_clone.rs.
+
+  Two related choices: the train sandbox honours [contained] read_allowlist exactly like conflict-lane regeneration does (ro-bind / when the list is empty). A refused regeneration is printed to stderr and the train continues as built (today's behaviour); the refusal reason is not journaled separately, but the journaled Built records a regen commit whenever one is made.
+
+  Raised by the implementer while working TASK-3963.
+  Branch: task-3963-train-regen-s1  ·  Commit: 1df06dd659  (PR link added on merge)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-28T09:02:14.909395137Z
+modified_at: 2026-11-28T09:02:14.909395137Z
+req_type: Task
+tags:
+- from-implementer:TASK-3963
+- kind:design-choice
+- severity:minor
+filed_at:
+  code_sha: 1df06dd6599bc217b4f072c85c494af648c96fbf
+  branch: task-3963-train-regen-s1
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6d3ca942ec
+  vendor: claude
+  session: 01a2214b4de1
+  harness_version: 2.1.319 (Claude Code)

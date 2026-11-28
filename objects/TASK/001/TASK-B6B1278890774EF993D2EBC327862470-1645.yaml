@@ -11,12 +11,12 @@ description: |-
   - AC3: the advisor's 01:16 requirements hold: deterministic regeneration (run twice → identical bytes), only registered paths may change, and the PR's own non-generated diff is re-verified unchanged (patch-id over non-generated paths).
   - AC4: tests: regeneration on a clean tree is a no-op; each section-4 failure mode refuses.
   - Touches gate/: needs a human merge.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T08:29:38.066956221Z
-modified_at: 2026-11-28T08:38:52.440680624Z
+modified_at: 2026-11-28T09:07:45.179724724Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -43,6 +43,27 @@ comments:
   modified_at: 2026-11-28T08:38:52.440680624Z
   session_id: 01a2214b4de1
   harness_version: 2.1.319 (Claude Code)
+- id: 01a22168-fe80-7b23-a914-ffa494f6ea2c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 1df06dd6599bc217b4f072c85c494af648c96fbf (PR #4808). Reviewed git diff origin/main...HEAD.
+
+    Acceptance evidence:
+    - AC1 [behavioral]: REGISTRY rows plus --baseline (scripts/repair-generated.py with_baseline; seat_clone.rs inventory and pinned generators). gate/train_generated.rs: TRAIN_GENERATED, TrainClass, the ratchet tests every_train_entry_matches_its_embedded_registry_row and no_train_output_is_on_the_protected_floor_and_a_config_match_disables_it. Driver train phase. pr_train_regen.rs regen commit with trailers; pr_body_block in train_pr_body; Built.regen (journaled). verify_structure accepts only one trailing regen commit.
+    - AC2 [behavioral]: add_car and the patch-id and merge-tree code are unchanged; the existing train test literals only gain regen: None.
+    - AC3 [behavioral]: determinism by double run (python test_each_failure_mode_refuses_and_rolls_back, case 'is not deterministic'). Registered paths only: driver refusal, verify_regen, and Rust sha256 and 100644 checks on staged outputs. The cars' patch-ids are untouched, and verify_structure re-proves them before the regen check.
+    - AC4 [behavioral]: clean-tip no-op (python test_clean_tip_regeneration_is_a_no_op; Rust the_train_tip_gets_one_regen_commit_and_a_clean_tip_gets_none). Each section-4 failure mode refuses: exit, unregistered write, non-determinism, changed reviewed row, non-blocked new row, protected path (runnable), regen commit touching other paths or with an edited message (verify_regen test).
+
+    Deep-pass findings and fixes: (1) verify_structure did not re-check E2, so I added ledger_check there and in regen_commit. (2) The sandbox ignored [contained] read_allowlist; it now honours it as conflict lanes do. (3) A new ambient PATH read tripped the exec-context ratchet; switched to Environment::capture. (4) The driver's new write site needed a store-writers row, which I regenerated.
+
+    Residual risks: the diff is ~640 non-test lines against the 300-line budget (TASK-73022632D35647CCA3858B18AC0723E3-073). cli-help is not train-run in S1 (TASK-...-074). A refusal is printed but not journaled. Conflict-lane restore of a conflicted inventory still takes base's rows (existing semantics).
+
+    Results: cargo test -p aida-cli-lib --lib -- train_generated, 8 passed (bwrap fixture executed); python tests/test_repair_generated.py, 24 passed; cargo test -p aida-ci-guards --lib, 51 passed; make check-ci-fast exit 0 (j20261128T090105984-3-0).
+  created_at: 2026-11-28T09:07:38.752623473Z
+  modified_at: 2026-11-28T09:07:38.752623473Z
+  session_id: 01a2214b4de1
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a22146-948a-7032-ad96-95a74d9a14d6
   author: joe
@@ -55,6 +76,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a22169-17ca-76b2-8d37-9b07dee42e52
+  author: dirtlab
+  timestamp: 2026-11-28T09:07:45.226649563Z
+  session_id: 01a2214b4de1
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 6d3ca942ec2e4a042f45c48bc90773576e06ffdc
   branch: main
@@ -62,3 +92,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 0039f0fc146
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-28T09:07:45.179724724Z
+  implemented_by: dirtlab
