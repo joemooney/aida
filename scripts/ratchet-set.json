@@ -85,6 +85,7 @@
         "t3869_specs_resolve_only_through_store_and_refuse_unknown",
         "bug2783_unconfined_runner_review_is_never_posted",
         "bug_2783_bwrap_confined_codex_never_reads_the_canary",
+        "task3955_signed_out_codex_is_refused_before_any_batch",
         "forge_head_and_shallow_parent",
         "git_inventory_and_content_errors_propagate",
         "invalid_review_rules_errors",

@@ -392,8 +392,18 @@ fn review_prepare(args: &ReviewPrepareArgs, storage: &Storage) -> Result<()> {
         if !batches.is_empty() {
             call.sign_in_check(SIGN_IN_DEADLINE)?;
         }
+        // A signed-out challenger is unavailable from the start (exit 4),
+        // never a silent hang. trace:TASK-3955 | ai:claude
+        let challenge_pass = pass.map(|p| {
+            let check = (!batches.is_empty()).then(|| p.sign_in_check(SIGN_IN_DEADLINE));
+            let failed = check.and_then(Result::err);
+            (
+                p,
+                failed.map(|e| format!("{:#}", runner_failure(p, "sign-in check", e))),
+            )
+        });
         let (found, ledger, refuted, unchallenged) =
-            review_batches(&call, pass, &batches, prompt, &inventory)?;
+            review_batches(&call, challenge_pass, &batches, prompt, &inventory)?;
         // Count the challenger even when it gave up partway: it may already
         // have read a file on an earlier batch. trace:BUG-2783 | ai:claude
         for runner in std::iter::once(&call).chain(pass) {
@@ -916,17 +926,22 @@ fn run_review_agent(
 /// With a `challenger`, each batch's findings must then be reproduced (kept)
 /// or refuted (returned apart) by it. A challenger that fails or answers
 /// unparsably is not asked again: its cause and every finding from that batch
-/// on come back unchallenged, so the finder's work is never discarded.
+/// on come back unchallenged, so the finder's work is never discarded. A
+/// challenger paired with a cause is never asked at all.
 // trace:STORY-3120 | ai:claude
 fn review_batches(
     call: &RunnerCall<'_>,
-    challenge: Option<&RunnerCall<'_>>,
+    challenge: Option<(&RunnerCall<'_>, Option<String>)>,
     batches: &[ReviewBatch],
     mut prompt: impl FnMut(&ReviewBatch) -> Result<String>,
     inventory: &ClassifiedInventory,
 ) -> Result<BatchesOutcome> {
     let (mut found, mut ledger, mut refuted) = (Vec::new(), CoverageLedger::default(), Vec::new());
-    let mut unchallenged = Unchallenged::default();
+    let (challenge, cause) = challenge.map_or((None, None), |(p, c)| (Some(p), c));
+    let mut unchallenged = Unchallenged {
+        cause,
+        ..Default::default()
+    };
     for (i, batch) in batches.iter().enumerate() {
         let context = prompt(batch)?;
         let fail = |pass: &RunnerCall<'_>, what: &str, e: anyhow::Error| {
@@ -3906,6 +3921,72 @@ echo '{{"headRefOid":"{head}","baseRefName":"base"}}'
             store,
         )
         .unwrap();
+    }
+
+    /// A signed-out codex finder fails the run with the `codex login` hint
+    /// before any batch runs; a signed-out codex challenger is never asked,
+    /// leaving the finder's report unchallenged (exit 4) with the same hint.
+    // trace:TASK-3955 | ai:claude
+    #[test]
+    fn task3955_signed_out_codex_is_refused_before_any_batch() {
+        if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
+            return;
+        }
+        let f = CanaryFixture::new();
+        let ran = f.t().join("ran");
+        crate::launch::review_runner::passthrough_bwrap(&f.bin);
+        let signed_out = format!(
+            "#!/bin/sh\nif [ \"$1 $2\" = 'login status' ]; then echo 'Not logged in' >&2; exit 1; fi\n\
+             echo x >>{}\nsleep 600\n",
+            ran.display()
+        );
+        f.install("codex", &signed_out);
+        let reply = canary_reply("ok");
+        f.install(
+            "claude",
+            &format!("#!/bin/sh\ncat >/dev/null\necho '{reply}'\n"),
+        );
+        let _env = f.guard(None);
+        let hint = "codex is not signed in: run `codex login`, then retry the review";
+        let base = ReviewPrepareArgs {
+            post_comment: false,
+            ..f.args.clone()
+        };
+        let finder = ReviewPrepareArgs {
+            agent: Some("codex".into()),
+            ..base.clone()
+        };
+        let started = std::time::Instant::now();
+        let err = format!(
+            "{:#}",
+            handle_review_prepare(&finder, &f.store).unwrap_err()
+        );
+        assert!(err.contains(hint), "{err}");
+        assert!(!ran.exists() && !f.root.join("out.json").exists(), "{err}");
+        let challenger = ReviewPrepareArgs {
+            agent: Some("claude".into()),
+            adversarial: true,
+            challenger_agent: Some("codex".into()),
+            ..base
+        };
+        let err = handle_review_prepare(&challenger, &f.store).unwrap_err();
+        assert_eq!(
+            crate::exit_code_for_error(&err),
+            PARTIAL_REVIEW_EXIT_CODE,
+            "{err:#}"
+        );
+        assert!(started.elapsed() < std::time::Duration::from_secs(60));
+        assert!(!ran.exists(), "the challenger was asked");
+        let out = std::fs::read_to_string(f.root.join("out.json")).unwrap();
+        let out: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let cause = out["adversarial"]["challenger_unavailable"]
+            .as_str()
+            .unwrap();
+        assert!(cause.contains(hint), "{cause}");
+        assert_eq!(
+            out["adversarial"]["unchallenged"].as_array().unwrap().len(),
+            1
+        );
     }
 
     /// The live half of the canary red team: through the real bubblewrap view,
