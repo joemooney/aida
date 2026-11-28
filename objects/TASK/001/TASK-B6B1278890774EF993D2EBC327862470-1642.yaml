@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-28T06:28:56.284634899Z
-modified_at: 2026-11-28T07:56:07.501921469Z
+modified_at: 2026-11-28T07:57:06.382430919Z
 req_type: Task
 relationships:
 - rel_type:
@@ -110,6 +110,12 @@ comments:
   content: Implementer push b6802b518391 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-28T07:56:07.501920883Z
   modified_at: 2026-11-28T07:56:07.501920883Z
+  session_id: 01a221177613
+- id: 01a22128-69ce-7f70-9ff3-117a544374d3
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3962-contract-teardown-race` at head `b6802b518391c66cc7ae905c04fd64515dfb2d75`.'
+  created_at: 2026-11-28T07:57:06.382423262Z
+  modified_at: 2026-11-28T07:57:06.382423262Z
   session_id: 01a221177613
 history:
 - id: 01a220dc-1247-73d3-8df8-5bfbbcb2c451
