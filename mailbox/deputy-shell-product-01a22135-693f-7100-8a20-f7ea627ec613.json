@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-product-01a22135-693f-7100-8a20-f7ea627ec613",
+  "thread_id": "deputy-01a22135-693f-7100-8a20-f7ea627ec613",
+  "from": "deputy-shell:product",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-15"
+  },
+  "timestamp": 1795853482985,
+  "body": "Script deputy \"product\" finished script job 01a22135-693f-7100-8a20-f7ea627ec613: rc 0 (ok).\nScript: cd /home/joe/ai/aida && aida comment add STORY-2894 \"SKETCH REQUIREMENTS (advisor aida-d3 2026-11-28 01:16; relayed by product-15; binding for the sketch): (a) regenerated output must be DETERMINISTIC from the reviewed sources: a generator run twice gives identical bytes, and the train checks it; (b) ONLY registered paths may change during regen, anything else means refuse; (c) the train RE-VERIFIES that the PR's own non-generated diff is unchanged (patch-id over the non-generated paths), so a generator can never smuggle in content.\"\nTranscript: /home/joe/.aida/deputy-shell/product/jobs/01a22135-693f-7100-8a20-f7ea627ec613/transcript.log\nRead it with `aida deputy shell log 01a22135-693f-7100-8a20-f7ea627ec613 --name product`.\n",
+  "subject": "deputy script job 01a22135 done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
