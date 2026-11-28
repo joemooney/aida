@@ -14,6 +14,7 @@ pub(crate) fn agent_error_block(err: &anyhow::Error, msg: &str) -> String {
         return toon::error_block_with_help_list(no_project.summary(), &no_project.help_lines());
     }
     let (summary, help) = agent_error_summary_help(msg);
+    let summary = with_cause_chain(summary, err);
     // TASK-1082: fold a did-you-mean suggestion into the agent-mode
     // summary when a "Requirement not found" error is a near-miss of
     // a real spec id. trace:TASK-1082 | ai:claude
@@ -22,6 +23,27 @@ pub(crate) fn agent_error_block(err: &anyhow::Error, msg: &str) -> String {
         None => summary.to_string(),
     };
     toon::error_block(&summary_owned, help.as_deref())
+}
+
+/// Append every cause below the outermost context to `summary`, in anyhow's
+/// alternate-Display order (`outer: inner: root`), so an agent sees why a
+/// layered `with_context` error happened, not only its outermost line. A
+/// multi-line cause is flattened with ` | ` so the summary stays one line.
+// trace:TASK-3511 | ai:claude
+fn with_cause_chain(summary: &str, err: &anyhow::Error) -> String {
+    err.chain()
+        .skip(1)
+        .map(|cause| {
+            cause
+                .to_string()
+                .lines()
+                .map(str::trim)
+                .filter(|l| !l.is_empty())
+                .collect::<Vec<_>>()
+                .join(" | ")
+        })
+        .filter(|text| !text.is_empty())
+        .fold(summary.to_string(), |acc, text| format!("{acc}: {text}"))
 }
 
 pub(crate) fn agent_error_summary_help(msg: &str) -> (&str, Option<String>) {
@@ -52,4 +74,44 @@ pub(crate) fn extract_aida_suggestion(msg: &str) -> Option<String> {
         rest = &after[close + 1..];
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::agent_error_block;
+
+    // trace:TASK-3511 | ai:claude
+    #[test]
+    fn agent_error_block_renders_the_whole_cause_chain() {
+        let err = anyhow::anyhow!("connection refused")
+            .context("fetch origin failed")
+            .context("review batch 1 failed");
+        let block = agent_error_block(&err, &format!("{err:?}"));
+        assert_eq!(
+            block,
+            "error: \"review batch 1 failed: fetch origin failed: connection refused\""
+        );
+    }
+
+    // trace:TASK-3511 | ai:claude
+    #[test]
+    fn agent_error_block_flattens_multiline_causes() {
+        let err = anyhow::anyhow!("CONFLICT in a.yaml\n\nAutomatic merge failed")
+            .context("merge of abc123 failed")
+            .context("sync refused; run `aida sync --retry`\n  details follow");
+        let block = agent_error_block(&err, &format!("{err:?}"));
+        assert_eq!(
+            block,
+            "error: \"sync refused; run `aida sync --retry`: merge of abc123 failed: \
+             CONFLICT in a.yaml | Automatic merge failed\"\nhelp: aida sync --retry"
+        );
+    }
+
+    // trace:TASK-3511 | ai:claude
+    #[test]
+    fn agent_error_block_single_cause_is_unchanged() {
+        let err = anyhow::anyhow!("Error: brief missing\n  more detail");
+        let block = agent_error_block(&err, &format!("{err:?}"));
+        assert_eq!(block, "error: \"brief missing\"");
+    }
 }
